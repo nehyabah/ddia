@@ -11,6 +11,10 @@ import { StatsPage } from "./pages/StatsPage";
 import { NotesPage } from "./pages/NotesPage";
 import { SearchPage } from "./pages/SearchPage";
 import { Settings } from "./pages/Settings";
+import { JavaHome } from "./pages/JavaHome";
+import { JavaPlay } from "./pages/JavaPlay";
+import { JavaLessons } from "./pages/JavaLessons";
+import { JavaBrowse } from "./pages/JavaBrowse";
 
 function Hud() {
   const { profile } = useProfile();
@@ -33,6 +37,7 @@ function Hud() {
       <nav className="tabs">
         <NavLink to="/" end>Map</NavLink>
         <NavLink to="/review">Review {profile.dueCount > 0 && <span className="pill">{profile.dueCount}</span>}</NavLink>
+        <NavLink to="/java">Java {profile.javaDue > 0 && <span className="pill">{profile.javaDue}</span>}</NavLink>
         <NavLink to="/stats">Stats</NavLink>
         <NavLink to="/notes">Notes</NavLink>
         <NavLink to="/search">Search</NavLink>
@@ -59,6 +64,11 @@ export function App() {
           <Route path="/chapter/:id/match" element={<Match />} />
           <Route path="/chapter/:id/drill" element={<DrillPage />} />
           <Route path="/review" element={<RunPage mode="review" />} />
+          <Route path="/java" element={<JavaHome />} />
+          <Route path="/java/play" element={<JavaPlay />} />
+          <Route path="/java/c/:id" element={<JavaPlay />} />
+          <Route path="/java/lessons" element={<JavaLessons />} />
+          <Route path="/java/all" element={<JavaBrowse />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/search" element={<SearchPage />} />

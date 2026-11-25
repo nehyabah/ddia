@@ -6,6 +6,9 @@ export const BADGES: Record<string, string> = {
   goal: "Hit the daily goal",
   reviewer: "Cleared the review queue",
   explainer: "Interview‑ready drill answer",
+  bughunter: "Squashed a Java bug",
+  eagle: "Pinpointed 10 bug lines exactly",
+  javaexpert: "Solved an expert Java bug",
 };
 
 /** Days until the next review after a correct answer lands a question in box N. */

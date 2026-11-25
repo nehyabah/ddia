@@ -1,0 +1,599 @@
+[
+  {
+    "id": "int-b-01",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "The set that can't find an equal point",
+    "kind": "bug",
+    "scenario": "Point defines equals and hashCode so duplicates can be detected in a HashSet. Calling equals directly says the points match, but the set says it has never seen the point.",
+    "symptom": "true\nfalse",
+    "code": "import java.util.*;\n\nclass Point {\n    final int x, y;\n    Point(int x, int y) { this.x = x; this.y = y; }\n    public boolean equals(Point p) {\n        return p.x == x && p.y == y;\n    }\n    @Override\n    public int hashCode() { return 31 * x + y; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Set<Point> seen = new HashSet<>();\n        seen.add(new Point(1, 2));\n        Point q = new Point(1, 2);\n        System.out.println(q.equals(new Point(1, 2)));\n        System.out.println(seen.contains(q));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "hashCode gives the same value for different points",
+      "HashSet compares elements with == instead of equals",
+      "equals(Point) overloads, not overrides, equals(Object)",
+      "The fields must be private for HashSet to read them"
+    ],
+    "answer": 2,
+    "explanation": "HashSet calls equals(Object), and equals(Point p) is a different method with a different parameter type: an overload, not an override. The set therefore uses Object.equals, which compares identity, so the two distinct Point objects are never equal. The direct call q.equals(new Point(1, 2)) picks the more specific overload at compile time, which is why it looks correct. Adding @Override would have turned this into a compile error.",
+    "fix": "import java.util.*;\n\nclass Point {\n    final int x, y;\n    Point(int x, int y) { this.x = x; this.y = y; }\n    @Override\n    public boolean equals(Object o) {\n        if (!(o instanceof Point p)) return false;\n        return p.x == x && p.y == y;\n    }\n    @Override\n    public int hashCode() { return 31 * x + y; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Set<Point> seen = new HashSet<>();\n        seen.add(new Point(1, 2));\n        Point q = new Point(1, 2);\n        System.out.println(q.equals(new Point(1, 2)));\n        System.out.println(seen.contains(q));\n    }\n}",
+    "fixNote": "Declare equals(Object o) with @Override and pattern-match the argument.",
+    "debugTip": "Put a breakpoint inside equals(Point) and step into seen.contains(q): the breakpoint is never hit, and stepping shows HashMap calling Object.equals instead.",
+    "buggyOutput": "true\nfalse",
+    "fixedOutput": "true\ntrue"
+  },
+  {
+    "id": "int-b-02",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "The dog that won't bark",
+    "kind": "output",
+    "scenario": "Dog redefines both name() and sound() from Animal, and the program calls them through an Animal reference that holds a Dog.",
+    "code": "class Animal {\n    static String sound() { return \"...\"; }\n    String name() { return \"animal\"; }\n}\n\nclass Dog extends Animal {\n    static String sound() { return \"Woof\"; }\n    @Override\n    String name() { return \"dog\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Animal a = new Dog();\n        System.out.println(a.name() + \" says \" + a.sound());\n    }\n}",
+    "bugLines": [
+      7,
+      15
+    ],
+    "question": "What does this print?",
+    "options": [
+      "dog says Woof",
+      "dog says ...",
+      "animal says ...",
+      "animal says Woof"
+    ],
+    "answer": 1,
+    "explanation": "Instance methods are dispatched on the runtime class, so a.name() runs Dog.name(). Static methods are never overridden, only hidden: a.sound() is compiled as Animal.sound() because the declared type of a is Animal, and the object it points at is ignored. Calling a static method through an instance reference compiles (with a warning) but hides this.",
+    "fix": "class Animal {\n    String sound() { return \"...\"; }\n    String name() { return \"animal\"; }\n}\n\nclass Dog extends Animal {\n    @Override\n    String sound() { return \"Woof\"; }\n    @Override\n    String name() { return \"dog\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Animal a = new Dog();\n        System.out.println(a.name() + \" says \" + a.sound());\n    }\n}",
+    "fixNote": "Make sound() an instance method and mark Dog's version @Override.",
+    "debugTip": "Break on line 15 and step into a.sound(): the debugger lands in Animal.sound() even though the Variables view shows a's runtime class is Dog.",
+    "buggyOutput": "dog says ...",
+    "fixedOutput": "dog says Woof"
+  },
+  {
+    "id": "int-b-03",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "A circle that calls itself a shape",
+    "kind": "bug",
+    "scenario": "Circle sets its own name so the inherited describe() should print \"I am a circle\". Instead it still describes itself as a shape.",
+    "symptom": "circle\nI am a shape\nshape",
+    "code": "class Shape {\n    String name = \"shape\";\n    String describe() { return \"I am a \" + name; }\n}\n\nclass Circle extends Shape {\n    String name = \"circle\";\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Circle c = new Circle();\n        System.out.println(c.name);\n        System.out.println(c.describe());\n        Shape s = c;\n        System.out.println(s.name);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "Why does describe() print \"shape\"?",
+    "options": [
+      "Circle declares a second field that hides Shape.name",
+      "describe() is not overridden, so it runs on a Shape copy",
+      "Field initialisers in subclasses run after describe()",
+      "String fields are shared between all instances"
+    ],
+    "answer": 0,
+    "explanation": "Fields are not polymorphic. Circle's `String name` is a brand-new field that hides Shape.name; each Circle object carries both. Code in Shape (describe) and references typed as Shape read Shape.name, while references typed as Circle read Circle.name. Assign to the inherited field instead of declaring a new one.",
+    "fix": "class Shape {\n    String name = \"shape\";\n    String describe() { return \"I am a \" + name; }\n}\n\nclass Circle extends Shape {\n    Circle() { name = \"circle\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Circle c = new Circle();\n        System.out.println(c.name);\n        System.out.println(c.describe());\n        Shape s = c;\n        System.out.println(s.name);\n    }\n}",
+    "fixNote": "Set the inherited field in Circle's constructor instead of redeclaring it.",
+    "debugTip": "Break on line 14 and expand `c` in the Variables view: you will see two `name` entries, one from Shape and one from Circle, with different values.",
+    "buggyOutput": "circle\nI am a shape\nshape",
+    "fixedOutput": "circle\nI am a circle\ncircle"
+  },
+  {
+    "id": "int-b-04",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "Hello becomes null",
+    "kind": "bug",
+    "scenario": "Greeter builds its message in an init() hook that the base class calls from its constructor. The message should be \"Hello, world\".",
+    "symptom": "null, world",
+    "code": "class Base {\n    Base() {\n        init();\n    }\n    void init() { }\n}\n\nclass Greeter extends Base {\n    private String prefix = \"Hello\";\n    private String msg;\n    @Override\n    void init() {\n        msg = prefix + \", world\";\n    }\n    String msg() { return msg; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(new Greeter().msg());\n    }\n}",
+    "bugLines": [
+      3,
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "msg is reset to null after init() returns",
+      "Base.init() runs instead of Greeter.init()",
+      "String concatenation with a private field is not allowed",
+      "init() runs before Greeter's field initialisers"
+    ],
+    "answer": 3,
+    "explanation": "A constructor first runs the superclass constructor, and only then the subclass's field initialisers. Base() calls init(), which dispatches to Greeter.init() while prefix is still null, so msg becomes \"null, world\". msg has no initialiser, so that value survives. Never call overridable methods from a constructor.",
+    "fix": "class Base {\n    Base() {\n    }\n    void init() { }\n}\n\nclass Greeter extends Base {\n    private String prefix = \"Hello\";\n    private String msg;\n    Greeter() { init(); }\n    @Override\n    void init() {\n        msg = prefix + \", world\";\n    }\n    String msg() { return msg; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(new Greeter().msg());\n    }\n}",
+    "fixNote": "Base no longer calls init(); Greeter calls it after its own fields are set.",
+    "debugTip": "Break on line 13 and look at `this` in the Variables view: its runtime class is Greeter, yet prefix is null. The call stack shows you came from Base.<init>, before Greeter's initialisers ran.",
+    "buggyOutput": "null, world",
+    "fixedOutput": "Hello, world"
+  },
+  {
+    "id": "int-b-05",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "Parsing that always returns the same number",
+    "kind": "output",
+    "scenario": "parse() should return the number, or -1 if the text is not a number. A finally block was added during a refactor.",
+    "code": "public class Main {\n    static int parse(String s) {\n        try {\n            return Integer.parseInt(s);\n        } catch (NumberFormatException e) {\n            return -1;\n        } finally {\n            return 0;\n        }\n    }\n\n    public static void main(String[] args) {\n        System.out.println(parse(\"42\"));\n        System.out.println(parse(\"x\"));\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What does this print?",
+    "options": [
+      "42 then -1",
+      "42 then 0",
+      "0 then 0",
+      "0 then -1"
+    ],
+    "answer": 2,
+    "explanation": "A finally block always runs as the try or catch completes. If finally itself executes a return, that return replaces whatever the try or catch was returning (or throwing). Both calls therefore return 0. Compilers flag this with the lint warning \"finally clause cannot complete normally\".",
+    "fix": "public class Main {\n    static int parse(String s) {\n        try {\n            return Integer.parseInt(s);\n        } catch (NumberFormatException e) {\n            return -1;\n        }\n    }\n\n    public static void main(String[] args) {\n        System.out.println(parse(\"42\"));\n        System.out.println(parse(\"x\"));\n    }\n}",
+    "fixNote": "Remove the return from finally (here the whole finally block).",
+    "debugTip": "Step over line 4 with parse(\"42\") and keep stepping: execution jumps from the return to line 8, and the method's return value shown by the debugger changes from 42 to 0.",
+    "buggyOutput": "0\n0",
+    "fixedOutput": "42\n-1"
+  },
+  {
+    "id": "int-b-06",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "The bad id that never fails",
+    "kind": "bug",
+    "scenario": "load() must throw IllegalArgumentException for a negative id so the caller can report it. The caller never sees the error; a negative id silently becomes \"guest\".",
+    "symptom": "user7\nguest",
+    "code": "public class Main {\n    static String load(int id) {\n        String result = null;\n        try {\n            if (id < 0) {\n                throw new IllegalArgumentException(\n                    \"bad id: \" + id);\n            }\n            result = \"user\" + id;\n        } finally {\n            if (result == null) {\n                return \"guest\";\n            }\n        }\n        return result;\n    }\n\n    public static void main(String[] args) {\n        for (int id : new int[] {7, -1}) {\n            try {\n                System.out.println(load(id));\n            } catch (IllegalArgumentException e) {\n                System.out.println(\"err \" + e.getMessage());\n            }\n        }\n    }\n}",
+    "bugLines": [
+      12
+    ],
+    "question": "Why does the exception disappear?",
+    "options": [
+      "A return in finally discards the pending exception",
+      "The exception is unchecked, so it is not propagated",
+      "The catch in main is for the wrong exception type",
+      "Exceptions thrown in a try block need a catch there"
+    ],
+    "answer": 0,
+    "explanation": "When the try block throws, finally runs while the exception is pending. If finally completes abruptly with a return, the pending exception is discarded and the method returns normally. Here result is still null, so finally returns \"guest\" and the IllegalArgumentException is lost. A finally block should only clean up, never return.",
+    "fix": "public class Main {\n    static String load(int id) {\n        String result = null;\n        try {\n            if (id < 0) {\n                throw new IllegalArgumentException(\n                    \"bad id: \" + id);\n            }\n            result = \"user\" + id;\n        } finally {\n            // cleanup only; never return here\n        }\n        return result;\n    }\n\n    public static void main(String[] args) {\n        for (int id : new int[] {7, -1}) {\n            try {\n                System.out.println(load(id));\n            } catch (IllegalArgumentException e) {\n                System.out.println(\"err \" + e.getMessage());\n            }\n        }\n    }\n}",
+    "fixNote": "Remove the return from the finally block so the exception propagates.",
+    "debugTip": "Add an exception breakpoint for IllegalArgumentException (caught and uncaught): it stops on line 6, and stepping over shows execution entering finally and returning instead of reaching main's catch.",
+    "buggyOutput": "user7\nguest",
+    "fixedOutput": "user7\nerr bad id: -1"
+  },
+  {
+    "id": "int-b-07",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "A NullPointerException far from the bug",
+    "kind": "trace",
+    "scenario": "Config values are parsed from strings. The program crashes on a line that only reads from the map, and nothing was logged about a bad value.",
+    "symptom": "loaded\nException in thread \"main\" java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because the return value of \"java.util.Map.get(Object)\" is null\n\tat Main.main(Main.java:19)",
+    "code": "import java.util.*;\n\npublic class Main {\n    static Map<String, Integer> config = new HashMap<>();\n\n    static void load(String key, String value) {\n        try {\n            config.put(key, Integer.parseInt(value));\n        } catch (NumberFormatException e) {\n            // ignore bad values\n        }\n    }\n\n    public static void main(String[] args) {\n        load(\"retries\", \"3\");\n        load(\"timeout\", \"30s\");\n        System.out.println(\"loaded\");\n        int retries = config.get(\"retries\");\n        int timeout = config.get(\"timeout\");\n        System.out.println(retries * timeout);\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "What actually caused the crash?",
+    "options": [
+      "HashMap cannot store Integer values for String keys",
+      "\"30s\" failed to parse; the swallowed error left the key out",
+      "retries was never stored because load() ran out of order",
+      "int timeout overflows when multiplied by retries"
+    ],
+    "answer": 1,
+    "explanation": "Integer.parseInt(\"30s\") throws NumberFormatException, which the empty catch silently discards, so \"timeout\" is never put in the map. Later config.get(\"timeout\") returns null and auto-unboxing it to int calls intValue() on null. The NPE is a symptom; the real bug is the swallowed exception. At minimum, report it and decide on a default.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static Map<String, Integer> config = new HashMap<>();\n\n    static void load(String key, String value) {\n        try {\n            config.put(key, Integer.parseInt(value));\n        } catch (NumberFormatException e) {\n            System.out.println(\"bad \" + key + \": \" + value);\n        }\n    }\n\n    public static void main(String[] args) {\n        load(\"retries\", \"3\");\n        load(\"timeout\", \"30s\");\n        System.out.println(\"loaded\");\n        int retries = config.get(\"retries\");\n        int timeout = config.getOrDefault(\"timeout\", 30);\n        System.out.println(retries * timeout);\n    }\n}",
+    "fixNote": "Report the bad value in the catch and use getOrDefault for the missing key.",
+    "debugTip": "Add an exception breakpoint on NumberFormatException with \"caught exceptions\" enabled: it stops inside load(\"timeout\", \"30s\") long before the NPE.",
+    "buggyOutput": "loaded",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "bad timeout: 30s\nloaded\n90"
+  },
+  {
+    "id": "int-b-08",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "A bad price that doesn't exist",
+    "kind": "bug",
+    "scenario": "total() sums prices and skips any that are not numbers. All three prices are valid, yet it reports a bad price at index 3.",
+    "symptom": "bad price at 3\n60",
+    "code": "import java.util.*;\n\npublic class Main {\n    static int total(List<String> prices) {\n        int sum = 0;\n        for (int i = 0; i <= prices.size(); i++) {\n            try {\n                sum += Integer.parseInt(prices.get(i));\n            } catch (Exception e) {\n                System.out.println(\"bad price at \" + i);\n            }\n        }\n        return sum;\n    }\n\n    public static void main(String[] args) {\n        List<String> p = List.of(\"10\", \"20\", \"30\");\n        System.out.println(total(p));\n    }\n}",
+    "bugLines": [
+      6,
+      9
+    ],
+    "question": "What's really going on?",
+    "options": [
+      "List.of returns an immutable list that rejects get()",
+      "parseInt fails on \"30\" because of a trailing newline",
+      "The sum overflows on the last element",
+      "An off-by-one IndexOutOfBounds is caught as a \"bad price\""
+    ],
+    "answer": 3,
+    "explanation": "The loop runs to i == 3, and prices.get(3) throws an IndexOutOfBoundsException (List.of reports it as the ArrayIndexOutOfBoundsException subclass). Because the catch is for Exception rather than NumberFormatException, the programming error is reported as a data problem. Catch the narrowest exception you expect so real bugs still surface.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static int total(List<String> prices) {\n        int sum = 0;\n        for (int i = 0; i < prices.size(); i++) {\n            try {\n                sum += Integer.parseInt(prices.get(i));\n            } catch (NumberFormatException e) {\n                System.out.println(\"bad price at \" + i);\n            }\n        }\n        return sum;\n    }\n\n    public static void main(String[] args) {\n        List<String> p = List.of(\"10\", \"20\", \"30\");\n        System.out.println(total(p));\n    }\n}",
+    "fixNote": "Loop with i < size() and catch only NumberFormatException.",
+    "debugTip": "Break on line 10 and evaluate `e.getClass()` with Evaluate Expression: it is an index-out-of-bounds exception, not a NumberFormatException.",
+    "buggyOutput": "bad price at 3\n60",
+    "fixedOutput": "60"
+  },
+  {
+    "id": "int-b-09",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "One resource never gets closed",
+    "kind": "bug",
+    "scenario": "Each resource must be closed after it is read, even when reading fails. The log shows resource b is opened but never closed.",
+    "symptom": "open a\ndata-a\nclosed a\nopen b\nerr read failed",
+    "code": "class Res implements AutoCloseable {\n    private final String name;\n    Res(String name) {\n        this.name = name;\n        System.out.println(\"open \" + name);\n    }\n    String read() {\n        if (name.equals(\"b\")) {\n            throw new IllegalStateException(\"read failed\");\n        }\n        return \"data-\" + name;\n    }\n    @Override\n    public void close() {\n        System.out.println(\"closed \" + name);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        for (String n : new String[] {\"a\", \"b\"}) {\n            try {\n                Res r = new Res(n);\n                System.out.println(r.read());\n                r.close();\n            } catch (IllegalStateException e) {\n                System.out.println(\"err \" + e.getMessage());\n            }\n        }\n    }\n}",
+    "bugLines": [
+      23,
+      25
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Call r.close() at the start of the catch block",
+      "Make close() throw so the failure is visible",
+      "Open r in a try-with-resources header",
+      "Catch Exception instead of IllegalStateException"
+    ],
+    "answer": 2,
+    "explanation": "When read() throws, the line r.close() is skipped and control jumps to the catch, so b leaks. try-with-resources calls close() automatically on every exit path, normal or exceptional, and closes the resource before the catch block runs. Calling close() in the catch would not compile anyway, because r is out of scope there.",
+    "fix": "class Res implements AutoCloseable {\n    private final String name;\n    Res(String name) {\n        this.name = name;\n        System.out.println(\"open \" + name);\n    }\n    String read() {\n        if (name.equals(\"b\")) {\n            throw new IllegalStateException(\"read failed\");\n        }\n        return \"data-\" + name;\n    }\n    @Override\n    public void close() {\n        System.out.println(\"closed \" + name);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        for (String n : new String[] {\"a\", \"b\"}) {\n            try (Res r = new Res(n)) {\n                System.out.println(r.read());\n            } catch (IllegalStateException e) {\n                System.out.println(\"err \" + e.getMessage());\n            }\n        }\n    }\n}",
+    "fixNote": "Declare Res in a try-with-resources header and drop the manual close().",
+    "debugTip": "Set a breakpoint in close() and step over line 24 for resource b: execution jumps straight to the catch and the close() breakpoint is never hit.",
+    "buggyOutput": "open a\ndata-a\nclosed a\nopen b\nerr read failed",
+    "fixedOutput": "open a\ndata-a\nclosed a\nopen b\nclosed b\nerr read failed"
+  },
+  {
+    "id": "int-b-10",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "Splitting a version number",
+    "kind": "trace",
+    "scenario": "The program reads the major version from \"17.0.2\". The split returns an empty array and the next line crashes.",
+    "symptom": "0\nException in thread \"main\" java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0\n\tat Main.main(Main.java:6)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String version = \"17.0.2\";\n        String[] parts = version.split(\".\");\n        System.out.println(parts.length);\n        int major = Integer.parseInt(parts[0]);\n        System.out.println(\"major \" + major);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "Why is the array empty?",
+    "options": [
+      "\".\" is a regex for any char; every piece is empty and dropped",
+      "split() needs a limit argument to return anything",
+      "split() only splits on whitespace unless told otherwise",
+      "The string is interned, so split returns a shared empty array"
+    ],
+    "answer": 0,
+    "explanation": "String.split takes a regular expression, and \".\" matches every character. Every piece between matches is an empty string, and split removes trailing empty strings, which leaves an array of length 0. Escape the dot (\"\\\\.\") or use Pattern.quote(\".\").",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String version = \"17.0.2\";\n        String[] parts = version.split(\"\\\\.\");\n        System.out.println(parts.length);\n        int major = Integer.parseInt(parts[0]);\n        System.out.println(\"major \" + major);\n    }\n}",
+    "fixNote": "Escape the dot: split(\"\\\\.\").",
+    "debugTip": "Break on line 5 and evaluate `version.split(\".\").length` and `version.split(\"\\\\.\").length` side by side with Evaluate Expression.",
+    "buggyOutput": "0",
+    "throws": "java.lang.ArrayIndexOutOfBoundsException",
+    "fixedOutput": "3\nmajor 17"
+  },
+  {
+    "id": "int-b-11",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "Seat labels turn into numbers",
+    "kind": "bug",
+    "scenario": "The program should print seat labels A1, A2, A3 for row A. It prints three numbers instead.",
+    "symptom": "66\n67\n68",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        char row = 'A';\n        for (int seat = 1; seat <= 3; seat++) {\n            System.out.println(row + seat);\n        }\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "println(char) prints the character code",
+      "char + int is numeric addition, giving an int",
+      "The loop variable overflows the char range",
+      "'A' is stored as a String, so + appends a code"
+    ],
+    "answer": 1,
+    "explanation": "When neither operand of + is a String, + is numeric addition. The char 'A' is promoted to its code 65, so 65 + 1 = 66 and println(int) prints 66. Make one operand a String first, e.g. \"\" + row + seat or String.valueOf(row) + seat.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        char row = 'A';\n        for (int seat = 1; seat <= 3; seat++) {\n            System.out.println(\"\" + row + seat);\n        }\n    }\n}",
+    "fixNote": "Start the expression with a String so + means concatenation.",
+    "debugTip": "Break on line 5 and evaluate `row + seat` and `\"\" + row + seat` with Evaluate Expression; the debugger shows the first is an int.",
+    "buggyOutput": "66\n67\n68",
+    "fixedOutput": "A1\nA2\nA3"
+  },
+  {
+    "id": "int-b-12",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "replace versus replaceAll",
+    "kind": "output",
+    "scenario": "Two calls try to turn an IP address into a dash-separated string.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String ip = \"192.168.0.1\";\n        System.out.println(ip.replace(\".\", \"-\"));\n        System.out.println(ip.replaceAll(\".\", \"-\"));\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What does this print?",
+    "options": [
+      "192-168-0-1 then 192-168-0-1",
+      "192.168.0.1 then 192-168-0-1",
+      "192-168-0-1 then 192.168.0.1",
+      "192-168-0-1 then 11 dashes"
+    ],
+    "answer": 3,
+    "explanation": "replace(CharSequence, CharSequence) replaces literal text, so it swaps each dot. replaceAll takes a regular expression, and \".\" matches any character, so all 11 characters become dashes. Despite the names, both methods replace every occurrence; the difference is literal text versus regex.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String ip = \"192.168.0.1\";\n        System.out.println(ip.replace(\".\", \"-\"));\n        System.out.println(ip.replaceAll(\"\\\\.\", \"-\"));\n    }\n}",
+    "fixNote": "Escape the dot in the replaceAll pattern (or just use replace).",
+    "debugTip": "Break on line 5 and evaluate `ip.replaceAll(\".\", \"-\").length()` to confirm every character was matched.",
+    "buggyOutput": "192-168-0-1\n-----------",
+    "fixedOutput": "192-168-0-1\n192-168-0-1"
+  },
+  {
+    "id": "int-b-13",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "Tags that keep growing",
+    "kind": "bug",
+    "scenario": "Each name should be printed as its own tag, like <bob>. Every line also contains all the previous tags.",
+    "symptom": "<ann>\n<ann><bob>\n<ann><bob><cy>",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> names = List.of(\"ann\", \"bob\", \"cy\");\n        StringBuilder sb = new StringBuilder();\n        for (String n : names) {\n            sb.append(\"<\").append(n).append(\">\");\n            System.out.println(sb);\n        }\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Call sb.setLength(0) at the start of each iteration",
+      "Print sb.toString() instead of sb",
+      "Replace append chaining with separate append calls",
+      "Use StringBuffer, which clears itself after printing"
+    ],
+    "answer": 0,
+    "explanation": "A StringBuilder is mutable and keeps everything appended to it; printing it does not clear it. The builder is created once outside the loop, so each iteration adds to the previous text. Reset it with setLength(0) or create a new builder inside the loop.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> names = List.of(\"ann\", \"bob\", \"cy\");\n        StringBuilder sb = new StringBuilder();\n        for (String n : names) {\n            sb.setLength(0);\n            sb.append(\"<\").append(n).append(\">\");\n            System.out.println(sb);\n        }\n    }\n}",
+    "fixNote": "Reset the builder with sb.setLength(0) at the top of the loop.",
+    "debugTip": "Add a watch on `sb.length()` and step over each iteration: it grows from 5 to 10 to 14 instead of starting again.",
+    "buggyOutput": "<ann>\n<ann><bob>\n<ann><bob><cy>",
+    "fixedOutput": "<ann>\n<bob>\n<cy>"
+  },
+  {
+    "id": "int-b-14",
+    "level": "intermediate",
+    "topic": "Numbers",
+    "title": "Exact money maths that isn't exact",
+    "kind": "bug",
+    "scenario": "Prices use BigDecimal to avoid floating-point errors. Three items at 0.1 should total exactly 0.3, but the check fails.",
+    "symptom": "false\nfalse",
+    "code": "import java.math.BigDecimal;\n\npublic class Main {\n    public static void main(String[] args) {\n        BigDecimal price = new BigDecimal(0.1);\n        BigDecimal qty = new BigDecimal(3);\n        BigDecimal total = price.multiply(qty);\n        BigDecimal want = new BigDecimal(\"0.3\");\n        System.out.println(total.compareTo(want) == 0);\n        System.out.println(total.equals(want));\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "multiply() rounds to the scale of the first operand",
+      "new BigDecimal(3) creates the value 3.0000000001",
+      "new BigDecimal(double) keeps the double's binary error",
+      "compareTo on BigDecimal compares scale, not value"
+    ],
+    "answer": 2,
+    "explanation": "The literal 0.1 is a double, which cannot hold 0.1 exactly. new BigDecimal(double) converts that binary value exactly, giving 0.1000000000000000055511151231257827021181583404541015625. BigDecimal.valueOf(0.1) goes through Double.toString, giving exactly 0.1, as does new BigDecimal(\"0.1\").",
+    "fix": "import java.math.BigDecimal;\n\npublic class Main {\n    public static void main(String[] args) {\n        BigDecimal price = BigDecimal.valueOf(0.1);\n        BigDecimal qty = new BigDecimal(3);\n        BigDecimal total = price.multiply(qty);\n        BigDecimal want = new BigDecimal(\"0.3\");\n        System.out.println(total.compareTo(want) == 0);\n        System.out.println(total.equals(want));\n    }\n}",
+    "fixNote": "Create the price with BigDecimal.valueOf(0.1) (or new BigDecimal(\"0.1\")).",
+    "debugTip": "Break on line 6 and inspect `price` in the Variables view (or evaluate price.toPlainString()): the long tail of digits is visible immediately.",
+    "buggyOutput": "false\nfalse",
+    "fixedOutput": "true\ntrue"
+  },
+  {
+    "id": "int-b-15",
+    "level": "intermediate",
+    "topic": "Numbers",
+    "title": "Is 2.0 equal to 2.00?",
+    "kind": "output",
+    "scenario": "Two amounts from different sources are compared and then de-duplicated in a set.",
+    "code": "import java.math.BigDecimal;\nimport java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        BigDecimal a = new BigDecimal(\"2.0\");\n        BigDecimal b = new BigDecimal(\"2.00\");\n        System.out.println(a.equals(b));\n        System.out.println(a.compareTo(b) == 0);\n        Set<BigDecimal> set = new HashSet<>(List.of(a, b));\n        System.out.println(set.size());\n    }\n}",
+    "bugLines": [
+      8,
+      10
+    ],
+    "question": "What does this print?",
+    "options": [
+      "true, true, 1",
+      "false, true, 2",
+      "false, true, 1",
+      "true, false, 2"
+    ],
+    "answer": 1,
+    "explanation": "BigDecimal.equals compares both value and scale, so 2.0 (scale 1) and 2.00 (scale 2) are not equal, while compareTo compares numeric value only and returns 0. HashSet uses equals and hashCode, so it keeps both. Use compareTo for numeric comparison, and a TreeSet (which uses compareTo) or stripTrailingZeros() when de-duplicating.",
+    "fix": "import java.math.BigDecimal;\nimport java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        BigDecimal a = new BigDecimal(\"2.0\");\n        BigDecimal b = new BigDecimal(\"2.00\");\n        System.out.println(a.equals(b));\n        System.out.println(a.compareTo(b) == 0);\n        Set<BigDecimal> set = new TreeSet<>(List.of(a, b));\n        System.out.println(set.size());\n    }\n}",
+    "fixNote": "De-duplicate with a TreeSet, which compares by compareTo.",
+    "debugTip": "Break on line 8 and evaluate `a.scale()` and `b.scale()`: 1 and 2, which is exactly what equals checks.",
+    "buggyOutput": "false\ntrue\n2",
+    "fixedOutput": "false\ntrue\n1"
+  },
+  {
+    "id": "int-b-16",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "Closed accounts come back suspended",
+    "kind": "bug",
+    "scenario": "Version 1 saved account statuses as enum ordinals when Status was { ACTIVE, CLOSED }. Version 2 added SUSPENDED, and old closed accounts now load as suspended.",
+    "symptom": "ACTIVE\nSUSPENDED\nSUSPENDED",
+    "code": "enum Status { ACTIVE, SUSPENDED, CLOSED }\n\npublic class Main {\n    // saved by v1, when Status was { ACTIVE, CLOSED }\n    static int[] saved = {0, 1, 1};\n\n    static Status load(int code) {\n        return Status.values()[code];\n    }\n\n    public static void main(String[] args) {\n        for (int code : saved) {\n            System.out.println(load(code));\n        }\n    }\n}",
+    "bugLines": [
+      8,
+      1
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "values() returns constants in alphabetical order",
+      "The saved array was corrupted when it was written",
+      "Enums cannot be loaded from an int in Java",
+      "Persisting ordinal() ties data to declaration order"
+    ],
+    "answer": 3,
+    "explanation": "ordinal() is just the position of a constant in the enum declaration. Inserting SUSPENDED shifted CLOSED from 1 to 2, so stored 1s now mean SUSPENDED. Persist the name() or an explicit, stable code field instead of the ordinal.",
+    "fix": "enum Status {\n    ACTIVE(0), SUSPENDED(2), CLOSED(1);\n    final int code;\n    Status(int code) { this.code = code; }\n}\n\npublic class Main {\n    // saved by v1, when Status was { ACTIVE, CLOSED }\n    static int[] saved = {0, 1, 1};\n\n    static Status load(int code) {\n        for (Status s : Status.values()) {\n            if (s.code == code) return s;\n        }\n        throw new IllegalArgumentException(\"code \" + code);\n    }\n\n    public static void main(String[] args) {\n        for (int code : saved) {\n            System.out.println(load(code));\n        }\n    }\n}",
+    "fixNote": "Give each constant an explicit stable code and look it up by that code.",
+    "debugTip": "Break in load() and evaluate `Status.CLOSED.ordinal()`: it is 2, not the 1 that v1 wrote.",
+    "buggyOutput": "ACTIVE\nSUSPENDED\nSUSPENDED",
+    "fixedOutput": "ACTIVE\nCLOSED\nCLOSED"
+  },
+  {
+    "id": "int-b-17",
+    "level": "intermediate",
+    "topic": "Dates",
+    "title": "Month numbers from a date picker",
+    "kind": "trace",
+    "scenario": "Month numbers arrive from a JavaScript date picker and are turned into the first day of each month. The very first one crashes.",
+    "symptom": "Exception in thread \"main\" java.time.DateTimeException: Invalid value for MonthOfYear (valid values 1 - 12): 0\n\t... (java.time frames) ...\n\tat Main.main(Main.java:7)",
+    "code": "import java.time.LocalDate;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] months = {0, 1, 2}; // from the JS picker\n        for (int m : months) {\n            LocalDate d = LocalDate.of(2024, m, 1);\n            System.out.println(d);\n        }\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What does the trace tell you?",
+    "options": [
+      "java.time months run 1-12; the picker's months are 0-based",
+      "LocalDate.of rejects day 1 for the first month",
+      "2024 is a leap year, so January needs special handling",
+      "The int[] must be converted to Month constants first"
+    ],
+    "answer": 0,
+    "explanation": "Unlike java.util.Calendar and JavaScript Date, java.time uses 1 for January. LocalDate.of validates every field and throws DateTimeException for month 0 rather than rolling over. Convert at the boundary by adding 1 (or use Month.of(m + 1)).",
+    "fix": "import java.time.LocalDate;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] months = {0, 1, 2}; // from the JS picker\n        for (int m : months) {\n            LocalDate d = LocalDate.of(2024, m + 1, 1);\n            System.out.println(d);\n        }\n    }\n}",
+    "fixNote": "Convert the 0-based month with m + 1.",
+    "debugTip": "Enable an exception breakpoint for java.time.DateTimeException; when it stops, select the main frame, inspect `m`, then use drop frame / restart frame to re-run the loop after changing it.",
+    "buggyOutput": "",
+    "throws": "java.time.DateTimeException",
+    "fixedOutput": "2024-01-01\n2024-02-01\n2024-03-01"
+  },
+  {
+    "id": "int-b-18",
+    "level": "intermediate",
+    "topic": "Dates",
+    "title": "A due date that never moves",
+    "kind": "bug",
+    "scenario": "The due date should be three days after the start date, 2024-02-27. It prints the start date unchanged.",
+    "symptom": "2024-02-27 -> 2024-02-27",
+    "code": "import java.time.LocalDate;\n\npublic class Main {\n    public static void main(String[] args) {\n        LocalDate start = LocalDate.of(2024, 2, 27);\n        LocalDate due = start;\n        for (int i = 0; i < 3; i++) {\n            due.plusDays(1);\n        }\n        System.out.println(start + \" -> \" + due);\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Use due.plusDays(3) instead of the loop",
+      "Copy start with LocalDate.from(start) first",
+      "Assign the result: due = due.plusDays(1)",
+      "Use due.withDayOfMonth(due.getDayOfMonth() + 1)"
+    ],
+    "answer": 2,
+    "explanation": "LocalDate is immutable: plusDays returns a new LocalDate and leaves the original unchanged. The result is thrown away, so due never changes. Assign the return value; the corrected code gives 2024-03-01 because 2024 is a leap year (27 -> 28 -> 29 -> Mar 1).",
+    "fix": "import java.time.LocalDate;\n\npublic class Main {\n    public static void main(String[] args) {\n        LocalDate start = LocalDate.of(2024, 2, 27);\n        LocalDate due = start;\n        for (int i = 0; i < 3; i++) {\n            due = due.plusDays(1);\n        }\n        System.out.println(start + \" -> \" + due);\n    }\n}",
+    "fixNote": "Assign the value returned by plusDays back to due.",
+    "debugTip": "Add a watch on `due` and step over line 8 three times: the value never changes, while evaluating `due.plusDays(1)` shows the date you expected.",
+    "buggyOutput": "2024-02-27 -> 2024-02-27",
+    "fixedOutput": "2024-02-27 -> 2024-03-01"
+  },
+  {
+    "id": "int-b-19",
+    "level": "intermediate",
+    "topic": "Dates",
+    "title": "A December date formatted a year late",
+    "kind": "output",
+    "scenario": "A report formats dates with a pattern copied from a style guide. Most dates look fine.",
+    "code": "import java.time.LocalDate;\nimport java.time.format.DateTimeFormatter;\nimport java.util.Locale;\n\npublic class Main {\n    public static void main(String[] args) {\n        DateTimeFormatter f = DateTimeFormatter\n            .ofPattern(\"YYYY-MM-dd\", Locale.US);\n        LocalDate d = LocalDate.of(2024, 12, 30);\n        System.out.println(f.format(d));\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What does this print?",
+    "options": [
+      "2024-12-30",
+      "2024-12-29",
+      "2025-01-30",
+      "2025-12-30"
+    ],
+    "answer": 3,
+    "explanation": "In DateTimeFormatter patterns, \"Y\" is the week-based year, not the calendar year (\"y\" or \"u\"). With US week rules, the week containing 1 January 2025 starts on Sunday 29 December 2024, so 30 December 2024 belongs to week-based year 2025. Month and day are still the calendar values, giving the odd 2025-12-30.",
+    "fix": "import java.time.LocalDate;\nimport java.time.format.DateTimeFormatter;\nimport java.util.Locale;\n\npublic class Main {\n    public static void main(String[] args) {\n        DateTimeFormatter f = DateTimeFormatter\n            .ofPattern(\"yyyy-MM-dd\", Locale.US);\n        LocalDate d = LocalDate.of(2024, 12, 30);\n        System.out.println(f.format(d));\n    }\n}",
+    "fixNote": "Use lowercase yyyy (year-of-era) instead of YYYY (week-based year).",
+    "debugTip": "Break on line 10 and evaluate f.format for LocalDate.of(2024, 12, 27) and LocalDate.of(2024, 12, 30): the year flips only in the last days of December.",
+    "buggyOutput": "2025-12-30",
+    "fixedOutput": "2024-12-30"
+  },
+  {
+    "id": "int-b-20",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "Which greeting wins?",
+    "kind": "output",
+    "scenario": "Two classes get a greet() method from a mix of interface default methods and a superclass.",
+    "code": "interface Greeter {\n    default String greet() { return \"hello\"; }\n}\n\ninterface LoudGreeter extends Greeter {\n    @Override\n    default String greet() { return \"HELLO\"; }\n}\n\nclass Base {\n    public String greet() { return \"hi\"; }\n}\n\nclass A implements Greeter, LoudGreeter { }\n\nclass B extends Base implements LoudGreeter { }\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(new A().greet());\n        System.out.println(new B().greet());\n    }\n}",
+    "bugLines": [
+      16
+    ],
+    "question": "What does this print?",
+    "options": [
+      "hello then hi",
+      "HELLO then hi",
+      "HELLO then HELLO",
+      "It fails to compile: greet() is ambiguous"
+    ],
+    "answer": 1,
+    "explanation": "Two rules resolve default-method conflicts. First, a method from a class always wins over an interface default, so B gets Base.greet() and prints \"hi\". Second, among interfaces the most specific one wins: LoudGreeter extends Greeter, so A uses LoudGreeter's \"HELLO\" with no ambiguity. Only unrelated interfaces with the same default force you to override.",
+    "fix": "interface Greeter {\n    default String greet() { return \"hello\"; }\n}\n\ninterface LoudGreeter extends Greeter {\n    @Override\n    default String greet() { return \"HELLO\"; }\n}\n\nclass Base {\n    public String greet() { return \"hi\"; }\n}\n\nclass A implements Greeter, LoudGreeter { }\n\nclass B extends Base implements LoudGreeter {\n    @Override\n    public String greet() {\n        return LoudGreeter.super.greet();\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(new A().greet());\n        System.out.println(new B().greet());\n    }\n}",
+    "fixNote": "If B should be loud, override greet() and call LoudGreeter.super.greet().",
+    "debugTip": "Break on line 21 and step into greet(): the debugger lands in Base.greet(), showing which implementation the runtime class B actually inherited.",
+    "buggyOutput": "HELLO\nhi",
+    "fixedOutput": "HELLO\nHELLO"
+  },
+  {
+    "id": "int-b-21",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "Equal one way, not the other",
+    "kind": "bug",
+    "scenario": "Point and its subclass ColorPoint both override equals. A test that checks equals is symmetric fails.",
+    "symptom": "true false",
+    "code": "class Point {\n    final int x, y;\n    Point(int x, int y) { this.x = x; this.y = y; }\n    @Override\n    public boolean equals(Object o) {\n        if (!(o instanceof Point)) return false;\n        Point p = (Point) o;\n        return x == p.x && y == p.y;\n    }\n    @Override\n    public int hashCode() { return 31 * x + y; }\n}\n\nclass ColorPoint extends Point {\n    final String color;\n    ColorPoint(int x, int y, String c) {\n        super(x, y);\n        color = c;\n    }\n    @Override\n    public boolean equals(Object o) {\n        if (!(o instanceof ColorPoint cp)) return false;\n        return super.equals(cp) && color.equals(cp.color);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Point p = new Point(1, 2);\n        ColorPoint c = new ColorPoint(1, 2, \"red\");\n        System.out.println(p.equals(c) + \" \" + c.equals(p));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Point's instanceof check accepts any subclass",
+      "ColorPoint forgot to override hashCode",
+      "super.equals(cp) calls ColorPoint.equals recursively",
+      "String.equals on color is case-sensitive"
+    ],
+    "answer": 0,
+    "explanation": "Point.equals uses instanceof, so a ColorPoint passes and only x and y are compared: p.equals(cp) is true. ColorPoint.equals rejects anything that is not a ColorPoint, so cp.equals(p) is false. That breaks the symmetry rule of the equals contract. Comparing getClass() makes both directions agree (alternatively make Point final, or use composition).",
+    "fix": "class Point {\n    final int x, y;\n    Point(int x, int y) { this.x = x; this.y = y; }\n    @Override\n    public boolean equals(Object o) {\n        if (o == null || o.getClass() != getClass()) {\n            return false;\n        }\n        Point p = (Point) o;\n        return x == p.x && y == p.y;\n    }\n    @Override\n    public int hashCode() { return 31 * x + y; }\n}\n\nclass ColorPoint extends Point {\n    final String color;\n    ColorPoint(int x, int y, String c) {\n        super(x, y);\n        color = c;\n    }\n    @Override\n    public boolean equals(Object o) {\n        if (!(o instanceof ColorPoint cp)) return false;\n        return super.equals(cp) && color.equals(cp.color);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Point p = new Point(1, 2);\n        ColorPoint c = new ColorPoint(1, 2, \"red\");\n        System.out.println(p.equals(c) + \" \" + c.equals(p));\n    }\n}",
+    "fixNote": "Point.equals compares getClass() instead of using instanceof.",
+    "debugTip": "Break on line 6 and inspect `this` and `o` in the Variables view: the runtime classes are Point and ColorPoint, yet the instanceof check lets it through.",
+    "buggyOutput": "true false",
+    "fixedOutput": "false false"
+  },
+  {
+    "id": "int-b-22",
+    "level": "intermediate",
+    "topic": "OOP",
+    "title": "Copying a playlist changes the original",
+    "kind": "bug",
+    "scenario": "The gym playlist is cloned from the road-trip playlist and then gets an extra song. The road-trip playlist gets the song too.",
+    "symptom": "road trip [Song A, Song B]\ngym [Song A, Song B]",
+    "code": "import java.util.*;\n\nclass Playlist implements Cloneable {\n    String name;\n    List<String> songs = new ArrayList<>();\n    Playlist(String name) { this.name = name; }\n    @Override\n    public Playlist clone() {\n        try {\n            return (Playlist) super.clone();\n        } catch (CloneNotSupportedException e) {\n            throw new AssertionError(e);\n        }\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Playlist a = new Playlist(\"road trip\");\n        a.songs.add(\"Song A\");\n        Playlist b = a.clone();\n        b.name = \"gym\";\n        b.songs.add(\"Song B\");\n        System.out.println(a.name + \" \" + a.songs);\n        System.out.println(b.name + \" \" + b.songs);\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "Why do both playlists change?",
+    "options": [
+      "b.name = \"gym\" also renames the original playlist",
+      "ArrayList.add is not thread-safe",
+      "clone() must be declared protected to work",
+      "super.clone() is shallow: both share one songs list"
+    ],
+    "answer": 3,
+    "explanation": "Object.clone copies field values. For a reference field that means copying the reference, so a.songs and b.songs point at the same ArrayList. Reassigning b.name is fine because it replaces b's reference, but mutating the shared list affects both. Deep-copy mutable fields in clone (or use a copy constructor).",
+    "fix": "import java.util.*;\n\nclass Playlist implements Cloneable {\n    String name;\n    List<String> songs = new ArrayList<>();\n    Playlist(String name) { this.name = name; }\n    @Override\n    public Playlist clone() {\n        try {\n            Playlist p = (Playlist) super.clone();\n            p.songs = new ArrayList<>(songs);\n            return p;\n        } catch (CloneNotSupportedException e) {\n            throw new AssertionError(e);\n        }\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Playlist a = new Playlist(\"road trip\");\n        a.songs.add(\"Song A\");\n        Playlist b = a.clone();\n        b.name = \"gym\";\n        b.songs.add(\"Song B\");\n        System.out.println(a.name + \" \" + a.songs);\n        System.out.println(b.name + \" \" + b.songs);\n    }\n}",
+    "fixNote": "Give the clone its own copy of the songs list.",
+    "debugTip": "Break on line 22 and evaluate `a.songs == b.songs`: it is true. Most debuggers also show the same object id for both lists in the Variables view.",
+    "buggyOutput": "road trip [Song A, Song B]\ngym [Song A, Song B]",
+    "fixedOutput": "road trip [Song A]\ngym [Song A, Song B]"
+  }
+]

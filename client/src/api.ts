@@ -33,7 +33,7 @@ export type Profile = {
   user: { id: number; username: string };
   xp: number; level: number; into: number; need: number;
   streak: number; bestStreak: number; studiedToday: boolean;
-  xpToday: number; dailyGoal: number; dueCount: number;
+  xpToday: number; dailyGoal: number; dueCount: number; javaDue: number;
   badges: Badge[];
 };
 
@@ -81,3 +81,32 @@ export type SearchResult = {
   terms: { id: number; term: string; meaning: string; chapterId: number; chapterLabel: string }[];
   questions: { id: number; prompt: string; answer: string; explanation: string; chapterId: number; chapterLabel: string }[];
 };
+
+/* ---------- Java debugging track ---------- */
+
+export type JavaLevel = "beginner" | "intermediate" | "advanced" | "expert";
+
+export type JavaOverview = {
+  levels: {
+    id: JavaLevel; label: string; count: number; tried: number; due: number; mastery: number;
+    lessons: number; lessonsRead: number; topics: { topic: string; count: number; mastery: number }[];
+  }[];
+  due: number;
+  totals: { answered: number; correct: number; exact: number };
+};
+
+export type JavaChallenge = {
+  id: string; level: JavaLevel; topic: string; title: string; kind: "bug" | "output" | "trace";
+  scenario: string; symptom: string | null; code: string; question: string; options: string[];
+  bugLineCount: number; box: number | null;
+};
+
+export type JavaResult = {
+  correct: boolean; answer: number; bugLines: number[]; linesExact: boolean; linesPartial: boolean;
+  explanation: string; fix: string; fixNote: string; debugTip: string;
+  buggyOutput: string | null; fixedOutput: string | null; throws: string | null;
+  xp: number; box: number; newBadges: Badge[];
+};
+
+export type JavaListItem = { id: string; level: JavaLevel; topic: string; title: string; kind: string; box: number | null; reps: number; lapses: number };
+export type JavaLesson = { id: string; level: JavaLevel; title: string; body: string[]; example?: string; read: boolean };

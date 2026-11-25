@@ -1,0 +1,612 @@
+[
+  {
+    "id": "beg-b-01",
+    "level": "beginner",
+    "topic": "NullPointerException",
+    "title": "The cart that cannot hold anything",
+    "kind": "trace",
+    "scenario": "A shopping cart class should collect item names. The very first add crashes with the stack trace below.",
+    "symptom": "Adding...\nException in thread \"main\" java.lang.NullPointerException\n\tat Cart.add(Main.java:8)\n\tat Main.main(Main.java:20)",
+    "code": "import java.util.ArrayList;\nimport java.util.List;\n\nclass Cart {\n    private List<String> items;\n\n    void add(String item) {\n        items.add(item);\n    }\n\n    int size() {\n        return items.size();\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Cart cart = new Cart();\n        System.out.println(\"Adding...\");\n        cart.add(\"milk\");\n        System.out.println(cart.size());\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "cart is null because new Cart() failed silently",
+      "The items field is declared but never assigned a list",
+      "List.add rejects the string \"milk\"",
+      "size() is called before add() finishes"
+    ],
+    "answer": 1,
+    "explanation": "Object fields that are never assigned start as null. The field items is declared on line 5 but no ArrayList is ever created, so items.add(item) on line 8 calls a method on null. The top frame (Cart.add, line 8) is where it blew up; the bottom frame (Main.main, line 20) is how we got there.",
+    "fix": "import java.util.ArrayList;\nimport java.util.List;\n\nclass Cart {\n    private List<String> items = new ArrayList<>();\n\n    void add(String item) {\n        items.add(item);\n    }\n\n    int size() {\n        return items.size();\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Cart cart = new Cart();\n        System.out.println(\"Adding...\");\n        cart.add(\"milk\");\n        System.out.println(cart.size());\n    }\n}",
+    "fixNote": "Initialise the field: items = new ArrayList<>().",
+    "debugTip": "Read the trace top-down: the first frame, Cart.add at Main.java:8, is the throwing line. Put a breakpoint there, run in debug, and inspect this in the variables view: items shows null, so look for where it should have been assigned.",
+    "buggyOutput": "Adding...\n",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "Adding...\n1\n"
+  },
+  {
+    "id": "beg-b-02",
+    "level": "beginner",
+    "topic": "NullPointerException",
+    "title": "Looking up an unknown user",
+    "kind": "trace",
+    "scenario": "The program looks up a user's email and prints it in capitals. For \"bob\" it crashes instead of printing anything.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException\n\tat Main.main(Main.java:14)",
+    "code": "import java.util.HashMap;\nimport java.util.Map;\n\npublic class Main {\n    static Map<String, String> emails = new HashMap<>();\n\n    static String findEmail(String user) {\n        return emails.get(user);\n    }\n\n    public static void main(String[] args) {\n        emails.put(\"ada\", \"ada@example.com\");\n        String e = findEmail(\"bob\");\n        System.out.println(e.toUpperCase());\n    }\n}",
+    "bugLines": [
+      13,
+      14
+    ],
+    "question": "Why is e null on line 14?",
+    "options": [
+      "HashMap cannot store email strings with an @ sign",
+      "toUpperCase() returns null for lowercase input",
+      "The static map is reset each time findEmail runs",
+      "Map.get returns null for a key that is not present"
+    ],
+    "answer": 3,
+    "explanation": "Map.get returns null when the key is missing, and \"bob\" was never put in the map. findEmail passes that null straight back, and line 14 calls toUpperCase() on it. A method that can return null forces every caller to check before dereferencing.",
+    "fix": "import java.util.HashMap;\nimport java.util.Map;\n\npublic class Main {\n    static Map<String, String> emails = new HashMap<>();\n\n    static String findEmail(String user) {\n        return emails.get(user);\n    }\n\n    public static void main(String[] args) {\n        emails.put(\"ada\", \"ada@example.com\");\n        String e = findEmail(\"bob\");\n        if (e == null) {\n            System.out.println(\"no email\");\n        } else {\n            System.out.println(e.toUpperCase());\n        }\n    }\n}",
+    "fixNote": "Check e for null before calling a method on it.",
+    "debugTip": "The only frame is Main.main line 14. Set a breakpoint on line 13, step over the findEmail call, and watch e: it becomes null right there, which points you back to the lookup rather than the print.",
+    "buggyOutput": "",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "no email\n"
+  },
+  {
+    "id": "beg-b-03",
+    "level": "beginner",
+    "topic": "NullPointerException",
+    "title": "Counting letters in a name list",
+    "kind": "trace",
+    "scenario": "The loop should add up the lengths of all names in the array. It crashes before printing the total.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException\n\tat Main.main(Main.java:8)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String[] names = new String[3];\n        names[0] = \"ann\";\n        names[1] = \"bo\";\n        int total = 0;\n        for (String n : names) {\n            total += n.length();\n        }\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "bugLines": [
+      3,
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Slot 2 of the array was never filled, so it is null",
+      "The for-each loop runs one index past the end",
+      "String.length() fails on two-letter names",
+      "total overflows after adding the second name"
+    ],
+    "answer": 0,
+    "explanation": "new String[3] creates three slots that all start as null. Only slots 0 and 1 get values, so on the third iteration n is null and n.length() throws. A for-each loop never goes out of bounds; it faithfully visits the empty slot too.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String[] names = new String[3];\n        names[0] = \"ann\";\n        names[1] = \"bo\";\n        int total = 0;\n        for (String n : names) {\n            if (n != null) {\n                total += n.length();\n            }\n        }\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "fixNote": "Skip null entries before calling length().",
+    "debugTip": "Add an exception breakpoint for NullPointerException and run in debug. The debugger stops on line 8; inspect names in the variables view and you will see [ann, bo, null] with n = null.",
+    "buggyOutput": "",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "Total: 5\n"
+  },
+  {
+    "id": "beg-b-04",
+    "level": "beginner",
+    "topic": "NullPointerException",
+    "title": "An NPE with no dot in sight",
+    "kind": "trace",
+    "scenario": "A stock counter reads quantities from a map. Apples print fine, then the kiwi line crashes even though it calls no method on a variable.",
+    "symptom": "apples=5\nException in thread \"main\" java.lang.NullPointerException\n\tat Main.main(Main.java:11)",
+    "code": "import java.util.HashMap;\nimport java.util.Map;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> stock = new HashMap<>();\n        stock.put(\"apple\", 5);\n        stock.put(\"pear\", 2);\n        int apples = stock.get(\"apple\");\n        System.out.println(\"apples=\" + apples);\n        int kiwis = stock.get(\"kiwi\");\n        System.out.println(\"kiwis=\" + kiwis);\n    }\n}",
+    "bugLines": [
+      11
+    ],
+    "question": "Why does line 11 throw a NullPointerException?",
+    "options": [
+      "stock itself became null after the first get",
+      "HashMap only allows two keys before resizing",
+      "get returns a null Integer, and unboxing it to int fails",
+      "The string \"kiwi\" is not a valid map key"
+    ],
+    "answer": 2,
+    "explanation": "The map holds Integer objects. Assigning one to an int makes Java auto-unbox it by calling intValue() behind the scenes. \"kiwi\" is missing, so get returns null and the hidden intValue() call throws. getOrDefault supplies 0 instead of null.",
+    "fix": "import java.util.HashMap;\nimport java.util.Map;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> stock = new HashMap<>();\n        stock.put(\"apple\", 5);\n        stock.put(\"pear\", 2);\n        int apples = stock.get(\"apple\");\n        System.out.println(\"apples=\" + apples);\n        int kiwis = stock.getOrDefault(\"kiwi\", 0);\n        System.out.println(\"kiwis=\" + kiwis);\n    }\n}",
+    "fixNote": "Use getOrDefault(\"kiwi\", 0) so a missing key gives 0, not null.",
+    "debugTip": "Breakpoint on line 11, then use evaluate expression on stock.get(\"kiwi\"): it shows null. When an NPE line has no visible dot, suspect auto-unboxing of a wrapper type.",
+    "buggyOutput": "apples=5\n",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "apples=5\nkiwis=0\n"
+  },
+  {
+    "id": "beg-b-05",
+    "level": "beginner",
+    "topic": "Arrays",
+    "title": "Summing three scores",
+    "kind": "trace",
+    "scenario": "sum() should add up every element of the array. It crashes with the trace below.",
+    "symptom": "Summing...\nException in thread \"main\" java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3\n\tat Main.sum(Main.java:5)\n\tat Main.main(Main.java:13)",
+    "code": "public class Main {\n    static int sum(int[] values) {\n        int total = 0;\n        for (int i = 0; i <= values.length; i++) {\n            total += values[i];\n        }\n        return total;\n    }\n\n    public static void main(String[] args) {\n        int[] scores = {10, 20, 30};\n        System.out.println(\"Summing...\");\n        System.out.println(sum(scores));\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "Which line holds the real mistake?",
+    "options": [
+      "Line 13: scores should be passed as a copy",
+      "Line 4: the loop condition lets i reach 3",
+      "Line 11: the array literal has the wrong size",
+      "Line 5: += cannot be used on array elements"
+    ],
+    "answer": 1,
+    "explanation": "An array of length 3 has indexes 0, 1 and 2. The condition i <= values.length lets i become 3, and values[3] throws. The message \"Index 3 out of bounds for length 3\" tells you both the bad index and the size, so the fix is i < values.length.",
+    "fix": "public class Main {\n    static int sum(int[] values) {\n        int total = 0;\n        for (int i = 0; i < values.length; i++) {\n            total += values[i];\n        }\n        return total;\n    }\n\n    public static void main(String[] args) {\n        int[] scores = {10, 20, 30};\n        System.out.println(\"Summing...\");\n        System.out.println(sum(scores));\n    }\n}",
+    "fixNote": "Change <= to < in the loop condition.",
+    "debugTip": "Top frame is Main.sum line 5. Set a conditional breakpoint on line 5 with i == values.length - 1, then step over once more and watch i go to 3 while the loop keeps running.",
+    "buggyOutput": "Summing...\n",
+    "throws": "java.lang.ArrayIndexOutOfBoundsException",
+    "fixedOutput": "Summing...\n60\n"
+  },
+  {
+    "id": "beg-b-06",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Trimming names to five letters",
+    "kind": "trace",
+    "scenario": "shortName should cut names down to at most five characters. \"Margaret\" works, \"Tom\" crashes. The trace starts inside the JDK.",
+    "symptom": "Marga\nException in thread \"main\" java.lang.StringIndexOutOfBoundsException: begin 0, end 5, length 3\n\tat java.base/java.lang.String.checkBoundsBeginEnd(String.java:4604)\n\tat java.base/java.lang.String.substring(String.java:2707)\n\tat Main.shortName(Main.java:3)\n\tat Main.main(Main.java:8)",
+    "code": "public class Main {\n    static String shortName(String s) {\n        return s.substring(0, 5);\n    }\n\n    public static void main(String[] args) {\n        System.out.println(shortName(\"Margaret\"));\n        System.out.println(shortName(\"Tom\"));\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "Which frame should you look at first?",
+    "options": [
+      "String.checkBoundsBeginEnd, because it is the top frame",
+      "String.substring, because the JDK has a bug there",
+      "Main.main line 8, because it is the oldest call",
+      "Main.shortName line 3, the first frame in your code"
+    ],
+    "answer": 3,
+    "explanation": "The top frames are inside java.base: that is where the JDK detected the problem, not where it was caused. Scan down to the first frame in your own code, Main.shortName line 3. substring(0, 5) needs at least 5 characters and \"Tom\" has 3, exactly as the message says: end 5, length 3.",
+    "fix": "public class Main {\n    static String shortName(String s) {\n        return s.substring(0, Math.min(5, s.length()));\n    }\n\n    public static void main(String[] args) {\n        System.out.println(shortName(\"Margaret\"));\n        System.out.println(shortName(\"Tom\"));\n    }\n}",
+    "fixNote": "Cap the end index with Math.min(5, s.length()).",
+    "debugTip": "Skip frames that start with java.base/ and put your breakpoint on the first Main frame (line 3). Inspect s and s.length() when it stops for \"Tom\".",
+    "buggyOutput": "Marga\n",
+    "throws": "java.lang.StringIndexOutOfBoundsException",
+    "fixedOutput": "Marga\nTom\n"
+  },
+  {
+    "id": "beg-b-07",
+    "level": "beginner",
+    "topic": "Parsing",
+    "title": "Ages copied from a spreadsheet",
+    "kind": "trace",
+    "scenario": "Ages pasted from a spreadsheet are parsed and incremented. The first works; the second crashes.",
+    "symptom": "31\nException in thread \"main\" java.lang.NumberFormatException: For input string: \" 42\"\n\tat java.base/java.lang.NumberFormatException.forInputString(NumberFormatException.java:67)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:652)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:786)\n\tat Main.parseAge(Main.java:3)\n\tat Main.main(Main.java:9)",
+    "code": "public class Main {\n    static int parseAge(String raw) {\n        return Integer.parseInt(raw);\n    }\n\n    public static void main(String[] args) {\n        String[] inputs = {\"30\", \" 42\"};\n        for (String in : inputs) {\n            System.out.println(parseAge(in) + 1);\n        }\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "Why does \" 42\" fail to parse?",
+    "options": [
+      "parseInt does not skip whitespace; the leading space is illegal",
+      "parseInt only accepts numbers below 40 by default",
+      "The second array element is a char, not a String",
+      "The + 1 runs before the string is parsed"
+    ],
+    "answer": 0,
+    "explanation": "Integer.parseInt accepts an optional sign and digits, nothing else. The quotes in the message, \" 42\", reveal a leading space. Trimming the input first (raw.trim()) removes surrounding whitespace.",
+    "fix": "public class Main {\n    static int parseAge(String raw) {\n        return Integer.parseInt(raw.trim());\n    }\n\n    public static void main(String[] args) {\n        String[] inputs = {\"30\", \" 42\"};\n        for (String in : inputs) {\n            System.out.println(parseAge(in) + 1);\n        }\n    }\n}",
+    "fixNote": "Parse raw.trim() instead of raw.",
+    "debugTip": "Read the exception message carefully: the quotes around \" 42\" show the hidden space. Then find the first Main frame (parseAge line 3) and inspect raw.length() at a breakpoint: it is 3, not 2.",
+    "buggyOutput": "31\n",
+    "throws": "java.lang.NumberFormatException",
+    "fixedOutput": "31\n43\n"
+  },
+  {
+    "id": "beg-b-08",
+    "level": "beginner",
+    "topic": "Parsing",
+    "title": "A price with a decimal point",
+    "kind": "bug",
+    "scenario": "The program multiplies a unit price by a quantity. Expected \"Total: 14.0\" but it crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.NumberFormatException: For input string: \"3.5\"\n\tat java.base/java.lang.NumberFormatException.forInputString(NumberFormatException.java:67)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:668)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:786)\n\tat Main.main(Main.java:5)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String price = \"3.5\";\n        int qty = 4;\n        int unit = Integer.parseInt(price);\n        System.out.println(\"Total: \" + unit * qty);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Wrap line 5 in try/catch and use 0 on failure",
+      "Use Integer.valueOf(price) instead of parseInt",
+      "Store unit as a double and use Double.parseDouble",
+      "Cast the string: int unit = (int) price;"
+    ],
+    "answer": 2,
+    "explanation": "Integer.parseInt only accepts whole numbers, so the \".\" in \"3.5\" is rejected. Integer.valueOf uses the same parser and fails the same way, and you cannot cast a String to int. The value really is fractional, so it must be parsed as a double: 3.5 * 4 = 14.0.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String price = \"3.5\";\n        int qty = 4;\n        double unit = Double.parseDouble(price);\n        System.out.println(\"Total: \" + unit * qty);\n    }\n}",
+    "fixNote": "Parse with Double.parseDouble into a double variable.",
+    "debugTip": "Use an exception breakpoint on NumberFormatException; when it stops, step out to the first Main frame (line 5) and inspect price to see the decimal point.",
+    "buggyOutput": "",
+    "throws": "java.lang.NumberFormatException",
+    "fixedOutput": "Total: 14.0\n"
+  },
+  {
+    "id": "beg-b-09",
+    "level": "beginner",
+    "topic": "Arithmetic",
+    "title": "Averaging an empty week",
+    "kind": "trace",
+    "scenario": "average() returns the mean of an int array. It works for a normal week but crashes for a week with no data.",
+    "symptom": "6\nException in thread \"main\" java.lang.ArithmeticException: / by zero\n\tat Main.average(Main.java:7)\n\tat Main.main(Main.java:14)",
+    "code": "public class Main {\n    static int average(int[] xs) {\n        int sum = 0;\n        for (int x : xs) {\n            sum += x;\n        }\n        return sum / xs.length;\n    }\n\n    public static void main(String[] args) {\n        int[] week = {4, 6, 8};\n        int[] empty = {};\n        System.out.println(average(week));\n        System.out.println(average(empty));\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "sum overflows when the array is empty",
+      "The for-each loop throws on an empty array",
+      "int[] empty = {} is not legal Java syntax",
+      "Integer division by xs.length, which is 0"
+    ],
+    "answer": 3,
+    "explanation": "For an empty array the loop simply does nothing and sum stays 0, then sum / xs.length is 0 / 0 in int arithmetic. Integer division by zero always throws ArithmeticException: / by zero. Guard the empty case before dividing.",
+    "fix": "public class Main {\n    static int average(int[] xs) {\n        if (xs.length == 0) {\n            return 0;\n        }\n        int sum = 0;\n        for (int x : xs) {\n            sum += x;\n        }\n        return sum / xs.length;\n    }\n\n    public static void main(String[] args) {\n        int[] week = {4, 6, 8};\n        int[] empty = {};\n        System.out.println(average(week));\n        System.out.println(average(empty));\n    }\n}",
+    "fixNote": "Return 0 early when the array is empty.",
+    "debugTip": "Top frame: Main.average line 7; the next frame shows the caller passed empty (line 14). Breakpoint on line 7 and watch xs.length: it is 0 on the second call.",
+    "buggyOutput": "6\n",
+    "throws": "java.lang.ArithmeticException",
+    "fixedOutput": "6\n0\n"
+  },
+  {
+    "id": "beg-b-10",
+    "level": "beginner",
+    "topic": "Arithmetic",
+    "title": "Dividing a double by zero",
+    "kind": "output",
+    "scenario": "Same idea as an average with no items, but this time the total is a double. Nothing crashes. What gets printed?",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        double total = 10;\n        int count = 0;\n        double avg = total / count;\n        System.out.println(\"avg = \" + avg);\n        System.out.println(avg > 1000);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What does this print?",
+    "options": [
+      "avg = NaN\nfalse",
+      "avg = Infinity\ntrue",
+      "avg = 0.0\nfalse",
+      "Nothing: ArithmeticException: / by zero"
+    ],
+    "answer": 1,
+    "explanation": "Because total is a double, count is widened to 0.0 and floating-point division is used. IEEE 754 floating-point division of a positive number by zero gives Infinity instead of throwing; only integer division throws. Infinity is greater than 1000, so the comparison is true. (0.0 / 0.0 would give NaN.)",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        double total = 10;\n        int count = 0;\n        double avg = count == 0 ? 0 : total / count;\n        System.out.println(\"avg = \" + avg);\n        System.out.println(avg > 1000);\n    }\n}",
+    "fixNote": "Guard count == 0 before dividing.",
+    "debugTip": "No exception means no stack trace, so set a breakpoint on line 5 and watch avg after stepping over: seeing Infinity tells you a divisor was zero. Double.isInfinite(avg) is handy in evaluate expression.",
+    "buggyOutput": "avg = Infinity\ntrue\n",
+    "fixedOutput": "avg = 0.0\nfalse\n"
+  },
+  {
+    "id": "beg-b-11",
+    "level": "beginner",
+    "topic": "Casting",
+    "title": "A list of Object that is not all strings",
+    "kind": "trace",
+    "scenario": "The loop prints each item in capitals. It prints APPLE, then crashes.",
+    "symptom": "APPLE\nException in thread \"main\" java.lang.ClassCastException: class java.lang.Integer cannot be cast to class java.lang.String (java.lang.Integer and java.lang.String are in module java.base of loader 'bootstrap')\n\tat Main.main(Main.java:11)",
+    "code": "import java.util.ArrayList;\nimport java.util.List;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Object> items = new ArrayList<>();\n        items.add(\"apple\");\n        items.add(42);\n        items.add(\"pear\");\n        for (Object o : items) {\n            String s = (String) o;\n            System.out.println(s.toUpperCase());\n        }\n    }\n}",
+    "bugLines": [
+      8,
+      11
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "An Integer was put in the list and then cast to String",
+      "toUpperCase() cannot handle the word \"pear\"",
+      "ArrayList cannot hold more than one type of object",
+      "The cast should be written (string) o in lowercase"
+    ],
+    "answer": 0,
+    "explanation": "List<Object> accepts anything, so 42 is autoboxed to an Integer and stored. A cast does not convert an object; it only checks its real type at runtime, and an Integer is not a String. The message names both classes. Checking with instanceof (or using a List<String>) avoids the crash.",
+    "fix": "import java.util.ArrayList;\nimport java.util.List;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Object> items = new ArrayList<>();\n        items.add(\"apple\");\n        items.add(42);\n        items.add(\"pear\");\n        for (Object o : items) {\n            if (o instanceof String s) {\n                System.out.println(s.toUpperCase());\n            }\n        }\n    }\n}",
+    "fixNote": "Only treat the item as a String when instanceof says it is one.",
+    "debugTip": "Breakpoint on line 11 and inspect o on each iteration: the variables view shows its runtime class (Integer on the second pass). The exception message always names the actual class first.",
+    "buggyOutput": "APPLE\n",
+    "throws": "java.lang.ClassCastException",
+    "fixedOutput": "APPLE\nPEAR\n"
+  },
+  {
+    "id": "beg-b-12",
+    "level": "beginner",
+    "topic": "Integer overflow",
+    "title": "How many bytes in 3 GB?",
+    "kind": "output",
+    "scenario": "A disk tool computes the number of bytes in 3 gigabytes (3 x 1024 x 1024 x 1024). No exception is thrown.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int bytesPerGb = 1024 * 1024 * 1024;\n        int gb = 3;\n        int total = gb * bytesPerGb;\n        System.out.println(\"bytes: \" + total);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What does this print?",
+    "options": [
+      "bytes: 3221225472",
+      "bytes: 2147483647",
+      "bytes: -1073741824",
+      "ArithmeticException: integer overflow"
+    ],
+    "answer": 2,
+    "explanation": "An int holds at most 2147483647. 3 x 1073741824 = 3221225472 does not fit, and Java int arithmetic silently wraps around (modulo 2^32) instead of throwing: 3221225472 - 4294967296 = -1073741824. Casting one operand to long before multiplying does the math in 64 bits.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int bytesPerGb = 1024 * 1024 * 1024;\n        int gb = 3;\n        long total = (long) gb * bytesPerGb;\n        System.out.println(\"bytes: \" + total);\n    }\n}",
+    "fixNote": "Make total a long and cast gb to long before multiplying.",
+    "debugTip": "Overflow throws nothing, so step over line 5 and watch total: a negative result from multiplying positives is the giveaway. Math.multiplyExact(gb, bytesPerGb) would throw ArithmeticException instead of wrapping.",
+    "buggyOutput": "bytes: -1073741824\n",
+    "fixedOutput": "bytes: 3221225472\n"
+  },
+  {
+    "id": "beg-b-13",
+    "level": "beginner",
+    "topic": "Floating point",
+    "title": "Is 0.1 + 0.2 equal to 0.3?",
+    "kind": "output",
+    "scenario": "A price check compares a computed sum to an expected value with ==.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        double a = 0.1 + 0.2;\n        System.out.println(a == 0.3);\n        System.out.println(a);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What does this print?",
+    "options": [
+      "true\n0.3",
+      "false\n0.3",
+      "true\n0.30000000000000004",
+      "false\n0.30000000000000004"
+    ],
+    "answer": 3,
+    "explanation": "0.1, 0.2 and 0.3 cannot be stored exactly in binary floating point. The rounded 0.1 plus the rounded 0.2 lands on a slightly different double than the rounded 0.3, so == is false, and printing shows 0.30000000000000004. Compare doubles with a tolerance (or use BigDecimal for money).",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        double a = 0.1 + 0.2;\n        System.out.println(Math.abs(a - 0.3) < 1e-9);\n        System.out.println(a);\n    }\n}",
+    "fixNote": "Compare with a small tolerance instead of ==.",
+    "debugTip": "Put a breakpoint on line 4 and evaluate a and a - 0.3 in the debugger: the tiny non-zero difference shows why == fails.",
+    "buggyOutput": "false\n0.30000000000000004\n",
+    "fixedOutput": "true\n0.30000000000000004\n"
+  },
+  {
+    "id": "beg-b-14",
+    "level": "beginner",
+    "topic": "Static fields",
+    "title": "Two players, one scoreboard",
+    "kind": "bug",
+    "scenario": "Ann scores twice and Ben once. The game should show Ann: 2 and Ben: 1.",
+    "symptom": "Ann: 3\nBen: 3",
+    "code": "class Player {\n    String name;\n    static int score = 0;\n\n    Player(String name) {\n        this.name = name;\n    }\n\n    void addPoint() {\n        score++;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Player a = new Player(\"Ann\");\n        Player b = new Player(\"Ben\");\n        a.addPoint();\n        a.addPoint();\n        b.addPoint();\n        System.out.println(a.name + \": \" + a.score);\n        System.out.println(b.name + \": \" + b.score);\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "score is static, so all players share one counter",
+      "addPoint() is called on the wrong object",
+      "The constructor resets score for every new player",
+      "a.score reads Ben's value because b was created last"
+    ],
+    "answer": 0,
+    "explanation": "A static field belongs to the class, not to each object: there is exactly one score for all Players. All three addPoint calls bump the same variable to 3. Java even lets you write a.score for a static field, which hides the sharing. Removing static gives each Player its own score.",
+    "fix": "class Player {\n    String name;\n    int score = 0;\n\n    Player(String name) {\n        this.name = name;\n    }\n\n    void addPoint() {\n        score++;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Player a = new Player(\"Ann\");\n        Player b = new Player(\"Ben\");\n        a.addPoint();\n        a.addPoint();\n        b.addPoint();\n        System.out.println(a.name + \": \" + a.score);\n        System.out.println(b.name + \": \" + b.score);\n    }\n}",
+    "fixNote": "Remove static so each Player has its own score.",
+    "debugTip": "Set a breakpoint on line 21 and expand a and b in the variables view: score is not listed under either object, only under the Player class (static), which shows it is shared.",
+    "buggyOutput": "Ann: 3\nBen: 3\n",
+    "fixedOutput": "Ann: 2\nBen: 1\n"
+  },
+  {
+    "id": "beg-b-15",
+    "level": "beginner",
+    "topic": "Methods",
+    "title": "The bonus that never arrives",
+    "kind": "bug",
+    "scenario": "addBonus should raise the salary by 500, so the program should print 3500.",
+    "symptom": "3000",
+    "code": "public class Main {\n    static void addBonus(int salary) {\n        salary = salary + 500;\n    }\n\n    public static void main(String[] args) {\n        int salary = 3000;\n        addBonus(salary);\n        System.out.println(salary);\n    }\n}",
+    "bugLines": [
+      3,
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "addBonus is static, so it cannot change variables",
+      "Java passes a copy of the int; the method changes only its copy",
+      "The parameter name must differ from the caller's variable",
+      "println prints the value cached before the call"
+    ],
+    "answer": 1,
+    "explanation": "Java is always pass-by-value. addBonus receives a copy of 3000 in its own parameter variable, adds 500 to that copy, and the copy disappears when the method returns. Having the same name as the caller's variable does not link them. Return the new value and assign it in the caller.",
+    "fix": "public class Main {\n    static int addBonus(int salary) {\n        return salary + 500;\n    }\n\n    public static void main(String[] args) {\n        int salary = 3000;\n        salary = addBonus(salary);\n        System.out.println(salary);\n    }\n}",
+    "fixNote": "Return the new salary and assign it: salary = addBonus(salary).",
+    "debugTip": "Step into addBonus on line 8 and watch salary: it becomes 3500 inside the method. Step out and the caller's salary is still 3000, because each frame has its own variable.",
+    "buggyOutput": "3000\n",
+    "fixedOutput": "3500\n"
+  },
+  {
+    "id": "beg-b-16",
+    "level": "beginner",
+    "topic": "Constructors",
+    "title": "A book with no title",
+    "kind": "bug",
+    "scenario": "The program should print \"Dune / 412\". The page count is right but the title is missing.",
+    "symptom": "null / 412",
+    "code": "class Book {\n    String title;\n    int pages;\n\n    Book(String title, int pages) {\n        title = title;\n        this.pages = pages;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Book b = new Book(\"Dune\", 412);\n        System.out.println(b.title + \" / \" + b.pages);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "Which line is wrong?",
+    "options": [
+      "Line 2: title must be declared private",
+      "Line 13: \"Dune\" is passed in the wrong position",
+      "Line 6: title = title assigns the parameter to itself",
+      "Line 14: string concatenation turns the title into null"
+    ],
+    "answer": 2,
+    "explanation": "Inside the constructor, the parameter title shadows the field title. So title = title copies the parameter onto itself and the field keeps its default, null. Line 7 shows the correct pattern: this.pages refers to the field.",
+    "fix": "class Book {\n    String title;\n    int pages;\n\n    Book(String title, int pages) {\n        this.title = title;\n        this.pages = pages;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Book b = new Book(\"Dune\", 412);\n        System.out.println(b.title + \" / \" + b.pages);\n    }\n}",
+    "fixNote": "Use this.title = title to assign the field.",
+    "debugTip": "Breakpoint on line 7, then inspect this in the variables view: this.title is still null right after line 6 ran, while the local title is \"Dune\".",
+    "buggyOutput": "null / 412\n",
+    "fixedOutput": "Dune / 412\n"
+  },
+  {
+    "id": "beg-b-17",
+    "level": "beginner",
+    "topic": "Reading stack traces",
+    "title": "The crash points at the wrong method",
+    "kind": "trace",
+    "scenario": "An account label should print as \"Label: KIM\". The trace below has three frames, but none of them is where the mistake is.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException: Cannot invoke \"String.toUpperCase()\" because \"this.owner\" is null\n\tat Account.label(Main.java:9)\n\tat Main.printLabel(Main.java:15)\n\tat Main.main(Main.java:20)",
+    "code": "class Account {\n    private String owner;\n\n    Account(String owner) {\n        owner = owner;\n    }\n\n    String label() {\n        return owner.toUpperCase();\n    }\n}\n\npublic class Main {\n    static void printLabel(Account a) {\n        System.out.println(\"Label: \" + a.label());\n    }\n\n    public static void main(String[] args) {\n        Account acc = new Account(\"kim\");\n        printLabel(acc);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "Where is the root cause?",
+    "options": [
+      "Line 9: label() should check for null and return \"\"",
+      "Line 15: printLabel must not call label() inside println",
+      "Line 20: acc should be created with new Account()",
+      "Line 5: owner = owner never sets the field"
+    ],
+    "answer": 3,
+    "explanation": "The message says this.owner is null, so ask: who was supposed to set this.owner? The constructor, but owner = owner assigns the parameter to itself because the parameter shadows the field. A stack trace shows where a bad value was used, not where it was (not) created; this.owner = owner fixes it at the source.",
+    "fix": "class Account {\n    private String owner;\n\n    Account(String owner) {\n        this.owner = owner;\n    }\n\n    String label() {\n        return owner.toUpperCase();\n    }\n}\n\npublic class Main {\n    static void printLabel(Account a) {\n        System.out.println(\"Label: \" + a.label());\n    }\n\n    public static void main(String[] args) {\n        Account acc = new Account(\"kim\");\n        printLabel(acc);\n    }\n}",
+    "fixNote": "Assign the field with this.owner = owner.",
+    "debugTip": "Read top-down: Account.label line 9 threw, and the message names this.owner. Then search for every assignment to owner and set a breakpoint in the constructor; after line 5 runs, this.owner is still null.",
+    "buggyOutput": "",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "Label: KIM\n"
+  },
+  {
+    "id": "beg-b-18",
+    "level": "beginner",
+    "topic": "Reading stack traces",
+    "title": "Counting vowels word by word",
+    "kind": "trace",
+    "scenario": "The program reports how many vowels each word has. Two words print, then it crashes in countVowels.",
+    "symptom": "java: 2\ndebug: 2\nException in thread \"main\" java.lang.NullPointerException\n\tat Main.countVowels(Main.java:4)\n\tat Main.report(Main.java:13)\n\tat Main.main(Main.java:19)",
+    "code": "public class Main {\n    static int countVowels(String word) {\n        int n = 0;\n        for (char c : word.toCharArray()) {\n            if (\"aeiou\".indexOf(c) >= 0) {\n                n++;\n            }\n        }\n        return n;\n    }\n\n    static void report(String word) {\n        System.out.println(word + \": \" + countVowels(word));\n    }\n\n    public static void main(String[] args) {\n        String[] words = {\"java\", \"debug\", null};\n        for (String w : words) {\n            report(w);\n        }\n    }\n}",
+    "bugLines": [
+      17
+    ],
+    "question": "Where did the null come from?",
+    "options": [
+      "Line 17: the words array contains a null element",
+      "Line 4: toCharArray() returns null for short words",
+      "Line 13: string concatenation replaces word with null",
+      "Line 5: indexOf returns null when no vowel is found"
+    ],
+    "answer": 0,
+    "explanation": "The top frame (countVowels line 4) is where null was used, and each frame below it passes word along unchanged. Following the trace down to main shows the value came from the array literal on line 17, which contains null. Fix the data or check for null at the boundary.",
+    "fix": "public class Main {\n    static int countVowels(String word) {\n        int n = 0;\n        for (char c : word.toCharArray()) {\n            if (\"aeiou\".indexOf(c) >= 0) {\n                n++;\n            }\n        }\n        return n;\n    }\n\n    static void report(String word) {\n        System.out.println(word + \": \" + countVowels(word));\n    }\n\n    public static void main(String[] args) {\n        String[] words = {\"java\", \"debug\", \"stack\"};\n        for (String w : words) {\n            report(w);\n        }\n    }\n}",
+    "fixNote": "Replace the null entry in the array with a real word.",
+    "debugTip": "Use an exception breakpoint on NullPointerException. When it stops, click each frame in the call stack panel: word is null in countVowels and report, and in main you can see w came from words[2].",
+    "buggyOutput": "java: 2\ndebug: 2\n",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "java: 2\ndebug: 2\nstack: 1\n"
+  },
+  {
+    "id": "beg-b-19",
+    "level": "beginner",
+    "topic": "Reading stack traces",
+    "title": "Greeting the whole team",
+    "kind": "trace",
+    "scenario": "Each team member should be greeted in order. Ana is skipped and then the program crashes inside greet().",
+    "symptom": "Hello, Raj\nHello, Lee\nException in thread \"main\" java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3\n\tat Main.greet(Main.java:3)\n\tat Main.main(Main.java:9)",
+    "code": "public class Main {\n    static String greet(String[] names, int pos) {\n        return \"Hello, \" + names[pos];\n    }\n\n    public static void main(String[] args) {\n        String[] team = {\"Ana\", \"Raj\", \"Lee\"};\n        for (int i = 1; i <= team.length; i++) {\n            System.out.println(greet(team, i));\n        }\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "Which line holds the real mistake?",
+    "options": [
+      "Line 3: greet should check pos against names.length",
+      "Line 7: the array needs a fourth element",
+      "Line 8: the loop counts from 1 up to 3 inclusive",
+      "Line 9: greet should be passed i - 1 only at the end"
+    ],
+    "answer": 2,
+    "explanation": "greet() line 3 is where the bad index was used, but greet just trusts pos. The next frame down, main line 9, passed i, and line 8 makes i run 1, 2, 3. Java arrays start at 0, which is also why Ana was skipped. Loop from 0 while i < team.length.",
+    "fix": "public class Main {\n    static String greet(String[] names, int pos) {\n        return \"Hello, \" + names[pos];\n    }\n\n    public static void main(String[] args) {\n        String[] team = {\"Ana\", \"Raj\", \"Lee\"};\n        for (int i = 0; i < team.length; i++) {\n            System.out.println(greet(team, i));\n        }\n    }\n}",
+    "fixNote": "Loop with i = 0 and i < team.length.",
+    "debugTip": "The top frame is in greet, but the bad value arrived as a parameter. Click the Main.main frame in the call stack panel and inspect i: it is 3. Then look at the loop header that produced it.",
+    "buggyOutput": "Hello, Raj\nHello, Lee\n",
+    "throws": "java.lang.ArrayIndexOutOfBoundsException",
+    "fixedOutput": "Hello, Ana\nHello, Raj\nHello, Lee\n"
+  },
+  {
+    "id": "beg-b-20",
+    "level": "beginner",
+    "topic": "Integer overflow",
+    "title": "Thirty days in milliseconds",
+    "kind": "bug",
+    "scenario": "daysToMillis returns a long, so it should handle 30 days (2592000000 ms) easily. One day is right; thirty days is negative.",
+    "symptom": "86400000\n-1702967296",
+    "code": "public class Main {\n    static long daysToMillis(int days) {\n        return days * 24 * 60 * 60 * 1000;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(daysToMillis(1));\n        System.out.println(daysToMillis(30));\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "Why is the result negative even though the method returns long?",
+    "options": [
+      "println cannot print longs larger than an int",
+      "The multiplication is done in int and overflows first",
+      "long values are limited to 2147483647 in Java",
+      "The 1000 literal is treated as a short"
+    ],
+    "answer": 1,
+    "explanation": "All operands are int, so Java multiplies in 32-bit int arithmetic and the product 2592000000 wraps to -1702967296. Only after that is the already-wrong int widened to long for the return. Making one early operand a long (24L) makes the whole chain use 64-bit math.",
+    "fix": "public class Main {\n    static long daysToMillis(int days) {\n        return days * 24L * 60 * 60 * 1000;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(daysToMillis(1));\n        System.out.println(daysToMillis(30));\n    }\n}",
+    "fixNote": "Use the long literal 24L so the multiplication happens in long.",
+    "debugTip": "No exception here, so set a breakpoint on line 3 and use evaluate expression on days * 24 * 60 * 60 * 1000 and days * 24L * 60 * 60 * 1000 side by side. Math.multiplyExact would have thrown at the overflow.",
+    "buggyOutput": "86400000\n-1702967296\n",
+    "fixedOutput": "86400000\n2592000000\n"
+  },
+  {
+    "id": "beg-b-21",
+    "level": "beginner",
+    "topic": "Reading stack traces",
+    "title": "Five JDK frames, one bug",
+    "kind": "trace",
+    "scenario": "last() should return the final element of a list. The stack trace is long and mostly JDK internals.",
+    "symptom": "Exception in thread \"main\" java.lang.IndexOutOfBoundsException: Index 2 out of bounds for length 2\n\tat java.base/jdk.internal.util.Preconditions.outOfBounds(Preconditions.java:64)\n\tat java.base/jdk.internal.util.Preconditions.outOfBoundsCheckIndex(Preconditions.java:70)\n\tat java.base/jdk.internal.util.Preconditions.checkIndex(Preconditions.java:266)\n\tat java.base/java.util.Objects.checkIndex(Objects.java:359)\n\tat java.base/java.util.ArrayList.get(ArrayList.java:427)\n\tat Main.last(Main.java:6)\n\tat Main.main(Main.java:13)",
+    "code": "import java.util.ArrayList;\nimport java.util.List;\n\npublic class Main {\n    static String last(List<String> items) {\n        return items.get(items.size());\n    }\n\n    public static void main(String[] args) {\n        List<String> queue = new ArrayList<>();\n        queue.add(\"a\");\n        queue.add(\"b\");\n        System.out.println(\"Last: \" + last(queue));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "ArrayList.get has a bounds-checking bug in the JDK",
+      "queue.add(\"b\") replaced \"a\" instead of appending",
+      "The list must be converted to an array before get",
+      "Indexes run 0..size-1, so get(size()) is one past the end"
+    ],
+    "answer": 3,
+    "explanation": "The first five frames are JDK code doing its job: checking the index and throwing. The first frame from your code is Main.last line 6. A list of size 2 has indexes 0 and 1, so the last element is items.get(items.size() - 1).",
+    "fix": "import java.util.ArrayList;\nimport java.util.List;\n\npublic class Main {\n    static String last(List<String> items) {\n        return items.get(items.size() - 1);\n    }\n\n    public static void main(String[] args) {\n        List<String> queue = new ArrayList<>();\n        queue.add(\"a\");\n        queue.add(\"b\");\n        System.out.println(\"Last: \" + last(queue));\n    }\n}",
+    "fixNote": "Use items.size() - 1 as the index of the last element.",
+    "debugTip": "Skip every java.base/ frame and start at the first Main frame (line 6). Breakpoint there and evaluate items.size() to see that it equals the index you are asking for.",
+    "buggyOutput": "",
+    "throws": "java.lang.IndexOutOfBoundsException",
+    "fixedOutput": "Last: b\n"
+  },
+  {
+    "id": "beg-b-22",
+    "level": "beginner",
+    "topic": "Casting",
+    "title": "Playing fetch with every animal",
+    "kind": "trace",
+    "scenario": "play() should make dogs fetch and ignore other animals. The dog works; the cat crashes.",
+    "symptom": "fetching!\nException in thread \"main\" java.lang.ClassCastException: class Cat cannot be cast to class Dog (Cat and Dog are in unnamed module of loader 'app')\n\tat Main.play(Main.java:15)\n\tat Main.main(Main.java:21)",
+    "code": "class Animal {\n}\n\nclass Dog extends Animal {\n    String fetch() {\n        return \"fetching!\";\n    }\n}\n\nclass Cat extends Animal {\n}\n\npublic class Main {\n    static void play(Animal a) {\n        Dog d = (Dog) a;\n        System.out.println(d.fetch());\n    }\n\n    public static void main(String[] args) {\n        play(new Dog());\n        play(new Cat());\n    }\n}",
+    "bugLines": [
+      15
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "A Cat is an Animal but not a Dog, so the downcast fails",
+      "Cat must also define a fetch() method to compile",
+      "new Cat() returns null because Cat has no constructor",
+      "Dog must override every Animal method for the cast"
+    ],
+    "answer": 0,
+    "explanation": "The parameter type Animal accepts any subclass, but (Dog) a is checked at runtime against the real object. The second call passes a Cat, which is not a Dog, so the cast throws. Use instanceof (here with a pattern variable) to cast only when it is safe.",
+    "fix": "class Animal {\n}\n\nclass Dog extends Animal {\n    String fetch() {\n        return \"fetching!\";\n    }\n}\n\nclass Cat extends Animal {\n}\n\npublic class Main {\n    static void play(Animal a) {\n        if (a instanceof Dog d) {\n            System.out.println(d.fetch());\n        }\n    }\n\n    public static void main(String[] args) {\n        play(new Dog());\n        play(new Cat());\n    }\n}",
+    "fixNote": "Only cast and call fetch() when a instanceof Dog.",
+    "debugTip": "Breakpoint on line 15; on the second hit the variables view shows a is a Cat. The next frame, main line 21, shows which call passed it.",
+    "buggyOutput": "fetching!\n",
+    "throws": "java.lang.ClassCastException",
+    "fixedOutput": "fetching!\n"
+  }
+]

@@ -151,6 +151,46 @@ CREATE TABLE IF NOT EXISTS runs (
   finished INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
+
+-- Java debugging track (content re-seeded from server/content/java/*.json on start)
+CREATE TABLE IF NOT EXISTS java_challenges (
+  id TEXT PRIMARY KEY,
+  level TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS java_lessons (
+  id TEXT PRIMARY KEY,
+  level TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS java_srs (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  challenge_id TEXT NOT NULL,
+  box INTEGER NOT NULL DEFAULT 0,
+  due_at INTEGER NOT NULL,
+  reps INTEGER NOT NULL DEFAULT 0,
+  lapses INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, challenge_id)
+);
+CREATE TABLE IF NOT EXISTS java_attempts (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  challenge_id TEXT NOT NULL,
+  correct INTEGER NOT NULL,
+  lines_exact INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS java_lesson_reads (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  lesson_id TEXT NOT NULL,
+  read_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, lesson_id)
+);
 `);
 
 /** Stable content ids: chapter * 1000 + index within chapter. */

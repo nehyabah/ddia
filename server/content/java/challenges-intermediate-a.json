@@ -1,0 +1,606 @@
+[
+  {
+    "id": "int-a-01",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Cleaning blanks out of a name list",
+    "kind": "trace",
+    "scenario": "The loop should drop empty strings from the list and print what is left. Instead the program dies before printing anything.",
+    "symptom": "Exception in thread \"main\" java.util.ConcurrentModificationException\n\tat java.base/java.util.ArrayList$Itr.checkForComodification(ArrayList.java:1013)\n\tat java.base/java.util.ArrayList$Itr.next(ArrayList.java:967)\n\tat Main.main(Main.java:7)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> names = new ArrayList<>(\n            List.of(\"ann\", \"bob\", \"\", \"cat\", \"\"));\n        for (String n : names) {\n            if (n.isEmpty()) {\n                names.remove(n);\n            }\n        }\n        System.out.println(names);\n    }\n}",
+    "bugLines": [
+      9,
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "List.of made the list immutable, so remove() is refused",
+      "The list shrinks inside a for-each; the iterator's next() sees modCount changed",
+      "remove(n) is resolved as remove(int index) and goes out of range",
+      "ArrayList is not thread-safe and the JIT reorders the removal"
+    ],
+    "answer": 1,
+    "explanation": "A for-each loop over an ArrayList uses its Iterator. names.remove(n) changes the list structurally behind the iterator's back, bumping modCount. On the next call to next(), checkForComodification() sees modCount != expectedModCount and throws. It is fail-fast behaviour in a single thread, not a race; the list was copied into an ArrayList, so it is mutable.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> names = new ArrayList<>(\n            List.of(\"ann\", \"bob\", \"\", \"cat\", \"\"));\n        names.removeIf(String::isEmpty);\n        System.out.println(names);\n    }\n}",
+    "fixNote": "Replaced the for-each + remove with names.removeIf(String::isEmpty) (Iterator.remove() in an explicit loop also works).",
+    "debugTip": "Add an exception breakpoint on java.util.ConcurrentModificationException. When it hits, walk down the stack past the ArrayList$Itr frames to the first Main frame (line 7) and add a watch on names.size() while stepping the loop body.",
+    "buggyOutput": "",
+    "throws": "java.util.ConcurrentModificationException",
+    "fixedOutput": "[ann, bob, cat]"
+  },
+  {
+    "id": "int-a-02",
+    "level": "intermediate",
+    "topic": "equals/hashCode",
+    "title": "The set forgets a point it already has",
+    "kind": "bug",
+    "scenario": "A path finder records visited points in a HashSet. Two points with the same coordinates are equal, yet the set claims it has never seen the second one and stores it again.",
+    "symptom": "true\nfalse\n2",
+    "code": "import java.util.*;\n\npublic class Main {\n    static class Point {\n        final int x, y;\n        Point(int x, int y) { this.x = x; this.y = y; }\n\n        @Override\n        public boolean equals(Object o) {\n            if (!(o instanceof Point)) return false;\n            Point p = (Point) o;\n            return x == p.x && y == p.y;\n        }\n    }\n\n    public static void main(String[] args) {\n        Set<Point> visited = new HashSet<>();\n        visited.add(new Point(1, 2));\n        Point q = new Point(1, 2);\n        System.out.println(q.equals(new Point(1, 2)));\n        System.out.println(visited.contains(q));\n        visited.add(q);\n        System.out.println(visited.size());\n    }\n}",
+    "bugLines": [
+      4,
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "equals must take a Point parameter, not Object, to be used",
+      "The fields are final, so HashSet cannot read them",
+      "hashCode is not overridden, so equal points hash to different buckets",
+      "HashSet compares elements with ==, never with equals"
+    ],
+    "answer": 2,
+    "explanation": "HashSet first uses hashCode() to pick a bucket and only then calls equals() on entries with a matching hash. Point inherits Object.hashCode(), which is based on identity, so two equal points almost always have different hashes and equals() is never consulted. The contract says equal objects must have equal hash codes; override both together.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static class Point {\n        final int x, y;\n        Point(int x, int y) { this.x = x; this.y = y; }\n\n        @Override\n        public boolean equals(Object o) {\n            if (!(o instanceof Point)) return false;\n            Point p = (Point) o;\n            return x == p.x && y == p.y;\n        }\n\n        @Override\n        public int hashCode() {\n            return Objects.hash(x, y);\n        }\n    }\n\n    public static void main(String[] args) {\n        Set<Point> visited = new HashSet<>();\n        visited.add(new Point(1, 2));\n        Point q = new Point(1, 2);\n        System.out.println(q.equals(new Point(1, 2)));\n        System.out.println(visited.contains(q));\n        visited.add(q);\n        System.out.println(visited.size());\n    }\n}",
+    "fixNote": "Added hashCode() returning Objects.hash(x, y) to match equals().",
+    "debugTip": "Break on line 21 and evaluate q.hashCode() and new Point(1, 2).hashCode() in the debugger: different values for equal objects immediately point at a missing hashCode().",
+    "buggyOutput": "true\nfalse\n2",
+    "fixedOutput": "true\ntrue\n1"
+  },
+  {
+    "id": "int-a-03",
+    "level": "intermediate",
+    "topic": "HashMap",
+    "title": "The owner entry vanished from the map",
+    "kind": "bug",
+    "scenario": "Cells are keyed by their coordinate list. After the cell list grows, nobody can find \"alice\" any more, even by looking up [1, 2], yet the map still has one entry.",
+    "symptom": "null\nnull\n1",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<List<Integer>, String> owner = new HashMap<>();\n        List<Integer> cell = new ArrayList<>(List.of(1, 2));\n        owner.put(cell, \"alice\");\n        cell.add(3);\n        System.out.println(owner.get(List.of(1, 2)));\n        System.out.println(owner.get(cell));\n        System.out.println(owner.size());\n    }\n}",
+    "bugLines": [
+      7,
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The key object was mutated after insertion, so its hash and equality changed",
+      "HashMap cannot use a List as a key; it needs a String",
+      "List.of(1, 2) and ArrayList are never equal to each other",
+      "get() needs the exact same reference that was used for put()"
+    ],
+    "answer": 0,
+    "explanation": "HashMap stores each entry in a bucket chosen from the key's hashCode() at put time. Adding 3 to the list changes its hashCode() and equals(), so get(cell) looks in a different bucket, and get(List.of(1, 2)) finds the right bucket but the stored key is now [1, 2, 3], which is not equal. The entry is still there (size 1) but unreachable. Keys must not change in ways that affect equals/hashCode while in a map.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<List<Integer>, String> owner = new HashMap<>();\n        List<Integer> cell = new ArrayList<>(List.of(1, 2));\n        owner.put(List.copyOf(cell), \"alice\");\n        cell.add(3);\n        System.out.println(owner.get(List.of(1, 2)));\n        System.out.println(owner.get(cell));\n        System.out.println(owner.size());\n    }\n}",
+    "fixNote": "Store an immutable copy as the key: owner.put(List.copyOf(cell), \"alice\").",
+    "debugTip": "Break on line 7 and evaluate cell.hashCode(), then step over line 8 and evaluate it again (994 vs 30817). A key whose hash changes after put() is the smoking gun.",
+    "buggyOutput": "null\nnull\n1",
+    "fixedOutput": "alice\nnull\n1"
+  },
+  {
+    "id": "int-a-04",
+    "level": "intermediate",
+    "topic": "Arrays.asList",
+    "title": "Adding a colour to a ready-made list",
+    "kind": "trace",
+    "scenario": "The palette starts from an array and should gain one more colour. It prints the size and then crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.UnsupportedOperationException\n\tat java.base/java.util.AbstractList.add(AbstractList.java:153)\n\tat java.base/java.util.AbstractList.add(AbstractList.java:111)\n\tat Main.main(Main.java:8)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        String[] base = {\"red\", \"green\"};\n        List<String> colors = Arrays.asList(base);\n        System.out.println(colors.size());\n        colors.add(\"blue\");\n        System.out.println(colors);\n    }\n}",
+    "bugLines": [
+      6,
+      8
+    ],
+    "question": "Why does add() fail here?",
+    "options": [
+      "String arrays cannot be converted to lists of String",
+      "The list is immutable because base was declared with {}",
+      "add() needs an index when the list came from an array",
+      "Arrays.asList returns a fixed-size view backed by the array"
+    ],
+    "answer": 3,
+    "explanation": "Arrays.asList wraps the array in a fixed-size List (java.util.Arrays$ArrayList). It supports set() but not add() or remove(), which fall through to AbstractList's default implementations that throw UnsupportedOperationException. The AbstractList frames tell you the class did not override add().",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        String[] base = {\"red\", \"green\"};\n        List<String> colors =\n            new ArrayList<>(Arrays.asList(base));\n        System.out.println(colors.size());\n        colors.add(\"blue\");\n        System.out.println(colors);\n    }\n}",
+    "fixNote": "Copied into a growable list: new ArrayList<>(Arrays.asList(base)).",
+    "debugTip": "Read the trace from the top until the first Main frame (line 8); the AbstractList.add frames mean the concrete list never implemented add. Evaluate colors.getClass() at a breakpoint to see java.util.Arrays$ArrayList.",
+    "buggyOutput": "2",
+    "throws": "java.lang.UnsupportedOperationException",
+    "fixedOutput": "2\n[red, green, blue]"
+  },
+  {
+    "id": "int-a-05",
+    "level": "intermediate",
+    "topic": "Arrays.asList",
+    "title": "Who changed the original array?",
+    "kind": "output",
+    "scenario": "A list is made from an array, then each is edited separately. The author expected the two to be independent.",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        String[] base = {\"a\", \"b\", \"c\"};\n        List<String> view = Arrays.asList(base);\n        view.set(0, \"z\");\n        base[2] = \"y\";\n        System.out.println(view);\n        System.out.println(Arrays.toString(base));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What does this print?",
+    "options": [
+      "[z, b, c] then [a, b, y]",
+      "[z, b, y] then [z, b, y]",
+      "[z, b, c] then [z, b, y]",
+      "[z, b, y] then [a, b, y]"
+    ],
+    "answer": 1,
+    "explanation": "Arrays.asList does not copy: the returned list is a view that reads and writes the original array. view.set(0, \"z\") writes into base[0], and base[2] = \"y\" is visible through the list. Both lines show the same three elements.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        String[] base = {\"a\", \"b\", \"c\"};\n        List<String> view =\n            new ArrayList<>(Arrays.asList(base));\n        view.set(0, \"z\");\n        base[2] = \"y\";\n        System.out.println(view);\n        System.out.println(Arrays.toString(base));\n    }\n}",
+    "fixNote": "Wrapped in new ArrayList<>(...) so the list is an independent copy.",
+    "debugTip": "Put a watch on both base[0] and view.get(0), then step over line 7: the array element changes too, proving the list is a write-through view.",
+    "buggyOutput": "[z, b, y]\n[z, b, y]",
+    "fixedOutput": "[z, b, c]\n[a, b, y]"
+  },
+  {
+    "id": "int-a-06",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Banning user 1 removes the wrong user",
+    "kind": "bug",
+    "scenario": "The code should remove the banned id 1 from the list. Instead id 20 disappears and 1 is still there.",
+    "symptom": "[10, 1, 30]",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> ids = new ArrayList<>(\n            List.of(10, 20, 1, 30));\n        int banned = 1;\n        ids.remove(banned);\n        System.out.println(ids);\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "remove(int) is chosen over remove(Object), so index 1 is removed",
+      "List.of copies values in reverse, so index 1 holds 20",
+      "remove() removes the first element greater than the argument",
+      "banned is autoboxed to a different Integer than the one stored"
+    ],
+    "answer": 0,
+    "explanation": "List has two overloads: remove(int index) and remove(Object o). With a primitive int argument, overload resolution picks remove(int) without boxing, so the element at index 1 (20) is removed. Pass an Integer to get remove(Object), which removes by equality.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> ids = new ArrayList<>(\n            List.of(10, 20, 1, 30));\n        int banned = 1;\n        ids.remove(Integer.valueOf(banned));\n        System.out.println(ids);\n    }\n}",
+    "fixNote": "Call ids.remove(Integer.valueOf(banned)) so the remove(Object) overload is used.",
+    "debugTip": "Use step into on line 8: the debugger lands in ArrayList.remove(int index), not remove(Object), which shows which overload the compiler chose.",
+    "buggyOutput": "[10, 1, 30]",
+    "fixedOutput": "[10, 20, 30]"
+  },
+  {
+    "id": "int-a-07",
+    "level": "intermediate",
+    "topic": "Autoboxing",
+    "title": "Tied scores that are not tied",
+    "kind": "output",
+    "scenario": "A leaderboard checks whether two players have the same score by comparing the values fetched from a map.",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> score = new TreeMap<>();\n        score.put(\"ann\", 127);\n        score.put(\"bob\", 127);\n        score.put(\"cat\", 1000);\n        score.put(\"dan\", 1000);\n        Integer a = score.get(\"ann\"), b = score.get(\"bob\");\n        Integer c = score.get(\"cat\"), d = score.get(\"dan\");\n        System.out.println(a == b);\n        System.out.println(c == d);\n    }\n}",
+    "bugLines": [
+      12,
+      13
+    ],
+    "question": "What does this print (default JVM settings)?",
+    "options": [
+      "true then true",
+      "false then false",
+      "true then false",
+      "false then true"
+    ],
+    "answer": 2,
+    "explanation": "put(\"ann\", 127) autoboxes with Integer.valueOf, which returns cached objects for -128..127, so a and b are the same object and == is true. 1000 is outside the cache, so each valueOf(1000) creates a new Integer and == compares two different references. Compare boxed values with equals() (or unbox to int).",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> score = new TreeMap<>();\n        score.put(\"ann\", 127);\n        score.put(\"bob\", 127);\n        score.put(\"cat\", 1000);\n        score.put(\"dan\", 1000);\n        Integer a = score.get(\"ann\"), b = score.get(\"bob\");\n        Integer c = score.get(\"cat\"), d = score.get(\"dan\");\n        System.out.println(a.equals(b));\n        System.out.println(c.equals(d));\n    }\n}",
+    "fixNote": "Compare the Integer values with equals() instead of ==.",
+    "debugTip": "Break on line 12 and inspect c and d in the variables view: most debuggers show an object id per reference, and the two 1000s have different ids while the two 127s share one.",
+    "buggyOutput": "true\nfalse",
+    "fixedOutput": "true\ntrue"
+  },
+  {
+    "id": "int-a-08",
+    "level": "intermediate",
+    "topic": "Autoboxing",
+    "title": "Stock report stops at the second item",
+    "kind": "trace",
+    "scenario": "Each ordered item should print its stock count, with unknown items counted as 0. The report prints one line and then crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because the return value of \"java.util.Map.get(Object)\" is null\n\tat Main.main(Main.java:10)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> stock = new HashMap<>();\n        stock.put(\"apple\", 3);\n        stock.put(\"pear\", 0);\n        String[] order = {\"apple\", \"plum\", \"pear\"};\n        for (String item : order) {\n            int qty = stock.get(item);\n            System.out.println(item + \"=\" + qty);\n        }\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "stock itself is null because HashMap was never initialised",
+      "item is null for the second element of the array",
+      "HashMap.get throws when the key is missing",
+      "get returns null for \"plum\" and unboxing null into int throws"
+    ],
+    "answer": 3,
+    "explanation": "Map.get returns null for a missing key. Assigning that Integer to an int makes the compiler insert intValue(), and calling it on null throws NullPointerException. Java's helpful NPE message says exactly that: the return value of Map.get(Object) is null. Use getOrDefault or keep the value as Integer and check it.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> stock = new HashMap<>();\n        stock.put(\"apple\", 3);\n        stock.put(\"pear\", 0);\n        String[] order = {\"apple\", \"plum\", \"pear\"};\n        for (String item : order) {\n            int qty = stock.getOrDefault(item, 0);\n            System.out.println(item + \"=\" + qty);\n        }\n    }\n}",
+    "fixNote": "Used stock.getOrDefault(item, 0) so a missing item counts as 0.",
+    "debugTip": "Set a conditional breakpoint on line 10 with condition !stock.containsKey(item); it stops exactly on \"plum\", where evaluating stock.get(item) shows null.",
+    "buggyOutput": "apple=3",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "apple=3\nplum=0\npear=0"
+  },
+  {
+    "id": "int-a-09",
+    "level": "intermediate",
+    "topic": "Comparators",
+    "title": "Sorting offsets leaves a big one last",
+    "kind": "bug",
+    "scenario": "Time offsets are sorted ascending. The result keeps the most negative offset at the end, and the sort raises no error.",
+    "symptom": "[0, 1000000000, -2000000000]",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> offsets = new ArrayList<>(\n            List.of(0, 1_000_000_000, -2_000_000_000));\n        offsets.sort((a, b) -> a - b);\n        System.out.println(offsets);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "List.sort is stable, so it keeps the original order of ties",
+      "a - b overflows int, so -2e9 vs 1e9 compares as positive",
+      "The lambda compares Integer references, not values",
+      "Underscores in numeric literals change their value"
+    ],
+    "answer": 1,
+    "explanation": "-2,000,000,000 - 1,000,000,000 is -3e9, which does not fit in an int and wraps around to +1,294,967,296. The comparator therefore says -2e9 is greater than 1e9, and TimSort sees the list as already ascending. Use Integer.compare (or Comparator.naturalOrder()), which never overflows.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> offsets = new ArrayList<>(\n            List.of(0, 1_000_000_000, -2_000_000_000));\n        offsets.sort(Integer::compare);\n        System.out.println(offsets);\n    }\n}",
+    "fixNote": "Replaced the subtraction comparator with Integer::compare.",
+    "debugTip": "Put a breakpoint inside the lambda on line 7 and evaluate a - b alongside Integer.compare(a, b) for each call; the sign disagrees on the call with -2000000000 and 1000000000.",
+    "buggyOutput": "[0, 1000000000, -2000000000]",
+    "fixedOutput": "[-2000000000, 0, 1000000000]"
+  },
+  {
+    "id": "int-a-10",
+    "level": "intermediate",
+    "topic": "subList",
+    "title": "A head slice breaks after an append",
+    "kind": "trace",
+    "scenario": "The first three items are kept as a \"head\" slice. After a new item is appended to the full list, asking the slice for its size crashes.",
+    "symptom": "Exception in thread \"main\" java.util.ConcurrentModificationException\n\tat java.base/java.util.ArrayList$SubList.checkForComodification(ArrayList.java:1415)\n\tat java.base/java.util.ArrayList$SubList.size(ArrayList.java:1150)\n\tat Main.main(Main.java:10)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> all = new ArrayList<>(\n            List.of(1, 2, 3, 4, 5));\n        List<Integer> head = all.subList(0, 3);\n        System.out.println(head);\n        all.add(6);\n        System.out.println(head.size());\n    }\n}",
+    "bugLines": [
+      7,
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "subList is a view; changing the parent structurally invalidates it",
+      "add(6) went past the subList range 0..3",
+      "Printing head on line 8 consumed its iterator",
+      "subList returns an immutable list, so size() is unsupported"
+    ],
+    "answer": 0,
+    "explanation": "ArrayList.subList returns a view that shares the parent's storage and remembers the parent's modCount. Any structural change made directly to the parent (add, remove, clear) makes the view's state undefined, and ArrayList's SubList detects it and throws ConcurrentModificationException on the next access. Copy the slice if it must outlive changes to the parent.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> all = new ArrayList<>(\n            List.of(1, 2, 3, 4, 5));\n        List<Integer> head =\n            new ArrayList<>(all.subList(0, 3));\n        System.out.println(head);\n        all.add(6);\n        System.out.println(head.size());\n    }\n}",
+    "fixNote": "Copied the slice with new ArrayList<>(all.subList(0, 3)).",
+    "debugTip": "The trace shows a CME with no loop in sight; the ArrayList$SubList frames reveal it is the view, not an iterator. Set an exception breakpoint on ConcurrentModificationException and inspect head.getClass() to confirm it is a SubList.",
+    "buggyOutput": "[1, 2, 3]",
+    "throws": "java.util.ConcurrentModificationException",
+    "fixedOutput": "[1, 2, 3]\n3"
+  },
+  {
+    "id": "int-a-11",
+    "level": "intermediate",
+    "topic": "subList",
+    "title": "Ranking the top three reorders everyone",
+    "kind": "output",
+    "scenario": "The first three scores are sorted for a podium display. The full score list was supposed to stay in arrival order.",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> scores = new ArrayList<>(\n            List.of(40, 10, 30, 20, 50));\n        List<Integer> top = scores.subList(0, 3);\n        top.sort(Comparator.reverseOrder());\n        System.out.println(top);\n        System.out.println(scores);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What does this print?",
+    "options": [
+      "[40, 30, 10] then [40, 10, 30, 20, 50]",
+      "[50, 40, 30] then [50, 40, 30, 20, 10]",
+      "[40, 30, 10] then [10, 20, 30, 40, 50]",
+      "[40, 30, 10] then [40, 30, 10, 20, 50]"
+    ],
+    "answer": 3,
+    "explanation": "subList returns a view over positions 0..2 of scores, not a copy. Sorting the view writes the sorted elements back into those positions of the parent list. Only the first three slots change; 20 and 50 are outside the view and stay put.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> scores = new ArrayList<>(\n            List.of(40, 10, 30, 20, 50));\n        List<Integer> top =\n            new ArrayList<>(scores.subList(0, 3));\n        top.sort(Comparator.reverseOrder());\n        System.out.println(top);\n        System.out.println(scores);\n    }\n}",
+    "fixNote": "Sorted a copy: new ArrayList<>(scores.subList(0, 3)).",
+    "debugTip": "Add a watch on scores and step over line 8; the watch changes even though only top was sorted, which shows top is a view.",
+    "buggyOutput": "[40, 30, 10]\n[40, 30, 10, 20, 50]",
+    "fixedOutput": "[40, 30, 10]\n[40, 10, 30, 20, 50]"
+  },
+  {
+    "id": "int-a-12",
+    "level": "intermediate",
+    "topic": "TreeSet",
+    "title": "A team member silently goes missing",
+    "kind": "bug",
+    "scenario": "Employees are kept in a TreeSet ordered by age. Three people are added but only two are in the set, and no error is raised.",
+    "symptom": "2\nbob\nann",
+    "code": "import java.util.*;\n\npublic class Main {\n    record Emp(String name, int age) {}\n\n    public static void main(String[] args) {\n        Comparator<Emp> byAge =\n            Comparator.comparingInt(Emp::age);\n        Set<Emp> team = new TreeSet<>(byAge);\n        team.add(new Emp(\"ann\", 30));\n        team.add(new Emp(\"bob\", 25));\n        team.add(new Emp(\"cat\", 30));\n        System.out.println(team.size());\n        for (Emp e : team) {\n            System.out.println(e.name());\n        }\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Records cannot be stored in a TreeSet without implementing Comparable",
+      "TreeSet keeps only the first 2 elements until it is rebalanced",
+      "The comparator returns 0 for ann and cat, so TreeSet treats them as duplicates",
+      "Records generate equals() that only compares the first field"
+    ],
+    "answer": 2,
+    "explanation": "A TreeSet decides uniqueness with its comparator, not with equals(). comparingInt(Emp::age) returns 0 for any two 30-year-olds, so add(cat) finds an \"equal\" element and returns false. The comparator should be consistent with equals: break ties on another field.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    record Emp(String name, int age) {}\n\n    public static void main(String[] args) {\n        Comparator<Emp> byAge =\n            Comparator.comparingInt(Emp::age)\n                .thenComparing(Emp::name);\n        Set<Emp> team = new TreeSet<>(byAge);\n        team.add(new Emp(\"ann\", 30));\n        team.add(new Emp(\"bob\", 25));\n        team.add(new Emp(\"cat\", 30));\n        System.out.println(team.size());\n        for (Emp e : team) {\n            System.out.println(e.name());\n        }\n    }\n}",
+    "fixNote": "Added .thenComparing(Emp::name) so only truly equal employees compare as 0.",
+    "debugTip": "Evaluate team.add(new Emp(\"cat\", 30)) in the debugger at line 12 and see it return false; then evaluate byAge.compare(new Emp(\"ann\", 30), new Emp(\"cat\", 30)) to get 0.",
+    "buggyOutput": "2\nbob\nann",
+    "fixedOutput": "3\nbob\nann\ncat"
+  },
+  {
+    "id": "int-a-13",
+    "level": "intermediate",
+    "topic": "Immutability",
+    "title": "The snapshot keeps changing",
+    "kind": "bug",
+    "scenario": "A read-only snapshot of the version list is taken before a new version is added. The snapshot should still show one version, but it shows two.",
+    "symptom": "2\n[v1, v2]",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> live = new ArrayList<>(List.of(\"v1\"));\n        List<String> snapshot =\n            Collections.unmodifiableList(live);\n        live.add(\"v2\");\n        System.out.println(snapshot.size());\n        System.out.println(snapshot);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "unmodifiableList copies lazily, on the first add to the source",
+      "unmodifiableList is a read-only view of live, not a copy",
+      "live.add should have thrown, but ArrayList ignores the wrapper",
+      "List.of(\"v1\") is shared, so both lists point to the same array"
+    ],
+    "answer": 1,
+    "explanation": "Collections.unmodifiableList wraps the original list: callers cannot modify it through the wrapper, but changes made to the underlying list show through. To freeze the current contents, take a copy, for example List.copyOf(live), which is both immutable and independent.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> live = new ArrayList<>(List.of(\"v1\"));\n        List<String> snapshot =\n            List.copyOf(live);\n        live.add(\"v2\");\n        System.out.println(snapshot.size());\n        System.out.println(snapshot);\n    }\n}",
+    "fixNote": "Used List.copyOf(live) to take a real immutable snapshot.",
+    "debugTip": "Add a watch on snapshot.size() and step over line 8; it changes from 1 to 2 even though snapshot was never touched, which means it is a view.",
+    "buggyOutput": "2\n[v1, v2]",
+    "fixedOutput": "1\n[v1]"
+  },
+  {
+    "id": "int-a-14",
+    "level": "intermediate",
+    "topic": "Immutability",
+    "title": "Building a tag list from lookups",
+    "kind": "trace",
+    "scenario": "Two nicknames are looked up and collected into a list, where a missing one should show as null. The lookups succeed, then the program crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException\n\tat java.base/java.util.Objects.requireNonNull(Objects.java:208)\n\tat java.base/java.util.ImmutableCollections$List12.<init>(ImmutableCollections.java:563)\n\tat java.base/java.util.List.of(List.java:827)\n\tat Main.main(Main.java:11)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, String> nick = new TreeMap<>();\n        nick.put(\"ann\", \"annie\");\n        nick.put(\"bob\", \"bobby\");\n        String a = nick.get(\"ann\");\n        String c = nick.get(\"cat\");\n        System.out.println(\"lookups done\");\n        List<String> tags = List.of(a, c);\n        System.out.println(tags);\n    }\n}",
+    "bugLines": [
+      11,
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "List.of rejects null elements, and c is null",
+      "TreeMap.get throws for keys it does not contain",
+      "println cannot print a list that contains null",
+      "List.of needs at least three elements"
+    ],
+    "answer": 0,
+    "explanation": "The immutable lists returned by List.of (and Set.of, Map.of, List.copyOf) do not allow null elements and check every argument with Objects.requireNonNull. nick.get(\"cat\") returned null, so construction fails. The JDK frames (requireNonNull, List12.<init>, List.of) lead straight back to line 11.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, String> nick = new TreeMap<>();\n        nick.put(\"ann\", \"annie\");\n        nick.put(\"bob\", \"bobby\");\n        String a = nick.get(\"ann\");\n        String c = nick.get(\"cat\");\n        System.out.println(\"lookups done\");\n        List<String> tags = Arrays.asList(a, c);\n        System.out.println(tags);\n    }\n}",
+    "fixNote": "Used Arrays.asList(a, c), which accepts null elements.",
+    "debugTip": "Read the trace downward past the java.base frames to the first Main frame (line 11). Break there and evaluate c == null to confirm which argument was rejected.",
+    "buggyOutput": "lookups done",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "lookups done\n[annie, null]"
+  },
+  {
+    "id": "int-a-15",
+    "level": "intermediate",
+    "topic": "Map API",
+    "title": "Grouping players by team gives nothing",
+    "kind": "bug",
+    "scenario": "Each row adds a player to their team's list. After the loop the map is empty, and nothing throws.",
+    "symptom": "0\n{}",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, List<String>> byTeam = new TreeMap<>();\n        String[][] rows = {\n            {\"red\", \"ann\"}, {\"blue\", \"bob\"}, {\"red\", \"cat\"}};\n        for (String[] r : rows) {\n            byTeam.getOrDefault(r[0], new ArrayList<>())\n                .add(r[1]);\n        }\n        System.out.println(byTeam.size());\n        System.out.println(byTeam);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "TreeMap cannot hold List values without a comparator",
+      "add(r[1]) fails silently because the list is immutable",
+      "r[0] is a copy of the key, so the map does not see it",
+      "getOrDefault returns the default without storing it in the map"
+    ],
+    "answer": 3,
+    "explanation": "getOrDefault only reads: when the key is missing it hands back the default value but never puts it into the map. Each new ArrayList receives a name and is then thrown away. computeIfAbsent both creates and stores the list when the key is absent, then returns it.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, List<String>> byTeam = new TreeMap<>();\n        String[][] rows = {\n            {\"red\", \"ann\"}, {\"blue\", \"bob\"}, {\"red\", \"cat\"}};\n        for (String[] r : rows) {\n            byTeam.computeIfAbsent(r[0],\n                    k -> new ArrayList<>())\n                .add(r[1]);\n        }\n        System.out.println(byTeam.size());\n        System.out.println(byTeam);\n    }\n}",
+    "fixNote": "Replaced getOrDefault with computeIfAbsent(r[0], k -> new ArrayList<>()).",
+    "debugTip": "Add a watch on byTeam.size() and step through the loop: it stays 0 after every add, so the list being appended to is not the one in the map.",
+    "buggyOutput": "0\n{}",
+    "fixedOutput": "2\n{blue=[bob], red=[ann, cat]}"
+  },
+  {
+    "id": "int-a-16",
+    "level": "intermediate",
+    "topic": "Map API",
+    "title": "Pruning out-of-stock items crashes",
+    "kind": "bug",
+    "scenario": "Items with zero stock should be removed from the map. The program crashes on the first removal.",
+    "symptom": "Exception in thread \"main\" java.util.ConcurrentModificationException\n\tat java.base/java.util.TreeMap$PrivateEntryIterator.nextEntry(TreeMap.java:1486)\n\tat java.base/java.util.TreeMap$KeyIterator.next(TreeMap.java:1540)\n\tat Main.main(Main.java:9)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> stock = new TreeMap<>();\n        stock.put(\"apple\", 0);\n        stock.put(\"kiwi\", 4);\n        stock.put(\"pear\", 0);\n        for (String k : stock.keySet()) {\n            if (stock.get(k) == 0) {\n                stock.remove(k);\n            }\n        }\n        System.out.println(stock);\n    }\n}",
+    "bugLines": [
+      11,
+      9
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Wrap the loop in synchronized (stock) { ... }",
+      "Call stock.keySet().remove(k) instead of stock.remove(k)",
+      "Replace the loop with stock.values().removeIf(v -> v == 0)",
+      "Switch to a HashMap, whose iterator allows removal"
+    ],
+    "answer": 2,
+    "explanation": "Removing from the map directly while iterating its keySet changes the map's modCount, so the iterator's next() throws ConcurrentModificationException. keySet().remove(k) is the same structural change and fails the same way, and synchronization is irrelevant in a single thread. Removing through the collection view's removeIf (or Iterator.remove()) is the supported way to delete during iteration.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> stock = new TreeMap<>();\n        stock.put(\"apple\", 0);\n        stock.put(\"kiwi\", 4);\n        stock.put(\"pear\", 0);\n        stock.values().removeIf(v -> v == 0);\n        System.out.println(stock);\n    }\n}",
+    "fixNote": "Replaced the loop with stock.values().removeIf(v -> v == 0).",
+    "debugTip": "Set an exception breakpoint on ConcurrentModificationException, then select the Main frame (line 9) in the call stack; the TreeMap iterator frames above it show the failure is in next(), right after the removal on line 11.",
+    "buggyOutput": "",
+    "throws": "java.util.ConcurrentModificationException",
+    "fixedOutput": "{kiwi=4}"
+  },
+  {
+    "id": "int-a-17",
+    "level": "intermediate",
+    "topic": "Comparators",
+    "title": "Sorting temperatures with a tolerance",
+    "kind": "bug",
+    "scenario": "Readings within 2 degrees are treated as ties to make the sort \"fuzzy\". The sorted list comes out with 5 before 3.",
+    "symptom": "[1, 5, 3]",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Comparator<Integer> roughly = (a, b) ->\n            Math.abs(a - b) < 3 ? 0 : Integer.compare(a, b);\n        List<Integer> temps = new ArrayList<>(\n            List.of(5, 1, 3));\n        Collections.sort(temps, roughly);\n        System.out.println(temps);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The comparator is not transitive: 1~3 and 3~5 tie, but 1<5",
+      "Collections.sort is unstable and shuffles tied elements",
+      "Math.abs overflows for small differences",
+      "Collections.sort ignores comparators on lists of Integer"
+    ],
+    "answer": 0,
+    "explanation": "A Comparator must be transitive, including for ties: if a==b and b==c then a==c. Here 1 ties with 3 and 3 ties with 5, but 1 is less than 5, so there is no consistent order. TimSort reverses the leading run to [1, 5], then sees 3 \"equal\" to 5 and leaves it last. Broken comparators give garbage (or \"Comparison method violates its general contract!\" on larger inputs).",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Comparator<Integer> byValue =\n            Comparator.naturalOrder();\n        List<Integer> temps = new ArrayList<>(\n            List.of(5, 1, 3));\n        Collections.sort(temps, byValue);\n        System.out.println(temps);\n    }\n}",
+    "fixNote": "Sort with a real total order (Comparator.naturalOrder()); handle tolerance separately, e.g. when grouping.",
+    "debugTip": "Put a breakpoint inside the lambda on line 6 and log a, b and the result for each call; you will see compare(3, 5) return 0 while compare(1, 5) returned -1.",
+    "buggyOutput": "[1, 5, 3]",
+    "fixedOutput": "[1, 3, 5]"
+  },
+  {
+    "id": "int-a-18",
+    "level": "intermediate",
+    "topic": "Arrays",
+    "title": "The grid walker revisits a cell",
+    "kind": "bug",
+    "scenario": "Visited cells are stored as int[] pairs. The cell {1, 2} was already visited, but the check says to visit it again.",
+    "symptom": "visit",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<int[]> visited = new ArrayList<>();\n        visited.add(new int[] {1, 2});\n        visited.add(new int[] {3, 4});\n        int[] next = {1, 2};\n        boolean seen = visited.contains(next);\n        System.out.println(seen ? \"skip\" : \"visit\");\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "contains only checks the last element added",
+      "contains uses equals, and arrays inherit identity equals",
+      "int[] is autoboxed to Integer[] and the boxes differ",
+      "The list must be sorted before contains can find anything"
+    ],
+    "answer": 1,
+    "explanation": "List.contains calls equals() on each element. Arrays do not override equals, so it is Object.equals, which is reference identity; next is a different array object from the stored {1, 2}. Compare contents with Arrays.equals, or store List<Integer> or a record instead of arrays.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<int[]> visited = new ArrayList<>();\n        visited.add(new int[] {1, 2});\n        visited.add(new int[] {3, 4});\n        int[] next = {1, 2};\n        boolean seen = visited.stream()\n            .anyMatch(p -> Arrays.equals(p, next));\n        System.out.println(seen ? \"skip\" : \"visit\");\n    }\n}",
+    "fixNote": "Check by content: visited.stream().anyMatch(p -> Arrays.equals(p, next)).",
+    "debugTip": "Break on line 9 and evaluate next.equals(visited.get(0)) and Arrays.equals(next, visited.get(0)) side by side: false vs true.",
+    "buggyOutput": "visit",
+    "fixedOutput": "skip"
+  },
+  {
+    "id": "int-a-19",
+    "level": "intermediate",
+    "topic": "Arrays",
+    "title": "Unsaved changes on an untouched document",
+    "kind": "output",
+    "scenario": "An editor clones the saved data and flags the document dirty if the copy differs from the saved version. Nothing has been edited yet.",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] saved = {1, 2, 3};\n        int[] current = saved.clone();\n        System.out.println(current == saved);\n        boolean dirty = !current.equals(saved);\n        System.out.println(dirty);\n        System.out.println(Arrays.equals(current, saved));\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What does this print?",
+    "options": [
+      "false, false, true",
+      "true, false, true",
+      "false, true, false",
+      "false, true, true"
+    ],
+    "answer": 3,
+    "explanation": "clone() makes a new array, so == is false. Arrays inherit Object.equals, which is also identity, so current.equals(saved) is false and dirty becomes true. Only Arrays.equals compares element by element and returns true.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] saved = {1, 2, 3};\n        int[] current = saved.clone();\n        System.out.println(current == saved);\n        boolean dirty = !Arrays.equals(current, saved);\n        System.out.println(dirty);\n        System.out.println(Arrays.equals(current, saved));\n    }\n}",
+    "fixNote": "Compute dirty with !Arrays.equals(current, saved).",
+    "debugTip": "Break on line 8 and evaluate current.equals(saved) and Arrays.equals(current, saved) in the debugger; when two calls that \"should\" agree disagree, check which equals is actually being used.",
+    "buggyOutput": "false\ntrue\ntrue",
+    "fixedOutput": "false\nfalse\ntrue"
+  },
+  {
+    "id": "int-a-20",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "Formatting a tag list",
+    "kind": "output",
+    "scenario": "Tags should be shown as [java, sql, go] and also as a pipe-separated line.",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> tags = List.of(\"java\", \"sql\", \"go\");\n        String out = tags.stream()\n            .collect(Collectors.joining(\"[\", \", \", \"]\"));\n        System.out.println(out);\n        System.out.println(String.join(\"|\", tags));\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What does this print?",
+    "options": [
+      "[java, sql, go] then java|sql|go",
+      "[java[sql[go] then java|sql|go",
+      ", java[sql[go] then java|sql|go",
+      "[java, sql, go] then |java|sql|go|"
+    ],
+    "answer": 2,
+    "explanation": "Collectors.joining takes (delimiter, prefix, suffix), in that order. Here the delimiter is \"[\", the prefix is \", \" and the suffix is \"]\", giving \", java[sql[go]\". String.join(\"|\", tags) puts the separator only between elements.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> tags = List.of(\"java\", \"sql\", \"go\");\n        String out = tags.stream()\n            .collect(Collectors.joining(\", \", \"[\", \"]\"));\n        System.out.println(out);\n        System.out.println(String.join(\"|\", tags));\n    }\n}",
+    "fixNote": "Reordered the arguments to joining(\", \", \"[\", \"]\").",
+    "debugTip": "Break on line 9 and evaluate tags.stream().collect(Collectors.joining(\"<D>\", \"<P>\", \"<S>\")) with marker strings; the result shows which argument goes where.",
+    "buggyOutput": ", java[sql[go]\njava|sql|go",
+    "fixedOutput": "[java, sql, go]\njava|sql|go"
+  },
+  {
+    "id": "int-a-21",
+    "level": "intermediate",
+    "topic": "PriorityQueue",
+    "title": "Printing a priority queue",
+    "kind": "output",
+    "scenario": "Five numbers go into a PriorityQueue, and the author prints the queue expecting to see them in sorted order.",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Queue<Integer> pq = new PriorityQueue<>();\n        for (int x : new int[] {5, 1, 4, 2, 3}) {\n            pq.add(x);\n        }\n        System.out.println(pq.peek());\n        System.out.println(pq);\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "What does this print?",
+    "options": [
+      "1 then [1, 2, 3, 4, 5]",
+      "1 then [1, 2, 4, 5, 3]",
+      "5 then [5, 1, 4, 2, 3]",
+      "1 then [1, 5, 4, 2, 3]"
+    ],
+    "answer": 1,
+    "explanation": "PriorityQueue is a binary min-heap stored in an array. It only guarantees that the head is the smallest; toString() and iteration walk the backing array in heap order. Adding 5, 1, 4, 2, 3 with sift-up leaves the array as [1, 2, 4, 5, 3]. To get sorted order, poll() repeatedly.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Queue<Integer> pq = new PriorityQueue<>();\n        for (int x : new int[] {5, 1, 4, 2, 3}) {\n            pq.add(x);\n        }\n        System.out.println(pq.peek());\n        StringBuilder sb = new StringBuilder();\n        while (!pq.isEmpty()) {\n            sb.append(pq.poll()).append(' ');\n        }\n        System.out.println(sb.toString().trim());\n    }\n}",
+    "fixNote": "Drain the queue with poll() to get elements in priority order.",
+    "debugTip": "Inspect pq in the variables view after the loop and expand its internal queue array: it holds heap order, not sorted order, which is exactly what toString() prints.",
+    "buggyOutput": "1\n[1, 2, 4, 5, 3]",
+    "fixedOutput": "1\n1 2 3 4 5"
+  },
+  {
+    "id": "int-a-22",
+    "level": "intermediate",
+    "topic": "Immutability",
+    "title": "Sorting names from a loader",
+    "kind": "trace",
+    "scenario": "Names come from a helper method and are sorted for display. The size prints, then sorting crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.UnsupportedOperationException\n\tat java.base/java.util.ImmutableCollections.uoe(ImmutableCollections.java:142)\n\tat java.base/java.util.ImmutableCollections$AbstractImmutableList.sort(ImmutableCollections.java:261)\n\tat java.base/java.util.Collections.sort(Collections.java:145)\n\tat Main.main(Main.java:11)",
+    "code": "import java.util.*;\n\npublic class Main {\n    static List<String> loadNames() {\n        return List.of(\"cara\", \"abe\", \"bo\");\n    }\n\n    public static void main(String[] args) {\n        List<String> names = loadNames();\n        System.out.println(names.size());\n        Collections.sort(names);\n        System.out.println(names);\n    }\n}",
+    "bugLines": [
+      5,
+      11
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "loadNames returns an immutable List.of list, which cannot be sorted in place",
+      "Collections.sort needs a Comparator for String",
+      "Strings of different lengths cannot be compared",
+      "names is a view of a temporary array that was freed"
+    ],
+    "answer": 0,
+    "explanation": "List.of returns an unmodifiable list; every mutator, including sort(), throws UnsupportedOperationException. Collections.sort(list) just calls list.sort(null), as the frames show. Reading past the JDK frames to Main line 11 tells you who tried to mutate, and the list's origin (line 5) tells you why it is immutable. Copy into an ArrayList before sorting.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static List<String> loadNames() {\n        return List.of(\"cara\", \"abe\", \"bo\");\n    }\n\n    public static void main(String[] args) {\n        List<String> names = new ArrayList<>(loadNames());\n        System.out.println(names.size());\n        Collections.sort(names);\n        System.out.println(names);\n    }\n}",
+    "fixNote": "Sort a mutable copy: new ArrayList<>(loadNames()).",
+    "debugTip": "Break on line 11 and evaluate names.getClass(): java.util.ImmutableCollections$ListN tells you the list is from List.of before you even step into sort().",
+    "buggyOutput": "3",
+    "throws": "java.lang.UnsupportedOperationException",
+    "fixedOutput": "3\n[abe, bo, cara]"
+  }
+]

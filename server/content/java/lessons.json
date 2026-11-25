@@ -1,0 +1,448 @@
+[
+  {
+    "id": "les-beg-01",
+    "level": "beginner",
+    "title": "A debugging mindset",
+    "body": [
+      "Debug in a loop: reproduce, isolate, hypothesise, test, fix, prevent. Skipping a step (usually \"reproduce\") is how you end up changing code at random.",
+      "Reproduce first: find the smallest input and the exact steps that trigger the bug every time. A bug you can trigger on demand is half solved.",
+      "Isolate by halving the search space: comment out half the code path, feed simpler input, or check the value at the midpoint of the pipeline.",
+      "State one hypothesis you can test (\"total is wrong because the loop skips the last item\"), then run one experiment that proves or kills it.",
+      "Fix the cause, not the symptom. A null check that hides a NullPointerException is a symptom fix if the value should never have been null.",
+      "Prevent it coming back: turn your reproduction into a unit test that fails before the fix and passes after.",
+      "Change one thing at a time and keep notes. If you change three things and it works, you do not know which one fixed it."
+    ],
+    "example": "1. Reproduce: input \"a,,b\" -> crash, every time\n2. Isolate:   split() OK, parse() crashes\n3. Hypothesis: empty token \"\" reaches parseInt\n4. Test:      print token before parseInt -> \"\"\n5. Fix:       skip blank tokens\n6. Prevent:   add test parse(\"a,,b\")"
+  },
+  {
+    "id": "les-beg-02",
+    "level": "beginner",
+    "title": "Reading a stack trace",
+    "body": [
+      "Line 1 gives the exception type and message. The type says what kind of failure; the message often names the bad value.",
+      "The frames below are the call stack, newest call first. The top frame is where the exception was thrown, which is often inside the JDK.",
+      "Scan down to the first frame in your own package. That is usually the line to inspect first, because your code passed the bad value in.",
+      "\"Caused by:\" introduces the exception that was wrapped. The root cause is usually the last \"Caused by\" block, so read it first.",
+      "\"... 3 more\" means the remaining frames are identical to the enclosing trace above it. Nothing is hidden that you cannot see elsewhere.",
+      "File name and line number (Config.java:34) let you jump straight there; most IDEs make them clickable in the console."
+    ],
+    "example": "Exception in thread \"main\"\n  java.lang.IllegalStateException: bad config\n  at app.Config.load(Config.java:21)\n  at app.Main.main(Main.java:8)\nCaused by: java.lang.NumberFormatException:\n  For input string: \"12a\"\n  at java.base/java.lang.Integer.parseInt(...)\n  at app.Config.port(Config.java:34)   <- start\n  at app.Config.load(Config.java:19)\n  ... 1 more\n(long lines wrapped to fit)"
+  },
+  {
+    "id": "les-beg-03",
+    "level": "beginner",
+    "title": "Compile errors, runtime exceptions, logic bugs",
+    "body": [
+      "Compile errors stop javac before anything runs: \"cannot find symbol\", \"incompatible types\", \"missing return statement\". Fix the first error first; later ones are often knock-on effects.",
+      "Runtime exceptions happen while the program runs and come with a stack trace. The code is legal Java but hit a bad state, such as a null or an index out of range.",
+      "Logic bugs give no error at all: the program runs and prints the wrong answer. They are the hardest, because you must first know what the right answer is.",
+      "For logic bugs, write down the expected value at each step, then compare with the actual value using prints or a debugger until they diverge.",
+      "An off-by-one (< vs <=), integer division (5 / 2 == 2) and comparing strings with == are the classic logic bugs to check first."
+    ],
+    "example": "int x = \"5\";          // compile error: types\nint[] a = new int[3];\na[3] = 1;             // runtime: AIOOBE\ndouble avg = 5 / 2;   // logic: avg is 2.0\nif (s == \"yes\") {}    // logic: use equals()"
+  },
+  {
+    "id": "les-beg-04",
+    "level": "beginner",
+    "title": "Print debugging done well",
+    "body": [
+      "Always label what you print: \"total=\" + total beats a bare 42 that you cannot match back to a variable.",
+      "Print before and after the suspect step so you see exactly where a value goes wrong.",
+      "Show boundaries and invisible characters by wrapping strings in brackets: \"[\" + s + \"]\" exposes leading spaces and empty strings.",
+      "Use Arrays.toString(arr) for arrays; printing an array directly gives something like [I@1b6d3586.",
+      "Print to System.err to keep debug output apart from real output, and delete the prints (or turn them into logging) once you are done.",
+      "If you are adding a fifth print and rerunning again, switch to a breakpoint: it shows every variable without editing code."
+    ],
+    "example": "System.err.println(\"before: i=\" + i\n    + \" sum=\" + sum);\nsum += prices[i];\nSystem.err.println(\"after:  sum=\" + sum);\n\nSystem.err.println(\"name=[\" + name + \"]\");\nSystem.err.println(\"arr=\" + Arrays.toString(arr));"
+  },
+  {
+    "id": "les-beg-05",
+    "level": "beginner",
+    "title": "Breakpoints and the Variables view",
+    "body": [
+      "A breakpoint pauses the program just before the marked line runs. Click the gutter next to a line number and start the program in debug mode, not normal run.",
+      "While paused, the Variables view shows every local variable, the parameters and the fields of this. Expand objects to drill into their fields.",
+      "The Frames (call stack) view lists how you got here. Click a lower frame to see that caller's variables at the moment of the call.",
+      "Put the breakpoint on the line before the crash or on the first line of the suspect method, not on the line after it.",
+      "A breakpoint that never hits tells you something too: that code path is not running at all.",
+      "Values shown are the state before the highlighted line executes. Step once to see the line's effect."
+    ],
+    "example": "Paused at Cart.java:14\nFrames:            Variables:\n> total()  :14       this = Cart@512\n  checkout():31        items = ArrayList size=3\n  main()   :8        i = 2\n                     sum = 37.5"
+  },
+  {
+    "id": "les-beg-06",
+    "level": "beginner",
+    "title": "Step over, into, out and resume",
+    "body": [
+      "Step over runs the current line, including any method calls on it, and stops on the next line of the same method.",
+      "Step into enters the method called on the current line. Use it when you suspect that method returns the wrong thing.",
+      "Step out finishes the current method and stops back in the caller, right after the call. Use it when you stepped into something uninteresting.",
+      "Resume (continue) runs until the next breakpoint is hit or the program ends.",
+      "Most IDEs skip JDK and library classes on step into by default; if you land in one anyway, step out.",
+      "\"Run to cursor\" runs to the line you clicked without adding a breakpoint, which saves stepping through a long loop."
+    ],
+    "example": "8  int n = parse(input);   // step INTO parse()\n9  int r = square(n);      // step OVER square()\n10 print(r);               // RESUME to next bp\n\ninside parse():\n21   String t = s.trim();\n22   return Integer.parseInt(t); // step OUT"
+  },
+  {
+    "id": "les-beg-07",
+    "level": "beginner",
+    "title": "Watches and evaluate expression",
+    "body": [
+      "A watch is an expression the debugger re-evaluates every time it pauses, such as items.size() or user.getName().",
+      "Watch derived values you would otherwise work out in your head: i < list.size(), total / count, s.length().",
+      "Evaluate expression runs any Java expression in the paused frame, such as map.get(\"key\") or list.stream().filter(x -> x < 0).count().",
+      "Evaluating code with side effects (list.remove(0), iterator.next()) changes program state for real, so the rest of the run may behave differently.",
+      "Many IDEs let you set a variable's value while paused. That is a quick way to test \"would it work if x were 0?\" without a rebuild."
+    ],
+    "example": "Watches (paused at line 14):\n  i                     = 3\n  i < items.size()      = false   <- loop ends\n  items.get(i - 1)      = \"milk\"\n  total / items.size()  = 12\n\nEvaluate: items.contains(\"eggs\")  -> false"
+  },
+  {
+    "id": "les-beg-08",
+    "level": "beginner",
+    "title": "Beginner exceptions cheat sheet",
+    "body": [
+      "NullPointerException: you called a method or read a field on null. Find which reference is null, then ask why it was never set.",
+      "ArrayIndexOutOfBoundsException: an index is < 0 or >= length. Look for <= in a loop bound or length used where length - 1 was meant.",
+      "NumberFormatException: Integer.parseInt or similar got text that is not a number, such as \"\", \" 42\" or \"4.5\". Print the input in brackets.",
+      "ClassCastException: a cast to a type the object is not, often from raw collections or Object. The message names both classes.",
+      "ArithmeticException: \"/ by zero\" from integer division or modulo by 0. Double division gives Infinity or NaN instead of throwing.",
+      "IndexOutOfBoundsException (lists) and StringIndexOutOfBoundsException (substring, charAt) work like the array version."
+    ],
+    "example": "NullPointerException      -> what is null?\nArrayIndexOutOfBounds...  -> check loop bounds\nNumberFormatException     -> print \"[\" + s + \"]\"\nClassCastException        -> what is the real type?\nArithmeticException       -> divisor is 0\n\njava.lang.ArrayIndexOutOfBoundsException:\n  Index 3 out of bounds for length 3"
+  },
+  {
+    "id": "les-int-01",
+    "level": "intermediate",
+    "title": "Conditional breakpoints and hit counts",
+    "body": [
+      "A conditional breakpoint only pauses when a boolean expression is true, such as id == 4711 or name.equals(\"bob\"). Ideal for the one bad item in 10,000.",
+      "Write null-safe conditions: \"bob\".equals(name) will not throw when name is null.",
+      "A hit count (pass count) pauses on the Nth hit. Use it when the bug shows up on, say, the 500th iteration.",
+      "Conditions are evaluated on every hit, which can slow a tight loop a lot. If it crawls, add a temporary if-block in code and break inside it.",
+      "A logging breakpoint (logpoint, or a breakpoint set not to suspend) prints an expression without pausing: print debugging without editing code.",
+      "Dependent breakpoints (\"only enable after breakpoint X is hit\") let you skip startup noise and stop only in the flow you care about."
+    ],
+    "example": "for (Order o : orders) {\n    process(o);          // bp condition:\n}                        //   o.getId() == 4711\n\n// condition that cannot itself throw:\n//   o != null && \"EUR\".equals(o.currency())\n\n// logpoint, no suspend:\n//   \"id=\" + o.getId() + \" total=\" + o.total()"
+  },
+  {
+    "id": "les-int-02",
+    "level": "intermediate",
+    "title": "Exception breakpoints",
+    "body": [
+      "An exception breakpoint pauses at the moment an exception is thrown, with all local variables still intact, before any catch block runs.",
+      "Break on uncaught exceptions to stop where the crash starts rather than reading the stack trace after the fact.",
+      "Break on caught exceptions to find errors that are swallowed by catch (Exception e) {} or turned into a vague message further up.",
+      "Narrow it to one type (e.g. java.lang.NullPointerException) and, if your IDE supports it, a class filter like com.myapp.*. Otherwise JDK and framework internals trigger it constantly.",
+      "From the paused frame, walk the Frames view upward to see which of your calls passed in the bad value."
+    ],
+    "example": "Exception breakpoint:\n  type:    java.lang.NumberFormatException\n  caught:  yes    uncaught: yes\n  filter:  com.myapp.*\n\ntry {\n    port = Integer.parseInt(raw); // pauses here\n} catch (NumberFormatException e) {\n    port = 8080;  // bug was hidden by this\n}"
+  },
+  {
+    "id": "les-int-03",
+    "level": "intermediate",
+    "title": "Reproduce with a failing unit test",
+    "body": [
+      "Before fixing, write a test that fails because of the bug. It proves you have reproduced it and it guards against the bug returning.",
+      "Keep the test minimal: the smallest input that still triggers the failure. Shrinking the input often reveals the cause on its own.",
+      "Use assertEquals(expected, actual) in that order so the failure message reads correctly; use assertThrows for expected exceptions.",
+      "Debug the test itself: set a breakpoint in production code and run the single test in debug mode. That beats restarting the whole app.",
+      "Name the test after the behaviour (\"parsesEmptyField\"), not the ticket number, so it still makes sense later."
+    ],
+    "example": "import static org.junit.jupiter.api.Assertions.*;\nimport org.junit.jupiter.api.Test;\n\nclass CsvParserTest {\n    @Test\n    void parsesEmptyField() {\n        var row = CsvParser.parse(\"a,,b\");\n        assertEquals(3, row.size());\n        assertEquals(\"\", row.get(1));\n    }\n\n    @Test\n    void rejectsNullInput() {\n        assertThrows(NullPointerException.class,\n            () -> CsvParser.parse(null));\n    }\n}"
+  },
+  {
+    "id": "les-int-04",
+    "level": "intermediate",
+    "title": "Logging instead of println",
+    "body": [
+      "Use a logging API (SLF4J with Logback or Log4j 2, or java.util.logging) so you can switch detail on and off by configuration, without editing code.",
+      "SLF4J levels from noisy to severe: TRACE, DEBUG, INFO, WARN, ERROR. java.util.logging uses FINEST, FINER, FINE, CONFIG, INFO, WARNING, SEVERE.",
+      "Use {} placeholders: log.debug(\"id={}\", id). The message is only formatted if DEBUG is enabled, so it is cheap when off.",
+      "Pass the exception as the last argument, log.error(\"load failed id={}\", id, e), to get the full stack trace. Logging only e.getMessage() throws away the stack.",
+      "Turn on DEBUG for one package (e.g. com.myapp.billing) rather than everything, or the signal drowns.",
+      "Logger, timestamp and thread name in each line tell you who logged, when, and on which thread, which println never does."
+    ],
+    "example": "import org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\nclass Billing {\n  private static final Logger log =\n      LoggerFactory.getLogger(Billing.class);\n\n  void charge(String id, long cents) {\n    log.debug(\"charge id={} cents={}\", id, cents);\n    try {\n      gateway.charge(id, cents);\n    } catch (GatewayException e) {\n      log.error(\"charge failed id={}\", id, e);\n      throw e;\n    }\n  }\n}"
+  },
+  {
+    "id": "les-int-05",
+    "level": "intermediate",
+    "title": "Fail fast: requireNonNull and assertions",
+    "body": [
+      "The earlier a bad value is rejected, the closer the stack trace is to the real mistake. A null stored now and used an hour later is very hard to trace.",
+      "Objects.requireNonNull(x, \"x\") in constructors and public methods throws immediately with a clear message.",
+      "Objects.checkIndex(i, size) (Java 9+) validates an index and throws IndexOutOfBoundsException with the values in the message.",
+      "assert cond : \"message\"; checks internal invariants, but assertions are off by default. Enable them with java -ea (Maven Surefire enables them for tests by default).",
+      "Never put required behaviour inside an assert: with assertions disabled the expression is not evaluated at all.",
+      "Throw IllegalArgumentException for bad arguments and IllegalStateException for calls made in the wrong state, and include the bad value in the message."
+    ],
+    "example": "record Order(String id, List<Item> items) {\n    Order {\n        Objects.requireNonNull(id, \"id\");\n        items = List.copyOf(items); // NPE if null\n        if (items.isEmpty())\n            throw new IllegalArgumentException(\n                \"order \" + id + \" has no items\");\n    }\n}\n\nassert total >= 0 : \"total=\" + total;\n// run with: java -ea -cp app.jar Main"
+  },
+  {
+    "id": "les-int-06",
+    "level": "intermediate",
+    "title": "Helpful NullPointerException messages",
+    "body": [
+      "Since Java 14 (on by default from Java 15, JEP 358) the NPE message says what was null and what was being done with it.",
+      "\"Cannot invoke X because Y is null\": Y is the null reference and X is the method you tried to call on it.",
+      "In a chain like a.getB().getC().name(), the message pins down which link returned null, so you do not need to split the line to find out.",
+      "Fields appear as \"this.name\" or \"Main.cache\", array elements as \"arr[i]\", and method results as the return value of a named method.",
+      "Local variables show as \"<local4>\" unless the class was compiled with debug info (javac -g). Maven and Gradle include it by default.",
+      "The message tells you where, not why. Next, find where that reference should have been set."
+    ],
+    "example": "String city = order.getCustomer()\n                   .getAddress().city();\n\nException in thread \"main\"\n  java.lang.NullPointerException:\n  Cannot invoke \"Address.city()\" because\n  the return value of\n  \"Customer.getAddress()\" is null\n\n-> getCustomer() was fine; getAddress()\n   returned null"
+  },
+  {
+    "id": "les-int-07",
+    "level": "intermediate",
+    "title": "Debugging collections: equals and hashCode",
+    "body": [
+      "If set.contains(x) or map.get(key) unexpectedly misses, suspect equals/hashCode first: overriding equals without hashCode breaks HashSet and HashMap.",
+      "Check the contract in evaluate expression: a.equals(b) and a.hashCode() == b.hashCode() should both be true for keys you think are the same.",
+      "Mutating a field used in hashCode after inserting the object \"loses\" it: it now sits in the wrong bucket, and contains returns false.",
+      "System.identityHashCode(a) == System.identityHashCode(b) tells you whether two references are literally the same object.",
+      "equals(Object o) must take Object. Writing equals(Point p) creates an overload that collections never call.",
+      "Records, or IDE-generated equals/hashCode over the same fields, avoid most of these bugs. Use immutable keys."
+    ],
+    "example": "Set<Point> seen = new HashSet<>();\nPoint p = new Point(1, 2);\nseen.add(p);\np.x = 5;                  // mutates the key!\nseen.contains(p);         // false\n\nEvaluate while paused:\n  p.equals(new Point(5, 2))       -> true\n  p.hashCode() ==\n    new Point(5, 2).hashCode()    -> true\n  seen.size()                     -> 1\n  seen.iterator().next() == p     -> true\n  // stored in the bucket for (1,2)"
+  },
+  {
+    "id": "les-int-08",
+    "level": "intermediate",
+    "title": "Bisecting a regression with git bisect",
+    "body": [
+      "When something worked in an older version and fails now, git bisect binary-searches the commits between to find the one that broke it.",
+      "Mark the current commit bad and a known working tag or commit good. Git checks out the midpoint; you test and mark it good or bad.",
+      "1,000 commits take only about 10 steps, because each step halves the range.",
+      "Automate it with git bisect run <cmd>: exit code 0 means good, 1-127 means bad, and 125 means \"cannot test, skip this commit\".",
+      "A focused failing test makes the perfect bisect command. Always finish with git bisect reset to return to your branch."
+    ],
+    "example": "git bisect start\ngit bisect bad                 # HEAD is broken\ngit bisect good v2.3.0         # this worked\n\n# manual: build, test, then one of:\ngit bisect good    # or: git bisect bad\n\n# or automatic:\ngit bisect run ./mvnw -q test \\\n    -Dtest=CsvParserTest#parsesEmptyField\n\n# -> \"abc123 is the first bad commit\"\ngit bisect reset"
+  },
+  {
+    "id": "les-adv-01",
+    "level": "advanced",
+    "title": "Thread dumps and thread states",
+    "body": [
+      "A thread dump is a snapshot of every thread's stack. Take one when an app hangs, is slow, or burns CPU: jstack <pid> or jcmd <pid> Thread.print.",
+      "Find the pid with jcmd (no arguments) or jps -l. Run the tools as the same OS user as the JVM.",
+      "RUNNABLE means running or ready to run. Threads blocked in native socket reads also show RUNNABLE, so check the top frame.",
+      "BLOCKED means waiting to enter a synchronized block held by another thread; look for \"waiting to lock <0x...>\" and find who holds it.",
+      "WAITING / TIMED_WAITING means parked in wait(), join(), sleep(), LockSupport.park or a queue take(). That is normal for idle pool threads.",
+      "Take 3 dumps 5-10 seconds apart. A thread stuck in the same frame in all three is your suspect; one that keeps moving is just busy."
+    ],
+    "example": "jcmd                       # list JVMs and pids\njcmd 4242 Thread.print > dump1.txt\njstack -l 4242 > dump2.txt # -l: lock details\n\n\"worker-3\" #21 prio=5 ... waiting for monitor\n   java.lang.Thread.State: BLOCKED (on object\n   monitor)\n  at app.Cache.get(Cache.java:40)\n  - waiting to lock <0x...a1> (a app.Cache)\n  at app.Api.handle(Api.java:17)"
+  },
+  {
+    "id": "les-adv-02",
+    "level": "advanced",
+    "title": "Spotting deadlocks",
+    "body": [
+      "A deadlock is two or more threads each holding a lock the other needs. CPU stays low and the affected requests never complete.",
+      "jstack and jcmd Thread.print detect monitor and ReentrantLock deadlocks automatically and print \"Found one Java-level deadlock\" at the end of the dump.",
+      "The report lists each thread, the lock it waits for, and which thread holds that lock: a cycle.",
+      "Programmatically, ThreadMXBean.findDeadlockedThreads() returns the ids of deadlocked threads, which is useful in health checks.",
+      "The usual cause is acquiring two locks in different orders (A then B vs B then A). Fix it with a global lock order, or tryLock with a timeout.",
+      "Lots of BLOCKED threads without a cycle is lock contention, not a deadlock. Find the holder and see why it holds the lock so long."
+    ],
+    "example": "Found one Java-level deadlock:\n=============================\n\"t1\":\n  waiting to lock monitor 0x...\n  (object 0x...b2, a app.Account),\n  which is held by \"t2\"\n\"t2\":\n  waiting to lock monitor 0x...\n  (object 0x...a1, a app.Account),\n  which is held by \"t1\"\n\nFix: always lock the lower account id first"
+  },
+  {
+    "id": "les-adv-03",
+    "level": "advanced",
+    "title": "Debugging threads: suspend policies",
+    "body": [
+      "A breakpoint can suspend all threads or only the thread that hit it. JDWP calls these SUSPEND_ALL and SUSPEND_EVENT_THREAD; IDEs show \"All\" vs \"Thread\" (or \"Suspend VM\" vs \"Suspend thread\").",
+      "Suspend all freezes the world, so state cannot change under you while you inspect it. But timeouts, heartbeats and other threads all stop too.",
+      "Suspend thread lets other threads keep running. Use it for servers and to catch two threads arriving at the same breakpoint.",
+      "Pausing changes timing, so races often vanish under the debugger (a \"heisenbug\"). Prefer logpoints (non-suspending breakpoints) or a thread dump for timing bugs.",
+      "In the Threads view you can switch between paused threads and inspect each one's stack, which is handy for confirming a lock-order problem.",
+      "Add the thread name to your conditions or logpoints (Thread.currentThread().getName()) to see who arrives when."
+    ],
+    "example": "Breakpoint at Inventory.java:52\n  Suspend: Thread        (not All)\n  Condition:\n    Thread.currentThread().getName()\n        .startsWith(\"http-nio\")\n\nLogpoint (no suspend):\n  Thread.currentThread().getName()\n    + \" stock=\" + stock"
+  },
+  {
+    "id": "les-adv-04",
+    "level": "advanced",
+    "title": "Heap dumps and Eclipse MAT",
+    "body": [
+      "A heap dump is a snapshot of every object on the heap. Take one when memory keeps growing or after an OutOfMemoryError.",
+      "On demand: jcmd <pid> GC.heap_dump /tmp/app.hprof. Use an absolute path, since a relative one resolves against the target JVM's working directory. By default only live objects are dumped, after a full GC.",
+      "Automatically: -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps. Set this in production so the evidence exists when the OOM happens.",
+      "In Eclipse MAT, start with the Leak Suspects report, then the dominator tree sorted by retained heap.",
+      "Shallow size is the object itself; retained size is everything that would be freed if it went away. A small HashMap retaining 2 GB is the leak.",
+      "Use \"Path to GC Roots\" (excluding weak/soft references) to see why a suspect object is still reachable, e.g. a static cache or a listener list.",
+      "Dumps are roughly heap-sized, pause the JVM while being written, and contain sensitive data. Treat them like a database backup."
+    ],
+    "example": "jcmd 4242 GC.heap_dump /tmp/app.hprof\n\njava -XX:+HeapDumpOnOutOfMemoryError \\\n     -XX:HeapDumpPath=/dumps -jar app.jar\n\nMAT dominator tree:\nClass                   Shallow  Retained\napp.SessionCache          24 B    1.9 GB\n java.util.HashMap        48 B    1.9 GB\n  java.util.HashMap$Node[] ...    1.9 GB"
+  },
+  {
+    "id": "les-adv-05",
+    "level": "advanced",
+    "title": "Class histograms: a cheap memory look",
+    "body": [
+      "A class histogram lists instance counts and bytes per class. It is much faster and smaller than a full heap dump.",
+      "jcmd <pid> GC.class_histogram or jmap -histo:live <pid>. Both live variants force a full GC first, which pauses the app.",
+      "jmap -histo <pid> (no :live) skips the GC and includes garbage, which is cheaper but noisier.",
+      "Take two histograms minutes apart and diff them. Classes whose counts only ever grow are your leak candidates.",
+      "[B (byte[]), [C, java.lang.String and HashMap$Node usually top the list. Look for your own classes ranked unexpectedly high.",
+      "A histogram tells you what is piling up, not who holds it. Follow up with a heap dump and Path to GC Roots."
+    ],
+    "example": "jcmd 4242 GC.class_histogram | head -8\n\n num  #instances    #bytes  class name\n---------------------------------------\n   1:   1203345  96267600  [B\n   2:   1201877  28845048  java.lang.String\n   3:    600112  19203584  app.AuditEvent\n   4:    600112  14402688  java.util.HashMap$Node\n...\n# AuditEvent count grows every minute"
+  },
+  {
+    "id": "les-adv-06",
+    "level": "advanced",
+    "title": "Reading GC logs",
+    "body": [
+      "Enable unified GC logging (JDK 9+) with -Xlog:gc*:file=gc.log:time,uptime,level,tags. Add filecount=5,filesize=20m to rotate.",
+      "Each pause line shows the GC type, heap before->after(total) and pause time. Watch the \"after\" number over time.",
+      "If heap-after-GC keeps rising across many collections, live data is growing: a leak or an unbounded cache.",
+      "Frequent young pauses with flat heap-after mean high allocation rate. Profile allocations rather than adding heap.",
+      "Repeated \"Pause Full\" collections that recover little memory mean the heap is nearly full of live data; an OutOfMemoryError is near.",
+      "Logging is cheap enough for production. Turn it on before an incident, not after."
+    ],
+    "example": "java -Xlog:gc*:file=gc.log:time,uptime,level,tags\\\n:filecount=5,filesize=20m -jar app.jar\n\n[12.3s][info][gc] GC(41) Pause Young (Normal)\n  (G1 Evacuation Pause) 812M->301M(1024M) 9.8ms\n[95.1s][info][gc] GC(97) Pause Young (Normal)\n  (G1 Evacuation Pause) 900M->702M(1024M) 14ms\n[96.0s][info][gc] GC(98) Pause Full\n  (G1 Compaction Pause) 1020M->998M(1024M) 2.1s\n-> live set ~1 GB in a 1 GB heap\n(long lines wrapped to fit)"
+  },
+  {
+    "id": "les-adv-07",
+    "level": "advanced",
+    "title": "Java Flight Recorder and Mission Control",
+    "body": [
+      "JFR is a low-overhead event recorder built into the JDK (free in OpenJDK 11+). It records CPU samples, allocations, locks, GC, I/O and exceptions.",
+      "Start at launch: -XX:StartFlightRecording=duration=120s,filename=rec.jfr. The default settings target about 1% overhead; settings=profile records more detail.",
+      "Attach to a running JVM: jcmd <pid> JFR.start name=r settings=profile, then jcmd <pid> JFR.dump name=r filename=/tmp/rec.jfr, then JFR.stop name=r.",
+      "Open the .jfr in JDK Mission Control (JMC, a separate download). Method Profiling shows hot methods; Lock Instances shows contention; Allocations shows who creates garbage.",
+      "No GUI? jfr summary rec.jfr gives event counts, and jfr print --events jdk.ExecutionSample rec.jfr dumps raw samples.",
+      "Keep a continuous recording in production (maxage=1h, disk=true) so you can dump the last hour right after an incident."
+    ],
+    "example": "java -XX:StartFlightRecording=duration=120s,\\\nfilename=rec.jfr -jar app.jar\n\njcmd 4242 JFR.start name=r settings=profile\njcmd 4242 JFR.dump name=r filename=/tmp/rec.jfr\njcmd 4242 JFR.stop name=r\n\njfr summary /tmp/rec.jfr\njfr print --events jdk.JavaMonitorEnter \\\n    /tmp/rec.jfr | head -40"
+  },
+  {
+    "id": "les-adv-08",
+    "level": "advanced",
+    "title": "Remote debugging with JDWP",
+    "body": [
+      "Start the JVM with the JDWP agent and attach your IDE's \"Remote JVM Debug\" configuration to the port: same breakpoints and stepping as locally.",
+      "suspend=n starts the app normally; suspend=y waits for a debugger before main runs, which is useful for startup bugs.",
+      "Since JDK 9, address=5005 listens on localhost only; address=*:5005 listens on all interfaces. Anyone who reaches that port can run arbitrary code in your JVM.",
+      "Prefer keeping it on localhost and tunnelling: ssh -L 5005:localhost:5005 host, or kubectl port-forward pod/app 5005:5005.",
+      "The source you have open must match the deployed build, or line numbers and breakpoints will be off.",
+      "A suspend-all breakpoint in a shared environment freezes everyone's requests. Use thread-only suspension or logpoints there."
+    ],
+    "example": "java -agentlib:jdwp=transport=dt_socket,\\\nserver=y,suspend=n,address=*:5005 -jar app.jar\n\n# safer: bind locally, tunnel in\njava -agentlib:jdwp=transport=dt_socket,\\\nserver=y,suspend=n,address=5005 -jar app.jar\nssh -L 5005:localhost:5005 user@host\n\n# command-line debugger\njdb -connect com.sun.jdi.SocketAttach:\\\nhostname=localhost,port=5005"
+  },
+  {
+    "id": "les-exp-01",
+    "level": "expert",
+    "title": "Reading bytecode with javap",
+    "body": [
+      "javap -c -p Foo.class disassembles every method, private ones included. Add -v for the constant pool, line tables and flags.",
+      "Use it when the source \"obviously\" cannot behave as it does: hidden autoboxing, string concatenation, synthetic bridge methods or lambdas.",
+      "Integer.valueOf / intValue calls reveal boxing, the usual source of surprise NPEs and == comparisons that fail above 127.",
+      "Since Java 9, string + compiles to invokedynamic makeConcatWithConstants; lambdas become invokedynamic plus a private lambda$name$0 method.",
+      "Check that the class you are running is the one you think: javap -v shows the class file version (major 61 = Java 17), and a stale class shows the old logic.",
+      "The LineNumberTable from javap -l maps bytecode offsets to source lines, which helps explain odd stepping in the debugger."
+    ],
+    "example": "// Integer count = map.get(k); int n = count;\njavap -c -p Main.class\n\n  10: invokeinterface #4  // Map.get\n  15: checkcast     #5    // class Integer\n  18: astore_2\n  19: aload_2\n  20: invokevirtual #6    // Integer.intValue\n  23: istore_3            // NPE here if null\n\njavap -v Main.class | grep major\n  major version: 61"
+  },
+  {
+    "id": "les-exp-02",
+    "level": "expert",
+    "title": "Class loading and initialisation failures",
+    "body": [
+      "ClassNotFoundException (checked) comes from loading a class by name (Class.forName, loadClass) when it is not on the classpath, typically a missing driver or plugin jar.",
+      "NoClassDefFoundError means the class was there at compile time but cannot be loaded now: a missing jar at runtime, or a class whose static initialiser failed earlier.",
+      "ExceptionInInitializerError wraps an exception thrown in a static initialiser. Every later use of that class throws \"NoClassDefFoundError: Could not initialize class X\", so look for the first error in the log.",
+      "NoSuchMethodError and NoSuchFieldError usually mean two versions of a library: you compiled against one and run with another. Check mvn dependency:tree or gradle dependencies.",
+      "Find out which jar a class actually came from with -verbose:class or -Xlog:class+load=info; each line shows the source location.",
+      "At runtime, Foo.class.getProtectionDomain().getCodeSource() in evaluate expression also reveals the jar."
+    ],
+    "example": "java -Xlog:class+load=info -jar app.jar \\\n  | grep JsonParser\n[0.412s][info][class,load] com.x.JsonParser\n  source: file:/app/lib/json-1.2.jar   <- old!\n\nException in thread \"main\"\n  java.lang.NoClassDefFoundError:\n  Could not initialize class app.Config\n-> scroll up for the first error:\n  java.lang.ExceptionInInitializerError\n  Caused by: java.lang.NumberFormatException"
+  },
+  {
+    "id": "les-exp-03",
+    "level": "expert",
+    "title": "Profiling CPU and allocations",
+    "body": [
+      "Do not guess where time goes: measure. Profile under realistic load, since a cold JVM spends its time in the interpreter and JIT.",
+      "async-profiler is a widely used open-source sampling profiler for Linux and macOS. It avoids safepoint bias and sees native and kernel frames.",
+      "Read a flame graph bottom-up: width is the share of samples, height is stack depth. Look for wide plateaus near the top; colours carry no meaning for cost.",
+      "Profile more than CPU: -e alloc finds allocation hotspots that drive GC, -e lock finds contention, and -e wall includes threads that are waiting (I/O, locks).",
+      "JFR with settings=profile gives method sampling with no extra install; open it in JMC or convert it to a flame graph.",
+      "For better accuracy with JFR and other JVM-based profilers, add -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints."
+    ],
+    "example": "# async-profiler 3.x (older: profiler.sh)\nasprof -d 30 -e cpu -f /tmp/cpu.html 4242\nasprof -d 30 -e alloc -f /tmp/alloc.html 4242\nasprof -d 30 -e wall -t -f /tmp/wall.html 4242\n\n# JDK only\njcmd 4242 JFR.start settings=profile \\\n     duration=30s filename=/tmp/cpu.jfr"
+  },
+  {
+    "id": "les-exp-04",
+    "level": "expert",
+    "title": "JMH, JIT and why microbenchmarks lie",
+    "body": [
+      "A hand-written timing loop measures the interpreter, then the JIT compiling, then dead code elimination, not your code. Use JMH for microbenchmarks.",
+      "Dead code: if a result is never used, the JIT may delete the work. Return it from the @Benchmark method or pass it to Blackhole.consume.",
+      "Constant folding: inputs known at compile time get precomputed. Keep inputs in @State fields, not literals or static finals.",
+      "Run warm-up iterations and several forks (@Fork); JIT decisions differ between runs. Read the error margin, not just the mean.",
+      "Use -XX:+PrintCompilation or -Xlog:jit+compilation=debug to see methods being compiled or deoptimised (\"made not entrant\") mid-run.",
+      "Safepoint bias: many profilers only sample at safepoints, so cost gets blamed on the wrong line. Confirm hot spots with two tools.",
+      "A microbenchmark win may not matter in the real app. Confirm with a production-like load test and a profile."
+    ],
+    "example": "@State(Scope.Thread)\n@Warmup(iterations = 5) @Measurement(iterations = 5)\n@Fork(3)\npublic class ParseBench {\n    String input = \"12345\"; // not a constant\n\n    @Benchmark\n    public int parse() {\n        return Integer.parseInt(input); // used\n    }\n}\n// run: java -jar target/benchmarks.jar \\\n//        ParseBench -prof gc"
+  },
+  {
+    "id": "les-exp-05",
+    "level": "expert",
+    "title": "Debugging in containers and production",
+    "body": [
+      "JDK 17 is container-aware: heap defaults come from the container memory limit. Size it with -XX:MaxRAMPercentage=75.0 rather than a fixed -Xmx that ignores the limit.",
+      "Run JDK tools inside the container as the same user as the JVM: kubectl exec -it pod -- jcmd 1 Thread.print. Distroless or JRE-only images may not include jcmd, so plan for it.",
+      "-XX:+ExitOnOutOfMemoryError makes the JVM exit on OOM so the orchestrator restarts it, instead of limping on half-broken. Pair it with -XX:+HeapDumpOnOutOfMemoryError and a mounted volume as HeapDumpPath.",
+      "Log structured JSON with a correlation ID on every line (SLF4J MDC) so you can follow one request across threads and services.",
+      "Check the JVM's effective settings with jcmd 1 VM.flags and jcmd 1 VM.system_properties; startup scripts often override what you think you set.",
+      "Prefer read-only evidence in production (thread dumps, JFR, logs, metrics) over attaching a debugger."
+    ],
+    "example": "JAVA_TOOL_OPTIONS=\"-XX:MaxRAMPercentage=75.0\n  -XX:+ExitOnOutOfMemoryError\n  -XX:+HeapDumpOnOutOfMemoryError\n  -XX:HeapDumpPath=/dumps\n  -Xlog:gc*:file=/logs/gc.log:time,uptime\"\n\nkubectl exec -it app-7f9c -- jcmd 1 VM.flags\n\n// per request\nMDC.put(\"traceId\", request.header(\"X-Trace-Id\"));\ntry { handle(request); }\nfinally { MDC.remove(\"traceId\"); }"
+  },
+  {
+    "id": "les-exp-06",
+    "level": "expert",
+    "title": "Flaky tests and nondeterminism",
+    "body": [
+      "A test that sometimes fails has a hidden input: time, randomness, thread scheduling, iteration order of HashMap/HashSet, test order, or the network.",
+      "Make randomness reproducible: create new Random(seed), log the seed on failure, and replay that seed locally.",
+      "Inject a java.time.Clock instead of calling Instant.now() so tests can use Clock.fixed(...). Watch for time-zone and DST assumptions.",
+      "Run the test many times to make it fail on demand: @RepeatedTest(500), or loop it in CI. Check for order dependence with @TestMethodOrder(MethodOrderer.Random.class).",
+      "Replace Thread.sleep waits with explicit synchronisation (CountDownLatch, or Awaitility's await().until(...)).",
+      "For memory-model and race bugs, use jcstress (OpenJDK Code Tools): it runs actor methods concurrently millions of times and counts each observed outcome."
+    ],
+    "example": "long seed = System.nanoTime();\nRandom rnd = new Random(seed);\nSystem.err.println(\"seed=\" + seed); // replay\n\n@JCStressTest\n@Outcome(id = \"1, 1\", expect = ACCEPTABLE)\n@Outcome(id = \"0, 0\", expect = FORBIDDEN,\n         desc = \"race seen\")\n@State\npublic class RaceTest {\n    int x, y;\n    @Actor public void a(II_Result r) { ... }\n    @Actor public void b(II_Result r) { ... }\n}"
+  },
+  {
+    "id": "les-exp-07",
+    "level": "expert",
+    "title": "Off-heap and native memory",
+    "body": [
+      "Process RSS can exceed -Xmx by a lot: metaspace, thread stacks, code cache, GC structures, direct ByteBuffers and native libraries all live outside the heap.",
+      "Enable Native Memory Tracking with -XX:NativeMemoryTracking=summary (it must be set at startup and costs some performance), then run jcmd <pid> VM.native_memory summary.",
+      "To find growth: jcmd <pid> VM.native_memory baseline, wait, then jcmd <pid> VM.native_memory summary.diff.",
+      "NMT only tracks memory the JVM itself allocates. Memory malloc'ed by native libraries (JNI, some compression or crypto libs) does not appear there; compare NMT's total with RSS from ps or pmap.",
+      "Thread count times stack size (-Xss, often 1 MB) adds up. A thread leak shows as a growing \"Thread\" section and eventually \"unable to create native thread\".",
+      "Cap direct buffers with -XX:MaxDirectMemorySize and metaspace with -XX:MaxMetaspaceSize so leaks fail loudly instead of the OS killing the process."
+    ],
+    "example": "java -XX:NativeMemoryTracking=summary -jar app.jar\n\njcmd 4242 VM.native_memory baseline\n# ...wait while it grows...\njcmd 4242 VM.native_memory summary.diff\n\nTotal: reserved=3.1GB +410MB, committed=1.9GB +405MB\n- Java Heap  committed=1024MB +0MB\n- Thread     committed=402MB +380MB\n             (threads #398 +370)   <- leak\n- Metaspace  committed=98MB +2MB"
+  },
+  {
+    "id": "les-exp-08",
+    "level": "expert",
+    "title": "Post-mortem: OOM killer, Java OOM and crashes",
+    "body": [
+      "Java OutOfMemoryError: the JVM throws it with a reason. \"Java heap space\" (live data too big or a leak), \"Metaspace\" (class leak), \"Direct buffer memory\", \"unable to create native thread\".",
+      "Linux OOM killer: the process just vanishes with no Java stack trace and no hs_err file, exit code 137 (SIGKILL). Check dmesg, or \"OOMKilled\" in kubectl describe pod.",
+      "An OOM kill means total RSS exceeded the container or host limit, usually heap plus native memory. Lower MaxRAMPercentage or find the native growth with NMT.",
+      "A hard JVM crash (SIGSEGV etc.) writes hs_err_pid<pid>.log to the working directory; set -XX:ErrorFile=/logs/hs_err_pid%p.log to choose where.",
+      "In hs_err, read the \"Problematic frame\" line: C = native code (often a JNI library), V = the JVM itself, J = JIT-compiled Java. Then read the thread stack and the loaded libraries.",
+      "Crashes in V or J frames are JVM bugs: upgrade to the latest patch release and search the JDK bug tracker for the frame name."
+    ],
+    "example": "$ dmesg | grep -i \"killed process\"\nOut of memory: Killed process 4242 (java)\n  total-vm:6.1GB, anon-rss:3.9GB ...\n\n# hs_err_pid4242.log\n# A fatal error has been detected by the\n# Java Runtime Environment:\n#  SIGSEGV (0xb) at pc=0x00007f..., pid=4242\n# Problematic frame:\n# C  [libzstd-jni.so+0x2a1f0]\n-> native library bug, not your Java code"
+  }
+]

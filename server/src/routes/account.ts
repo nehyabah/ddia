@@ -3,6 +3,7 @@ import { db, contentId, tx } from "../db.js";
 import { endSession, hashPassword, startSession, verifyPassword } from "../auth.js";
 import { BADGES, MAX_BOX, dueCount, earnedBadges, levelInfo, localDay, xpToday } from "../progress.js";
 import { HttpError, int, str } from "../http.js";
+import { javaDueCount } from "./java.js";
 
 export const auth = Router();
 export const account = Router();
@@ -50,6 +51,7 @@ export function profile(userId: number) {
     xpToday: xpToday(userId),
     dailyGoal: u.daily_goal,
     dueCount: dueCount(userId),
+    javaDue: javaDueCount(userId),
     badges: Object.entries(BADGES).map(([id, label]) => ({ id, label, earned: earned.has(id) })),
   };
 }
@@ -73,7 +75,7 @@ account.post("/me/password", (req, res) => {
   res.json({ ok: true });
 });
 
-const PROGRESS_TABLES = ["card_progress", "question_srs", "attempts", "drill_progress", "badges", "boss_wins", "xp_events", "runs"];
+const PROGRESS_TABLES = ["card_progress", "question_srs", "attempts", "drill_progress", "badges", "boss_wins", "xp_events", "runs", "java_srs", "java_attempts", "java_lesson_reads"];
 
 account.post("/me/reset", (req, res) => {
   tx(() => {

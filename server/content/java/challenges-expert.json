@@ -1,0 +1,658 @@
+[
+  {
+    "level": "expert",
+    "id": "exp-01",
+    "topic": "Integer arithmetic",
+    "kind": "bug",
+    "title": "Midpoint of a very large search range",
+    "scenario": "mid() is the midpoint helper of a binary search over a huge index space. A test with indices near Integer.MAX_VALUE found that the midpoint was not between lo and hi.",
+    "symptom": "false\ntrue",
+    "code": "public class Main {\n    static int mid(int lo, int hi) {\n        return (lo + hi) / 2;\n    }\n    public static void main(String[] args) {\n        int lo = Integer.MAX_VALUE - 10;\n        int hi = Integer.MAX_VALUE - 2;\n        int m = mid(lo, hi);\n        System.out.println(m >= lo && m <= hi);\n        System.out.println(m < 0);\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Integer division by 2 rounds toward zero instead of down",
+      "lo + hi overflows int and wraps to a negative number",
+      "Integer.MAX_VALUE - 2 is evaluated as a long constant",
+      "The JIT reorders the addition and the division"
+    ],
+    "answer": 1,
+    "explanation": "int addition wraps silently on overflow (JLS 15.18.2). lo + hi is about 2 * MAX_VALUE, which wraps to -14, and -14 / 2 is -7. Writing lo + (hi - lo) / 2 never exceeds hi, so it cannot overflow when 0 <= lo <= hi. This exact bug sat in java.util.Arrays.binarySearch for years.",
+    "fix": "public class Main {\n    static int mid(int lo, int hi) {\n        return lo + (hi - lo) / 2;\n    }\n    public static void main(String[] args) {\n        int lo = Integer.MAX_VALUE - 10;\n        int hi = Integer.MAX_VALUE - 2;\n        int m = mid(lo, hi);\n        System.out.println(m >= lo && m <= hi);\n        System.out.println(m < 0);\n    }\n}",
+    "fixNote": "Compute the midpoint as lo + (hi - lo) / 2 (or (lo + hi) >>> 1).",
+    "debugTip": "Break on line 3 and evaluate lo + hi on its own: the watch shows -14. A property-based test that draws lo and hi near Integer.MAX_VALUE finds this immediately; example-based tests with small arrays never will.",
+    "buggyOutput": "false\ntrue",
+    "fixedOutput": "true\nfalse"
+  },
+  {
+    "level": "expert",
+    "id": "exp-02",
+    "topic": "Integer arithmetic",
+    "kind": "trace",
+    "title": "A bucket index that comes out negative",
+    "scenario": "A hand-rolled hash table picks a bucket with Math.abs(hashCode()) % n. It works for months, then one key crashes it.",
+    "symptom": "bucket -8\nException in thread \"main\" java.lang.ArrayIndexOutOfBoundsException: Index -8 out of bounds for length 10\n\tat Main.main(Main.java:14)",
+    "code": "public class Main {\n    record Key(int h) {\n        @Override\n        public int hashCode() { return h; }\n    }\n    static int bucket(Object k, int n) {\n        return Math.abs(k.hashCode()) % n;\n    }\n    public static void main(String[] args) {\n        String[] buckets = new String[10];\n        Key k = new Key(Integer.MIN_VALUE);\n        int b = bucket(k, buckets.length);\n        System.out.println(\"bucket \" + b);\n        buckets[b] = \"x\";\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "Why is the index negative?",
+    "options": [
+      "The % operator on int always returns a negative result",
+      "Records may not override hashCode, so a default is used",
+      "Math.abs(Integer.MIN_VALUE) is still Integer.MIN_VALUE",
+      "The array length is converted to a negative long"
+    ],
+    "answer": 2,
+    "explanation": "Two's complement int has no positive counterpart for -2147483648, so Math.abs returns MIN_VALUE unchanged (its Javadoc says so). The remainder operator keeps the sign of the dividend, so MIN_VALUE % 10 is -8. Math.floorMod(h, n) always returns a value in [0, n) for positive n.",
+    "fix": "public class Main {\n    record Key(int h) {\n        @Override\n        public int hashCode() { return h; }\n    }\n    static int bucket(Object k, int n) {\n        return Math.floorMod(k.hashCode(), n);\n    }\n    public static void main(String[] args) {\n        String[] buckets = new String[10];\n        Key k = new Key(Integer.MIN_VALUE);\n        int b = bucket(k, buckets.length);\n        System.out.println(\"bucket \" + b);\n        buckets[b] = \"x\";\n    }\n}",
+    "fixNote": "Use Math.floorMod(hash, n) instead of Math.abs(hash) % n.",
+    "debugTip": "Set an exception breakpoint on ArrayIndexOutOfBoundsException, then step into bucket() and evaluate Math.abs(k.hashCode()). Property-based tests should always include Integer.MIN_VALUE as an edge value for hashes.",
+    "buggyOutput": "bucket -8",
+    "throws": "java.lang.ArrayIndexOutOfBoundsException",
+    "fixedOutput": "bucket 2"
+  },
+  {
+    "level": "expert",
+    "id": "exp-03",
+    "topic": "Type conversion",
+    "kind": "output",
+    "title": "Turning the volume up on a byte",
+    "scenario": "A byte holds a volume level. Someone adds 300 to it with +=, and the code compiles without a warning.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        byte volume = 10;\n        volume += 300;\n        System.out.println(volume);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What does this print?",
+    "options": [
+      "310",
+      "-202",
+      "It does not compile",
+      "54"
+    ],
+    "answer": 3,
+    "explanation": "A compound assignment E1 op= E2 means E1 = (T) ((E1) op (E2)), with an implicit cast back to E1's type (JLS 15.26.2). 10 + 300 = 310 as an int, and the cast to byte keeps the low 8 bits: 310 - 256 = 54. The plain form volume = volume + 300 would be a compile error, which is why += hides the problem.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int volume = 10;\n        volume += 300;\n        System.out.println(volume);\n    }\n}",
+    "fixNote": "Store the value in an int so no narrowing cast is inserted.",
+    "debugTip": "Run javap -c Main and look for the i2b instruction right after iadd: that is the hidden narrowing cast. In the debugger, evaluate volume + 300 (an int) and compare it with volume after stepping over line 4.",
+    "buggyOutput": "54",
+    "fixedOutput": "310"
+  },
+  {
+    "level": "expert",
+    "id": "exp-04",
+    "topic": "Type conversion",
+    "kind": "output",
+    "title": "Characters that print as numbers",
+    "scenario": "Three println calls each look like they should print a character. They don't all agree.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int zero = 0;\n        boolean flag = true;\n        System.out.println('a' + 1);\n        System.out.println(flag ? 'x' : 0);\n        System.out.println(flag ? 'x' : zero);\n    }\n}",
+    "bugLines": [
+      5,
+      7
+    ],
+    "question": "What does this print?",
+    "options": [
+      "b\nx\nx",
+      "98\nx\n120",
+      "98\n120\n120",
+      "b\nx\n120"
+    ],
+    "answer": 1,
+    "explanation": "'a' + 1 is binary numeric promotion to int, so println(int) prints 98. In a conditional, if one operand is char and the other is an int constant that fits in char, the result type is char (JLS 15.25), so the second line prints x. With a non-constant int variable the result is promoted to int, so 'x' becomes 120.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int zero = 0;\n        boolean flag = true;\n        System.out.println((char) ('a' + 1));\n        System.out.println(flag ? 'x' : 0);\n        System.out.println(flag ? 'x' : (char) zero);\n    }\n}",
+    "fixNote": "Cast the int results back to char so println(char) is chosen.",
+    "debugTip": "Evaluate each expression in the debugger and check the result type the watch shows (int vs char). javap -c shows which overload was bound: println:(I)V versus println:(C)V.",
+    "buggyOutput": "98\nx\n120",
+    "fixedOutput": "b\nx\nx"
+  },
+  {
+    "level": "expert",
+    "id": "exp-05",
+    "topic": "Control flow",
+    "kind": "trace",
+    "title": "The default branch that never runs",
+    "scenario": "label() maps a status to a colour and has a default branch for anything unknown. A missing status crashes it instead of returning grey.",
+    "symptom": "Prints green, then throws java.lang.NullPointerException\n\tat Main.label(Main.java:3)\n\tat Main.main(Main.java:11)",
+    "code": "public class Main {\n    static String label(String status) {\n        switch (status) {\n            case \"OK\": return \"green\";\n            case \"FAIL\": return \"red\";\n            default: return \"grey\";\n        }\n    }\n    public static void main(String[] args) {\n        System.out.println(label(\"OK\"));\n        System.out.println(label(null));\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "Why does default not catch the null?",
+    "options": [
+      "A switch on a String calls hashCode() on it, so null throws first",
+      "default only matches values that are not compile-time constants",
+      "null is matched by case \"OK\" and then fails the equals check",
+      "The JVM rejects null method arguments of type String"
+    ],
+    "answer": 0,
+    "explanation": "javac compiles a switch on String into a switch on status.hashCode() followed by equals() checks. The hashCode() call happens before any case or default is considered, so a null selector throws NullPointerException. Before Java 21 pattern switches (case null) there is no way to route null to a branch; you have to check it first.",
+    "fix": "public class Main {\n    static String label(String status) {\n        if (status == null) return \"grey\";\n        switch (status) {\n            case \"OK\": return \"green\";\n            case \"FAIL\": return \"red\";\n            default: return \"grey\";\n        }\n    }\n    public static void main(String[] args) {\n        System.out.println(label(\"OK\"));\n        System.out.println(label(null));\n    }\n}",
+    "fixNote": "Guard against null before the switch.",
+    "debugTip": "javap -c Main shows the invokevirtual String.hashCode before the lookupswitch, which explains why the trace points at the switch line. An exception breakpoint on NullPointerException stops on line 3 with status shown as null.",
+    "buggyOutput": "green",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "green\ngrey"
+  },
+  {
+    "level": "expert",
+    "id": "exp-06",
+    "topic": "Exceptions",
+    "kind": "bug",
+    "title": "A parser that always says -1",
+    "scenario": "parse() should return the number, or -1 when the text is not a number. It returns -1 even for \"42\".",
+    "symptom": "parsed 42\n-1\nparsed oops\n-1",
+    "code": "public class Main {\n    static int parse(String s) {\n        try {\n            return Integer.parseInt(s);\n        } finally {\n            System.out.println(\"parsed \" + s);\n            return -1;\n        }\n    }\n    public static void main(String[] args) {\n        System.out.println(parse(\"42\"));\n        System.out.println(parse(\"oops\"));\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "parseInt returns -1 for input it cannot parse",
+      "The println in finally clears the pending return value",
+      "try without catch rethrows and the caller defaults to -1",
+      "A return in finally replaces both the return and the exception"
+    ],
+    "answer": 3,
+    "explanation": "When a finally block completes abruptly (return, throw, break), that outcome replaces whatever the try block was doing (JLS 14.20.2). So the try's return 42 is discarded, and the NumberFormatException for \"oops\" is silently swallowed. Never return from finally; catch the specific exception instead.",
+    "fix": "public class Main {\n    static int parse(String s) {\n        try {\n            return Integer.parseInt(s);\n        } catch (NumberFormatException e) {\n            return -1;\n        } finally {\n            System.out.println(\"parsed \" + s);\n        }\n    }\n    public static void main(String[] args) {\n        System.out.println(parse(\"42\"));\n        System.out.println(parse(\"oops\"));\n    }\n}",
+    "fixNote": "Move the -1 into a catch for NumberFormatException; finally only logs.",
+    "debugTip": "Compile with javac -Xlint:finally, which warns \"finally clause cannot complete normally\". In the debugger, step over line 4 and watch execution jump to line 7 anyway: the try's return value is pending but gets overwritten.",
+    "buggyOutput": "parsed 42\n-1\nparsed oops\n-1",
+    "fixedOutput": "parsed 42\n42\nparsed oops\n-1"
+  },
+  {
+    "level": "expert",
+    "id": "exp-07",
+    "topic": "Control flow",
+    "kind": "bug",
+    "title": "First row with a negative value",
+    "scenario": "The loop should report the first row that contains a negative number (row 1). It reports row 2.",
+    "symptom": "first row: 2",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int[][] grid = {{1, 2}, {-3, 4}, {5, -6}};\n        int found = -1;\n        outer:\n        for (int r = 0; r < grid.length; r++) {\n            for (int c = 0; c < grid[r].length; c++) {\n                if (grid[r][c] < 0) {\n                    found = r;\n                    break;\n                }\n            }\n        }\n        System.out.println(\"first row: \" + found);\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Unlabelled break exits only the inner loop; the search continues",
+      "The label outer: must be on the same line as the for",
+      "found is overwritten because r is captured by reference",
+      "break inside an if exits the if block, not the loop"
+    ],
+    "answer": 0,
+    "explanation": "An unlabelled break terminates the innermost enclosing loop or switch only (JLS 14.15). The outer loop keeps going, reaches row 2, and overwrites found. The label was declared but never used, which javac does not warn about. break outer ends both loops.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int[][] grid = {{1, 2}, {-3, 4}, {5, -6}};\n        int found = -1;\n        outer:\n        for (int r = 0; r < grid.length; r++) {\n            for (int c = 0; c < grid[r].length; c++) {\n                if (grid[r][c] < 0) {\n                    found = r;\n                    break outer;\n                }\n            }\n        }\n        System.out.println(\"first row: \" + found);\n    }\n}",
+    "fixNote": "Use break outer so the search stops at the first match.",
+    "debugTip": "Put a breakpoint on line 9 and add a watch on r: it is hit twice (r = 1, then r = 2). A breakpoint that fires more often than the logic intends is the quickest sign of a missing label.",
+    "buggyOutput": "first row: 2",
+    "fixedOutput": "first row: 1"
+  },
+  {
+    "level": "expert",
+    "id": "exp-08",
+    "topic": "Operators",
+    "kind": "trace",
+    "title": "A null check that does not protect",
+    "scenario": "The code checks name != null before calling check(name), yet check receives null and crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException\n\tat Main.check(Main.java:5)\n\tat Main.main(Main.java:9)",
+    "code": "public class Main {\n    static int calls = 0;\n    static boolean check(String s) {\n        calls++;\n        return s.length() > 3;\n    }\n    public static void main(String[] args) {\n        String name = null;\n        if (name != null & check(name)) {\n            System.out.println(\"long name\");\n        }\n        System.out.println(\"calls \" + calls);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "Why is check() called with null?",
+    "options": [
+      "Method arguments are evaluated before the comparison",
+      "The JIT reorders the two sides of the condition",
+      "& on booleans evaluates both operands; only && short-circuits",
+      "name != null is true because null is boxed"
+    ],
+    "answer": 2,
+    "explanation": "For boolean operands, & is a logical AND that always evaluates both sides (JLS 15.22.2). Only && and || short-circuit (JLS 15.23). So check(name) runs even though the left side is false, and s.length() throws. Side-effecting calls such as calls++ also run when you did not expect them.",
+    "fix": "public class Main {\n    static int calls = 0;\n    static boolean check(String s) {\n        calls++;\n        return s.length() > 3;\n    }\n    public static void main(String[] args) {\n        String name = null;\n        if (name != null && check(name)) {\n            System.out.println(\"long name\");\n        }\n        System.out.println(\"calls \" + calls);\n    }\n}",
+    "fixNote": "Use && so check() is skipped when name is null.",
+    "debugTip": "Set a breakpoint on line 9 and use Step Into: you land in check() even though name != null evaluated false. A watch on calls in the fixed version should stay 0.",
+    "buggyOutput": "",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "calls 0"
+  },
+  {
+    "level": "expert",
+    "id": "exp-09",
+    "topic": "Autoboxing",
+    "kind": "bug",
+    "title": "Equal counts that are not equal",
+    "scenario": "same() is a generic helper used to compare values from two lists. It says 100 equals 100 but 1000 does not equal 1000.",
+    "symptom": "true\nfalse",
+    "code": "import java.util.*;\n\npublic class Main {\n    static <T> boolean same(T a, T b) {\n        return a == b;\n    }\n    public static void main(String[] args) {\n        List<Integer> xs = List.of(100, 1000);\n        List<Integer> ys = List.of(100, 1000);\n        System.out.println(same(xs.get(0), ys.get(0)));\n        System.out.println(same(xs.get(1), ys.get(1)));\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "== on T compares references; only -128..127 are cached",
+      "List.of stores 1000 as a Long, so the types differ",
+      "Generic methods unbox T before comparing with ==",
+      "The second List.of copies its elements defensively"
+    ],
+    "answer": 0,
+    "explanation": "Inside a generic method T erases to Object, so == is reference comparison, never numeric. Autoboxing uses Integer.valueOf, which returns cached instances only for -128 to 127 by default. So both 100s are the same object, while each 1000 is a separate object. Use Objects.equals or equals().",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static <T> boolean same(T a, T b) {\n        return Objects.equals(a, b);\n    }\n    public static void main(String[] args) {\n        List<Integer> xs = List.of(100, 1000);\n        List<Integer> ys = List.of(100, 1000);\n        System.out.println(same(xs.get(0), ys.get(0)));\n        System.out.println(same(xs.get(1), ys.get(1)));\n    }\n}",
+    "fixNote": "Compare with Objects.equals(a, b) instead of ==.",
+    "debugTip": "Break on line 5 and evaluate System.identityHashCode(a) and System.identityHashCode(b): equal for 100, different for 1000. Test with values outside -128..127; small test numbers hide this bug.",
+    "buggyOutput": "true\nfalse",
+    "fixedOutput": "true\ntrue"
+  },
+  {
+    "level": "expert",
+    "id": "exp-10",
+    "topic": "Generics",
+    "kind": "trace",
+    "title": "A ClassCastException in a loop over strings",
+    "scenario": "A List<String> is passed through an old helper. Later, a plain for-each over the list throws ClassCastException, far from the helper.",
+    "symptom": "Prints \"size 2\" and \"ANN\", then throws java.lang.ClassCastException (class java.lang.Integer cannot be cast to class java.lang.String) from the for-each loop in Main.main.",
+    "code": "import java.util.*;\n\npublic class Main {\n    static void addLegacy(List list) {\n        list.add(42);\n    }\n    public static void main(String[] args) {\n        List<String> names = new ArrayList<>();\n        names.add(\"ann\");\n        addLegacy(names);\n        System.out.println(\"size \" + names.size());\n        for (String n : names) {\n            System.out.println(n.toUpperCase());\n        }\n    }\n}",
+    "bugLines": [
+      4,
+      5
+    ],
+    "question": "Where does the bad element really come from?",
+    "options": [
+      "The for-each loop converts 42 to an Integer on read",
+      "ArrayList stores ints separately from Strings",
+      "toUpperCase() returns an Integer for numeric strings",
+      "The raw List in addLegacy inserts an Integer unchecked"
+    ],
+    "answer": 3,
+    "explanation": "Generics are erased: at run time the ArrayList is just a list of Object, and a raw List parameter lets any object in with only an \"unchecked\" compile warning. This is heap pollution. The cast to String is inserted by javac where the element is read, so the failure shows up in the loop, not where the Integer was added. (You cannot even write instanceof List<String> to guard against it, because the type argument does not exist at run time.)",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static void addLegacy(List<String> list) {\n        list.add(\"42\");\n    }\n    public static void main(String[] args) {\n        List<String> names = new ArrayList<>();\n        names.add(\"ann\");\n        addLegacy(names);\n        System.out.println(\"size \" + names.size());\n        for (String n : names) {\n            System.out.println(n.toUpperCase());\n        }\n    }\n}",
+    "fixNote": "Give the helper a typed List<String> parameter and add a String.",
+    "debugTip": "Compile with -Xlint:unchecked to see the warning at line 5. To find the polluter at run time, wrap the list with Collections.checkedList(names, String.class): the exception then fires at the bad add(), not at the later read.",
+    "buggyOutput": "size 2\nANN",
+    "throws": "java.lang.ClassCastException",
+    "fixedOutput": "size 2\nANN\n42"
+  },
+  {
+    "level": "expert",
+    "id": "exp-11",
+    "topic": "Arrays",
+    "kind": "trace",
+    "title": "Filling an Object[] that is not one",
+    "scenario": "fill() sets every slot of an Object[] to a value. The second call crashes even though Integer is an Object.",
+    "symptom": "n/a\nException in thread \"main\" java.lang.ArrayStoreException: java.lang.Integer\n\tat Main.fill(Main.java:4)\n\tat Main.main(Main.java:11)",
+    "code": "public class Main {\n    static void fill(Object[] slots, Object v) {\n        for (int i = 0; i < slots.length; i++) {\n            slots[i] = v;\n        }\n    }\n    public static void main(String[] args) {\n        String[] names = new String[2];\n        fill(names, \"n/a\");\n        System.out.println(names[0]);\n        fill(names, 0);\n        System.out.println(names[1]);\n    }\n}",
+    "bugLines": [
+      2,
+      11
+    ],
+    "question": "Why does storing an Integer fail?",
+    "options": [
+      "Integer cannot be autoboxed when the target is Object",
+      "The array is really a String[]; stores are checked at run time",
+      "fill() made a copy of the array and the copy is read-only",
+      "slots.length is evaluated once and the index runs past it"
+    ],
+    "answer": 1,
+    "explanation": "Java arrays are covariant: a String[] can be passed where Object[] is expected. To stay type-safe, every array store is checked at run time against the array's actual component type, and storing an Integer into a String[] throws ArrayStoreException. Generic collections are invariant, so passing a List<String> as a List<Object> would be a compile error instead.",
+    "fix": "public class Main {\n    static void fill(Object[] slots, Object v) {\n        for (int i = 0; i < slots.length; i++) {\n            slots[i] = v;\n        }\n    }\n    public static void main(String[] args) {\n        String[] names = new String[2];\n        fill(names, \"n/a\");\n        System.out.println(names[0]);\n        fill(names, \"0\");\n        System.out.println(names[1]);\n    }\n}",
+    "fixNote": "Store a String, matching the array's real component type.",
+    "debugTip": "Break on line 4 and evaluate slots.getClass().getComponentType(): it shows java.lang.String, not Object. An exception breakpoint on ArrayStoreException stops right at the store.",
+    "buggyOutput": "n/a",
+    "throws": "java.lang.ArrayStoreException",
+    "fixedOutput": "n/a\n0"
+  },
+  {
+    "level": "expert",
+    "id": "exp-12",
+    "topic": "Collections",
+    "kind": "bug",
+    "title": "A list of three ids with size 1",
+    "scenario": "An int[] of ids is wrapped with Arrays.asList to use contains(). The list reports size 1 and cannot find id 1.",
+    "symptom": "1\nfalse",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] ids = {3, 1, 2};\n        var list = Arrays.asList(ids);\n        System.out.println(list.size());\n        System.out.println(list.contains(1));\n    }\n}",
+    "bugLines": [
+      5,
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "asList copies only the first element of a primitive array",
+      "contains(1) looks for index 1, not the value 1",
+      "T cannot be int, so the whole int[] becomes the single element",
+      "var infers List<Object>, which hides the other elements"
+    ],
+    "answer": 2,
+    "explanation": "Arrays.asList(T... a) is varargs over a type variable, and type variables cannot be primitive. An int[] is not a T[], so javac treats the int[] as one T and wraps it: the result is a List<int[]> of size 1. contains(1) then compares Integer 1 with the array and finds nothing. Use Integer[], or IntStream.of(ids).boxed().",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Integer[] ids = {3, 1, 2};\n        var list = Arrays.asList(ids);\n        System.out.println(list.size());\n        System.out.println(list.contains(1));\n    }\n}",
+    "fixNote": "Use Integer[] so asList receives the elements, not one array.",
+    "debugTip": "Hover over var or evaluate list.get(0).getClass() in the debugger: it shows int[], not Integer. Replacing var with an explicit List<Integer> would turn this into a compile error.",
+    "buggyOutput": "1\nfalse",
+    "fixedOutput": "3\ntrue"
+  },
+  {
+    "level": "expert",
+    "id": "exp-13",
+    "topic": "Varargs",
+    "kind": "trace",
+    "title": "Counting tags when there are none",
+    "scenario": "count() returns how many tags were passed. It handles two tags and zero tags, but passing null crashes inside count().",
+    "symptom": "2\n0\nException in thread \"main\" java.lang.NullPointerException\n\tat Main.count(Main.java:3)\n\tat Main.main(Main.java:8)",
+    "code": "public class Main {\n    static int count(String... tags) {\n        return tags.length;\n    }\n    public static void main(String[] args) {\n        System.out.println(count(\"a\", \"b\"));\n        System.out.println(count());\n        System.out.println(count(null));\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "Why is tags null instead of an array?",
+    "options": [
+      "null is passed as the String[] itself, not as one element",
+      "Varargs arrays are created lazily on first access",
+      "count() with no arguments left a null array cached",
+      "null cannot be autoboxed into a String"
+    ],
+    "answer": 0,
+    "explanation": "Overload resolution first tries to call a varargs method without varargs expansion (JLS 15.12.2). null is assignable to String[], so count(null) passes a null array rather than an array holding one null. javac only warns (\"non-varargs call of varargs method with inexact argument type\"). Varargs methods should treat a null array defensively, or callers should write count((String) null).",
+    "fix": "public class Main {\n    static int count(String... tags) {\n        return tags == null ? 0 : tags.length;\n    }\n    public static void main(String[] args) {\n        System.out.println(count(\"a\", \"b\"));\n        System.out.println(count());\n        System.out.println(count(null));\n    }\n}",
+    "fixNote": "Treat a null varargs array as zero tags.",
+    "debugTip": "Read the javac warnings: the inexact-argument warning on line 8 points straight at it. In the debugger, break on line 3 and evaluate tags == null for each call.",
+    "buggyOutput": "2\n0",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "2\n0\n0"
+  },
+  {
+    "level": "expert",
+    "id": "exp-14",
+    "topic": "Collections",
+    "kind": "bug",
+    "title": "Removing a banned id from a list",
+    "scenario": "The list should end up without id 1. Instead, 20 disappears and 1 stays.",
+    "symptom": "[10, 30, 1]",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> ids =\n                new ArrayList<>(List.of(10, 20, 30, 1));\n        int banned = 1;\n        ids.remove(banned);\n        System.out.println(ids);\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "List.of makes the list immutable, so remove picks a copy",
+      "remove() always deletes the second element of an ArrayList",
+      "banned is unboxed to a long and then truncated",
+      "remove(int index) is chosen over remove(Object) for an int"
+    ],
+    "answer": 3,
+    "explanation": "Overload resolution prefers a method that needs no boxing (phase 1 of JLS 15.12.2). An int argument matches remove(int index) exactly, so the element at index 1 (20) is removed. To remove by value, pass an Integer: ids.remove(Integer.valueOf(banned)).",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> ids =\n                new ArrayList<>(List.of(10, 20, 30, 1));\n        int banned = 1;\n        ids.remove(Integer.valueOf(banned));\n        System.out.println(ids);\n    }\n}",
+    "fixNote": "Box the value so remove(Object) is selected.",
+    "debugTip": "Use Step Into on line 8: you land in ArrayList.remove(int index), not remove(Object o). javap -c shows the bound signature remove:(I)Ljava/lang/Object;.",
+    "buggyOutput": "[10, 30, 1]",
+    "fixedOutput": "[10, 20, 30]"
+  },
+  {
+    "level": "expert",
+    "id": "exp-15",
+    "topic": "Records",
+    "kind": "bug",
+    "title": "A set of points with duplicates",
+    "scenario": "Point is a record, so two points with the same coordinates should be equal. The set ends up with two copies of (1, 2).",
+    "symptom": "2",
+    "code": "import java.util.*;\n\npublic class Main {\n    record Point(int[] coords) {}\n    public static void main(String[] args) {\n        Set<Point> seen = new HashSet<>();\n        seen.add(new Point(new int[]{1, 2}));\n        Point p = new Point(new int[]{1, 2});\n        seen.add(p);\n        System.out.println(seen.size());\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Records do not generate hashCode, only equals",
+      "HashSet compares records by their toString output",
+      "Record equals uses the array's own equals: reference identity",
+      "Records with arrays are stored by identity in any Set"
+    ],
+    "answer": 2,
+    "explanation": "A record's generated equals and hashCode compare each reference component with Objects.equals and Objects.hashCode. Arrays do not override equals or hashCode, so two arrays with the same contents are different. Use an immutable List component, or override equals and hashCode with Arrays.equals and Arrays.hashCode.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    record Point(List<Integer> coords) {}\n    public static void main(String[] args) {\n        Set<Point> seen = new HashSet<>();\n        seen.add(new Point(List.of(1, 2)));\n        Point p = new Point(List.of(1, 2));\n        seen.add(p);\n        System.out.println(seen.size());\n    }\n}",
+    "fixNote": "Use a List<Integer> component, which has value-based equals.",
+    "debugTip": "Evaluate new Point(new int[]{1, 2}).equals(new Point(new int[]{1, 2})) in the debugger: false. A minimal reproducer like this one isolates the record from the collection code around it.",
+    "buggyOutput": "2",
+    "fixedOutput": "1"
+  },
+  {
+    "level": "expert",
+    "id": "exp-16",
+    "topic": "Records",
+    "kind": "bug",
+    "title": "The cart that left its own set",
+    "scenario": "A Cart record goes into a HashSet. After an item is added to the list behind it, the set says it does not contain the very same cart object.",
+    "symptom": "false\n1",
+    "code": "import java.util.*;\n\npublic class Main {\n    record Cart(List<String> items) {}\n    public static void main(String[] args) {\n        List<String> items = new ArrayList<>();\n        Cart cart = new Cart(items);\n        Set<Cart> carts = new HashSet<>();\n        carts.add(cart);\n        items.add(\"book\");\n        System.out.println(carts.contains(cart));\n        System.out.println(carts.size());\n    }\n}",
+    "bugLines": [
+      4,
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The record holds a mutable list, so its hashCode changes in the set",
+      "Records are copied into a HashSet, so cart is a different object",
+      "contains() uses == for records, and the list is a new instance",
+      "ArrayList.add replaces the record's items with a new list"
+    ],
+    "answer": 0,
+    "explanation": "A record's hashCode is computed from its components, including the list's current contents. Records are only shallowly immutable: the field is final but the ArrayList can still change. After items.add, the cart hashes to a different value than when it was stored, so HashSet looks in the wrong place. Copy mutable components in a compact constructor (List.copyOf).",
+    "fix": "import java.util.*;\n\npublic class Main {\n    record Cart(List<String> items) {\n        Cart { items = List.copyOf(items); }\n    }\n    public static void main(String[] args) {\n        List<String> items = new ArrayList<>();\n        Cart cart = new Cart(items);\n        Set<Cart> carts = new HashSet<>();\n        carts.add(cart);\n        items.add(\"book\");\n        System.out.println(carts.contains(cart));\n        System.out.println(carts.size());\n    }\n}",
+    "fixNote": "Defensively copy the list in a compact constructor.",
+    "debugTip": "Watch cart.hashCode() before and after stepping over line 10: the value changes. A property-based test that mutates objects after inserting them into hashed collections catches this class of bug.",
+    "buggyOutput": "false\n1",
+    "fixedOutput": "true\n1"
+  },
+  {
+    "level": "expert",
+    "id": "exp-17",
+    "topic": "Initialization",
+    "kind": "output",
+    "title": "A singleton that sees a zero limit",
+    "scenario": "The singleton computes its limit from a static base of 10. Look at the order of the static fields.",
+    "code": "public class Main {\n    static final Main INSTANCE = new Main();\n    static int base = 10;\n    final int limit;\n    Main() {\n        limit = base * 2;\n    }\n    public static void main(String[] args) {\n        System.out.println(INSTANCE.limit);\n        System.out.println(base);\n    }\n}",
+    "bugLines": [
+      2,
+      3
+    ],
+    "question": "What does this print?",
+    "options": [
+      "20\n10",
+      "0\n0",
+      "0\n10",
+      "It throws ExceptionInInitializerError"
+    ],
+    "answer": 2,
+    "explanation": "Static initializers run in textual order (JLS 12.4.2). INSTANCE is created first, while base still holds its default value 0, so limit is 0. Then base is set to 10. If base were a compile-time constant (static final int base = 10) it would be inlined and the result would be 20.",
+    "fix": "public class Main {\n    static int base = 10;\n    static final Main INSTANCE = new Main();\n    final int limit;\n    Main() {\n        limit = base * 2;\n    }\n    public static void main(String[] args) {\n        System.out.println(INSTANCE.limit);\n        System.out.println(base);\n    }\n}",
+    "fixNote": "Declare base before the INSTANCE that depends on it.",
+    "debugTip": "Put a breakpoint in the constructor and look at the call stack: it is inside <clinit>, and a watch on base shows 0. javap -c shows <clinit> doing new Main before putstatic base.",
+    "buggyOutput": "0\n10",
+    "fixedOutput": "20\n10"
+  },
+  {
+    "level": "expert",
+    "id": "exp-18",
+    "topic": "Initialization",
+    "kind": "output",
+    "title": "Two classes that depend on each other",
+    "scenario": "A and B each compute a static value from the other. There is no exception; look at what they settle on.",
+    "code": "public class Main {\n    static class A {\n        static int X = B.Y + 1;\n    }\n    static class B {\n        static int Y = A.X + 1;\n    }\n    public static void main(String[] args) {\n        System.out.println(A.X);\n        System.out.println(B.Y);\n    }\n}",
+    "bugLines": [
+      3,
+      6
+    ],
+    "question": "What does this print?",
+    "options": [
+      "1\n2",
+      "2\n1",
+      "1\n1",
+      "It throws StackOverflowError"
+    ],
+    "answer": 1,
+    "explanation": "Reading A.X starts initializing A, whose initializer reads B.Y, which starts initializing B. B's initializer reads A.X; A is already being initialized by the same thread, so the JVM returns its current value 0 rather than recursing (JLS 12.4.2). So Y = 1, then X = 2. The result depends on which class is touched first, which is why init cycles are dangerous.",
+    "fix": "public class Main {\n    static class A {\n        static int X = 1;\n    }\n    static class B {\n        static int Y = A.X + 1;\n    }\n    public static void main(String[] args) {\n        System.out.println(A.X);\n        System.out.println(B.Y);\n    }\n}",
+    "fixNote": "Break the cycle: A.X no longer depends on B.",
+    "debugTip": "Run with java -Xlog:class+init=info Main to see the order in which A and B are initialized. In the debugger, a breakpoint on line 6 shows A.X evaluating to 0 while A's initializer is still on the stack.",
+    "buggyOutput": "2\n1",
+    "fixedOutput": "1\n2"
+  },
+  {
+    "level": "expert",
+    "id": "exp-19",
+    "topic": "Strings",
+    "kind": "output",
+    "title": "Three ways to build \"ab\"",
+    "scenario": "Three string comparisons use ==. One of the operands is final and one is not.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        final String a = \"a\";\n        String b = \"b\";\n        String ab = \"ab\";\n        System.out.println((a + \"b\") == ab);\n        System.out.println((a + b) == ab);\n        System.out.println((a + b).intern() == ab);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What does this print?",
+    "options": [
+      "true\ntrue\ntrue",
+      "false\nfalse\ntrue",
+      "true\nfalse\nfalse",
+      "true\nfalse\ntrue"
+    ],
+    "answer": 3,
+    "explanation": "a is a constant variable (final, initialized with a constant), so a + \"b\" is a compile-time constant folded to \"ab\" and interned: the same object as the literal. b is not final, so a + b is built at run time and is a new String. intern() returns the canonical pooled instance, which is the literal. Compare strings with equals().",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        final String a = \"a\";\n        String b = \"b\";\n        String ab = \"ab\";\n        System.out.println((a + \"b\").equals(ab));\n        System.out.println((a + b).equals(ab));\n        System.out.println((a + b).intern().equals(ab));\n    }\n}",
+    "fixNote": "Compare with equals(), which does not depend on constant folding.",
+    "debugTip": "javap -c Main shows the first comparison loading the constant \"ab\" directly with ldc, while the second builds the string with invokedynamic makeConcatWithConstants. Evaluate System.identityHashCode on each side to see which are the same object.",
+    "buggyOutput": "true\nfalse\ntrue",
+    "fixedOutput": "true\ntrue\ntrue"
+  },
+  {
+    "level": "expert",
+    "id": "exp-20",
+    "topic": "Floating point",
+    "kind": "bug",
+    "title": "Ten steps of 0.1 that take eleven",
+    "scenario": "An animation advances t by 0.1 per tick until it reaches 1.0, which should take 10 ticks. It takes 11.",
+    "symptom": "ticks 11",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        double t = 0.0;\n        int ticks = 0;\n        while (t < 1.0) {\n            t += 0.1;\n            ticks++;\n        }\n        System.out.println(\"ticks \" + ticks);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "0.1 has no exact binary form; ten additions give 0.9999999999999999",
+      "The < comparison on doubles rounds both sides to float",
+      "ticks++ runs once more because of the post-increment",
+      "Java rounds 0.1 up to 0.1000001 when it is a literal"
+    ],
+    "answer": 0,
+    "explanation": "double is binary floating point, and 0.1 is stored as the nearest binary fraction. Rounding errors build up, so after ten additions t is 0.9999999999999999, which is still less than 1.0, and one more tick runs. Count steps with an integer (or use BigDecimal) and derive the fraction from it.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int tenths = 0;\n        int ticks = 0;\n        while (tenths < 10) {\n            tenths += 1;\n            ticks++;\n        }\n        System.out.println(\"ticks \" + ticks);\n    }\n}",
+    "fixNote": "Count in integer tenths instead of accumulating 0.1 as a double.",
+    "debugTip": "Add a conditional breakpoint on line 7 with ticks == 9 and watch t: it shows 0.9999999999999999. Evaluating new java.math.BigDecimal(0.1) shows the exact stored value of the literal.",
+    "buggyOutput": "ticks 11",
+    "fixedOutput": "ticks 10"
+  },
+  {
+    "level": "expert",
+    "id": "exp-21",
+    "topic": "Integer arithmetic",
+    "kind": "bug",
+    "title": "Milliseconds in 25 days",
+    "scenario": "The code converts a number of days into milliseconds and stores it in a long. For 25 days it prints a negative number.",
+    "symptom": "-2134967296",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int days = 25;\n        long ms = days * 24 * 60 * 60 * 1000;\n        System.out.println(ms);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "A long cannot hold more than 2^31 milliseconds",
+      "println(long) prints the value as a signed int",
+      "Literals over 1000 are treated as short constants",
+      "The product is computed in int and overflows before widening"
+    ],
+    "answer": 3,
+    "explanation": "The type of an expression does not depend on the variable it is assigned to. Every operand is an int, so the whole product is int arithmetic: 2,160,000,000 exceeds Integer.MAX_VALUE and wraps to -2134967296. Only then is it widened to long. Making an early factor a long (24L) promotes the rest of the chain.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int days = 25;\n        long ms = days * 24L * 60 * 60 * 1000;\n        System.out.println(ms);\n    }\n}",
+    "fixNote": "Use a long literal (24L) so the multiplication is done in long.",
+    "debugTip": "javap -c shows imul instructions followed by i2l: the widening happens after the overflow. Math.multiplyExact throws ArithmeticException on overflow, which makes this kind of bug loud in tests.",
+    "buggyOutput": "-2134967296",
+    "fixedOutput": "2160000000"
+  },
+  {
+    "level": "expert",
+    "id": "exp-22",
+    "topic": "Floating point",
+    "kind": "bug",
+    "title": "Skipping bad sensor readings",
+    "scenario": "Readings that failed are stored as NaN and should be skipped before averaging. The average comes out as NaN anyway.",
+    "symptom": "3\nNaN",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        double[] readings = {2.0, 0.0 / 0.0, 4.0};\n        double sum = 0;\n        int n = 0;\n        for (double r : readings) {\n            if (r == Double.NaN) {\n                continue;\n            }\n            sum += r;\n            n++;\n        }\n        System.out.println(n);\n        System.out.println(sum / n);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "0.0 / 0.0 throws ArithmeticException, which is swallowed",
+      "NaN is not equal to anything, including NaN, so == is always false",
+      "Double.NaN is a boxed Double, so == compares references",
+      "The for-each loop copies NaN as 0.0"
+    ],
+    "answer": 1,
+    "explanation": "IEEE 754 makes every comparison involving NaN false except !=, so r == Double.NaN is never true and r != r is the classic NaN test. Use Double.isNaN(r). Confusingly, Double.valueOf(Double.NaN).equals(Double.NaN) is true, because Double.equals compares bit patterns, so List.contains(Double.NaN) behaves differently from ==.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        double[] readings = {2.0, 0.0 / 0.0, 4.0};\n        double sum = 0;\n        int n = 0;\n        for (double r : readings) {\n            if (Double.isNaN(r)) {\n                continue;\n            }\n            sum += r;\n            n++;\n        }\n        System.out.println(n);\n        System.out.println(sum / n);\n    }\n}",
+    "fixNote": "Test with Double.isNaN(r) instead of == Double.NaN.",
+    "debugTip": "Set a conditional breakpoint on line 10 with condition Double.isNaN(r): it fires, proving the skip did not work. Property-based tests should always feed NaN and the infinities into numeric code.",
+    "buggyOutput": "3\nNaN",
+    "fixedOutput": "2\n3.0"
+  },
+  {
+    "level": "expert",
+    "id": "exp-23",
+    "topic": "Unicode",
+    "kind": "bug",
+    "title": "A digit check that lets the wrong digits in",
+    "scenario": "toInt() should reject anything that is not an ASCII number. Arabic-Indic digits pass validation and turn into a large wrong number.",
+    "symptom": "123\n175947",
+    "code": "public class Main {\n    static int toInt(String s) {\n        int v = 0;\n        for (char c : s.toCharArray()) {\n            if (!Character.isDigit(c)) {\n                throw new IllegalArgumentException(s);\n            }\n            v = v * 10 + (c - '0');\n        }\n        return v;\n    }\n    public static void main(String[] args) {\n        System.out.println(toInt(\"123\"));\n        try {\n            System.out.println(toInt(\"\\u0661\\u0662\\u0663\"));\n        } catch (IllegalArgumentException e) {\n            System.out.println(\"rejected\");\n        }\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "c - '0' overflows for chars above 127",
+      "toCharArray() decodes the string as UTF-16 incorrectly",
+      "Character.isDigit is true for any Unicode decimal digit",
+      "The \\u escapes are not valid inside string literals"
+    ],
+    "answer": 2,
+    "explanation": "Character.isDigit returns true for every character in Unicode category Nd, including the Arabic-Indic digits U+0660 to U+0669. The arithmetic c - '0' assumes ASCII, so U+0661 becomes 1585 instead of 1. Check the range '0' to '9' explicitly, or use Character.digit(c, 10) if you really want to accept Unicode digits.",
+    "fix": "public class Main {\n    static int toInt(String s) {\n        int v = 0;\n        for (char c : s.toCharArray()) {\n            if (c < '0' || c > '9') {\n                throw new IllegalArgumentException(s);\n            }\n            v = v * 10 + (c - '0');\n        }\n        return v;\n    }\n    public static void main(String[] args) {\n        System.out.println(toInt(\"123\"));\n        try {\n            System.out.println(toInt(\"\\u0661\\u0662\\u0663\"));\n        } catch (IllegalArgumentException e) {\n            System.out.println(\"rejected\");\n        }\n    }\n}",
+    "fixNote": "Accept only '0' to '9' instead of Character.isDigit.",
+    "debugTip": "Break on line 8 and evaluate (int) c and c - '0' for each character. Fuzz parsers with property-based tests that draw from all of Unicode, not just ASCII.",
+    "buggyOutput": "123\n175947",
+    "fixedOutput": "123\nrejected"
+  },
+  {
+    "level": "expert",
+    "id": "exp-24",
+    "topic": "Unicode",
+    "kind": "bug",
+    "title": "A message preview that cuts an emoji in half",
+    "scenario": "preview() should keep at most 4 characters. \"Hi \" plus one emoji is 4 characters to a reader, but the preview ends with half of the emoji.",
+    "symptom": "5\n4\ntrue",
+    "code": "public class Main {\n    static String preview(String s, int n) {\n        return s.length() <= n ? s : s.substring(0, n);\n    }\n    public static void main(String[] args) {\n        String msg = \"Hi \\uD83D\\uDE00\";\n        String p = preview(msg, 4);\n        System.out.println(msg.length());\n        System.out.println(p.length());\n        char last = p.charAt(p.length() - 1);\n        System.out.println(Character.isHighSurrogate(last));\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "substring counts bytes in UTF-8, not characters",
+      "length() and substring count UTF-16 chars, and the emoji is two",
+      "The \\u escapes produce two separate emoji characters",
+      "charAt returns the high surrogate for every character"
+    ],
+    "answer": 1,
+    "explanation": "A Java String is a sequence of UTF-16 code units. Characters outside the Basic Multilingual Plane, such as most emoji, take a surrogate pair of two chars, so length() is 5 and substring(0, 4) keeps only the high surrogate. Work in code points: codePointCount and offsetByCodePoints.",
+    "fix": "public class Main {\n    static String preview(String s, int n) {\n        if (s.codePointCount(0, s.length()) <= n) return s;\n        return s.substring(0, s.offsetByCodePoints(0, n));\n    }\n    public static void main(String[] args) {\n        String msg = \"Hi \\uD83D\\uDE00\";\n        String p = preview(msg, 4);\n        System.out.println(msg.length());\n        System.out.println(p.length());\n        char last = p.charAt(p.length() - 1);\n        System.out.println(Character.isHighSurrogate(last));\n    }\n}",
+    "fixNote": "Count and cut by code points instead of chars.",
+    "debugTip": "Evaluate msg.length() and msg.codePointCount(0, msg.length()) side by side: 5 versus 4. Include emoji and other supplementary characters as edge values in property-based tests for any text truncation.",
+    "buggyOutput": "5\n4\ntrue",
+    "fixedOutput": "5\n5\nfalse"
+  }
+]

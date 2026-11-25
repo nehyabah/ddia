@@ -1,0 +1,593 @@
+[
+  {
+    "id": "beg-a-01",
+    "level": "beginner",
+    "topic": "Loops",
+    "title": "Checkout crashes when adding up prices",
+    "kind": "trace",
+    "scenario": "The checkout should print the total of three item prices. Instead it crashes before printing anything.",
+    "symptom": "Exception in thread \"main\" java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3\n\tat Main.main(Main.java:6)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int[] prices = {5, 10, 15};\n        int total = 0;\n        for (int i = 0; i <= prices.length; i++) {\n            total += prices[i];\n        }\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The array literal only stores two of the three prices",
+      "`total` must start at prices[0] instead of 0",
+      "`<=` lets i reach 3, one past the last valid index",
+      "`prices.length` returns the last index, not the size"
+    ],
+    "answer": 2,
+    "explanation": "Arrays in Java are zero-based: an array of length 3 has indexes 0, 1 and 2. The condition `i <= prices.length` is still true when i is 3, so line 6 reads prices[3], which does not exist, and the JVM throws ArrayIndexOutOfBoundsException. The usual pattern is `i < array.length`.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int[] prices = {5, 10, 15};\n        int total = 0;\n        for (int i = 0; i < prices.length; i++) {\n            total += prices[i];\n        }\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "fixNote": "Changed the loop condition from `i <= prices.length` to `i < prices.length`.",
+    "debugTip": "Read the stack trace bottom line first: Main.java:6 points at `prices[i]`. Set a breakpoint on line 6, add a watch on `i`, and step over each iteration until i equals prices.length.",
+    "buggyOutput": "",
+    "throws": "java.lang.ArrayIndexOutOfBoundsException",
+    "fixedOutput": "Total: 30"
+  },
+  {
+    "id": "beg-a-02",
+    "level": "beginner",
+    "topic": "Loops",
+    "title": "Class total is lower than expected",
+    "kind": "bug",
+    "scenario": "A teacher's report adds up three test scores. The scores are 90, 80 and 70, so the total should be 240, but the report shows less.",
+    "symptom": "Sum: 150",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int[] scores = {90, 80, 70};\n        int sum = 0;\n        for (int i = 1; i < scores.length; i++) {\n            sum += scores[i];\n        }\n        System.out.println(\"Sum: \" + sum);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The loop starts at index 1, so scores[0] is never added",
+      "The loop stops one element early because it uses `<`",
+      "`sum` should be a long to avoid overflow",
+      "`scores.length` is 2 because arrays are zero-based"
+    ],
+    "answer": 0,
+    "explanation": "The first element of a Java array is at index 0. Starting the loop at 1 skips the 90, leaving 80 + 70 = 150. The `< scores.length` condition is correct; only the starting value is off by one.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int[] scores = {90, 80, 70};\n        int sum = 0;\n        for (int i = 0; i < scores.length; i++) {\n            sum += scores[i];\n        }\n        System.out.println(\"Sum: \" + sum);\n    }\n}",
+    "fixNote": "Started the loop at `i = 0` instead of `i = 1`.",
+    "debugTip": "Set a breakpoint on line 6 and watch `i` and `sum`. On the very first stop, check which index is being read: if it is not 0, the first element is being skipped.",
+    "buggyOutput": "Sum: 150",
+    "fixedOutput": "Sum: 240"
+  },
+  {
+    "id": "beg-a-03",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Admin can't log in",
+    "kind": "bug",
+    "scenario": "The role string is built at runtime and should be \"admin\". The admin check still prints \"Access denied\".",
+    "symptom": "Access denied",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String prefix = \"ad\";\n        String role = prefix + \"min\";\n        if (role == \"admin\") {\n            System.out.println(\"Welcome, admin\");\n        } else {\n            System.out.println(\"Access denied\");\n        }\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`prefix + \"min\"` produces \"admin \" with a trailing space",
+      "Strings must be compared with `compareTo`, never `==`",
+      "The `if` needs braces around the `else` branch",
+      "`==` checks whether both are the same object, not the same text"
+    ],
+    "answer": 3,
+    "explanation": "For objects, `==` compares references: it is true only if both sides point to the same object. Concatenating a non-constant variable creates a brand-new String at runtime, so `role` holds the text \"admin\" but is a different object from the \"admin\" literal. Use `equals` to compare the characters.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String prefix = \"ad\";\n        String role = prefix + \"min\";\n        if (role.equals(\"admin\")) {\n            System.out.println(\"Welcome, admin\");\n        } else {\n            System.out.println(\"Access denied\");\n        }\n    }\n}",
+    "fixNote": "Replaced `role == \"admin\"` with `role.equals(\"admin\")`.",
+    "debugTip": "Set a breakpoint on line 5 and evaluate both `role == \"admin\"` and `role.equals(\"admin\")` in the evaluate-expression window. Seeing false and true side by side shows the difference between identity and equality.",
+    "buggyOutput": "Access denied",
+    "fixedOutput": "Welcome, admin"
+  },
+  {
+    "id": "beg-a-04",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Three ways to compare a cart label",
+    "kind": "output",
+    "scenario": "A developer is checking how Java compares two literals and a String made with `new`. Predict the line it prints.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String a = \"cart\";\n        String b = \"cart\";\n        String c = new String(\"cart\");\n        System.out.print((a == b) + \" \");\n        System.out.print((a == c) + \" \");\n        System.out.println(a.equals(c));\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What does this print?",
+    "options": [
+      "true true true",
+      "true false true",
+      "false false true",
+      "true false false"
+    ],
+    "answer": 1,
+    "explanation": "Identical string literals are interned, so `a` and `b` refer to the same object and `a == b` is true. `new String(\"cart\")` always creates a separate object, so `a == c` is false even though the text matches. `equals` compares characters, so it is true. Rule of thumb: always compare String contents with `equals`.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String a = \"cart\";\n        String b = \"cart\";\n        String c = new String(\"cart\");\n        System.out.print(a.equals(b) + \" \");\n        System.out.print(a.equals(c) + \" \");\n        System.out.println(a.equals(c));\n    }\n}",
+    "fixNote": "Compared the strings with `equals` everywhere, so every check is true.",
+    "debugTip": "In the debugger's variables view, many IDEs show an object id next to each String (for example String@123). Pause after line 5 and compare the ids of `a`, `b` and `c`: matching ids mean `==` is true.",
+    "buggyOutput": "true false true",
+    "fixedOutput": "true true true"
+  },
+  {
+    "id": "beg-a-05",
+    "level": "beginner",
+    "topic": "Numbers",
+    "title": "Star rating loses its half star",
+    "kind": "bug",
+    "scenario": "A product has 7 stars across 2 reviews, so the average should be 3.5. The page shows 3.0.",
+    "symptom": "Average: 3.0",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int totalStars = 7;\n        int reviews = 2;\n        double average = totalStars / reviews;\n        System.out.println(\"Average: \" + average);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "A `double` variable can't hold a result computed from ints",
+      "`println` rounds doubles down to one decimal place",
+      "7 / 2 is int division (3); it's widened to double afterwards",
+      "The value is truncated when it is joined to the String"
+    ],
+    "answer": 2,
+    "explanation": "When both operands of `/` are ints, Java performs integer division and throws away the remainder: 7 / 2 is 3. Only after that is the int 3 widened to 3.0 to fit the double variable. Cast one operand first, e.g. `(double) totalStars / reviews`, so the division itself happens in floating point.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int totalStars = 7;\n        int reviews = 2;\n        double average = (double) totalStars / reviews;\n        System.out.println(\"Average: \" + average);\n    }\n}",
+    "fixNote": "Cast `totalStars` to double before dividing.",
+    "debugTip": "Set a breakpoint on line 5 and evaluate `totalStars / reviews` and then `(double) totalStars / reviews`. Evaluating sub-expressions on their own shows exactly where the fraction disappears.",
+    "buggyOutput": "Average: 3.0",
+    "fixedOutput": "Average: 3.5"
+  },
+  {
+    "id": "beg-a-06",
+    "level": "beginner",
+    "topic": "Numbers",
+    "title": "Progress bar stuck at the start",
+    "kind": "output",
+    "scenario": "An upload has finished 3 of 4 chunks. Predict what the progress line prints.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int done = 3;\n        int total = 4;\n        int percent = done / total * 100;\n        System.out.println(\"Progress: \" + percent + \"%\");\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What does this print?",
+    "options": [
+      "Progress: 75%",
+      "Progress: 0%",
+      "Progress: 0.75%",
+      "Progress: 100%"
+    ],
+    "answer": 1,
+    "explanation": "`/` and `*` have the same precedence and run left to right, so `done / total` happens first. With two ints that is integer division: 3 / 4 is 0, and 0 * 100 is still 0. Multiplying first (`done * 100 / total` gives 300 / 4 = 75) keeps the precision.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int done = 3;\n        int total = 4;\n        int percent = done * 100 / total;\n        System.out.println(\"Progress: \" + percent + \"%\");\n    }\n}",
+    "fixNote": "Multiplied by 100 before dividing: `done * 100 / total`.",
+    "debugTip": "Split the expression into two lines (`int ratio = done / total;`) and put a breakpoint after it. Watching the intermediate value shows the 0 immediately.",
+    "buggyOutput": "Progress: 0%",
+    "fixedOutput": "Progress: 75%"
+  },
+  {
+    "id": "beg-a-07",
+    "level": "beginner",
+    "topic": "Operators",
+    "title": "Cart says 23 items instead of 5",
+    "kind": "bug",
+    "scenario": "The cart holds 2 apples and 3 pears and should report 5 items. The banner shows 23.",
+    "symptom": "Items: 23",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int apples = 2;\n        int pears = 3;\n        System.out.println(\"Items: \" + apples + pears);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`apples + pears` overflows the int range",
+      "`println` prints ints as their character codes",
+      "`+` always concatenates when either operand is an int",
+      "`+` runs left to right; after the String, ints are appended as text"
+    ],
+    "answer": 3,
+    "explanation": "`+` is left-associative. \"Items: \" + apples is a String, \"Items: 2\", and String + int appends the int's text, giving \"Items: 23\". The numbers are never added together. Wrap the arithmetic in parentheses so it runs first: \"Items: \" + (apples + pears).",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int apples = 2;\n        int pears = 3;\n        System.out.println(\"Items: \" + (apples + pears));\n    }\n}",
+    "fixNote": "Added parentheses: `\"Items: \" + (apples + pears)`.",
+    "debugTip": "Pull the argument into a variable (`String msg = ...;`), set a breakpoint after it and evaluate `\"Items: \" + apples` on its own to see that the left part is already a String.",
+    "buggyOutput": "Items: 23",
+    "fixedOutput": "Items: 5"
+  },
+  {
+    "id": "beg-a-08",
+    "level": "beginner",
+    "topic": "Operators",
+    "title": "Average temperature reads too high",
+    "kind": "bug",
+    "scenario": "The morning reading was 10 and the evening reading 20, so the average should be 15. The dashboard shows 20.",
+    "symptom": "Average temp: 20",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int morning = 10;\n        int evening = 20;\n        int avgTemp = morning + evening / 2;\n        System.out.println(\"Average temp: \" + avgTemp);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`/` binds tighter than `+`, so only `evening` is halved",
+      "Integer division rounds 15 up to 20",
+      "`avgTemp` should be a double, not an int",
+      "The readings are added after printing"
+    ],
+    "answer": 0,
+    "explanation": "Multiplication, division and remainder have higher precedence than addition, so the expression is read as morning + (evening / 2) = 10 + 10 = 20. To divide the sum, group it: (morning + evening) / 2.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int morning = 10;\n        int evening = 20;\n        int avgTemp = (morning + evening) / 2;\n        System.out.println(\"Average temp: \" + avgTemp);\n    }\n}",
+    "fixNote": "Added parentheses: `(morning + evening) / 2`.",
+    "debugTip": "Set a breakpoint on line 5 and evaluate `evening / 2` and `morning + evening` separately. If neither matches what you expected to be divided, the grouping is wrong.",
+    "buggyOutput": "Average temp: 20",
+    "fixedOutput": "Average temp: 15"
+  },
+  {
+    "id": "beg-a-09",
+    "level": "beginner",
+    "topic": "Control flow",
+    "title": "Local deliveries charged the national rate",
+    "kind": "bug",
+    "scenario": "Local shipping should cost 5 and national shipping 10. Customers in the local zone are being charged 10.",
+    "symptom": "local: 10\nnational: 10",
+    "code": "public class Main {\n    static int shippingCost(String zone) {\n        int cost = 0;\n        switch (zone) {\n            case \"local\":\n                cost = 5;\n            case \"national\":\n                cost = 10;\n                break;\n            case \"international\":\n                cost = 25;\n                break;\n        }\n        return cost;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(\"local: \" + shippingCost(\"local\"));\n        String n = \"national\";\n        System.out.println(\"national: \" + shippingCost(n));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Strings can't be used as `switch` labels",
+      "There's no `break` after `cost = 5`, so it falls into the next case",
+      "`cost` is reset to 0 by the `return` statement",
+      "The `international` case is matched first"
+    ],
+    "answer": 1,
+    "explanation": "In a classic `switch`, execution starts at the matching `case` and keeps running through the following cases until it hits `break` (this is called fall-through). For \"local\", cost becomes 5 and then immediately 10. Add `break;` after each case, or use the arrow form `case \"local\" -> cost = 5;` which never falls through.",
+    "fix": "public class Main {\n    static int shippingCost(String zone) {\n        int cost = 0;\n        switch (zone) {\n            case \"local\":\n                cost = 5;\n                break;\n            case \"national\":\n                cost = 10;\n                break;\n            case \"international\":\n                cost = 25;\n                break;\n        }\n        return cost;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(\"local: \" + shippingCost(\"local\"));\n        String n = \"national\";\n        System.out.println(\"national: \" + shippingCost(n));\n    }\n}",
+    "fixNote": "Added `break;` after `cost = 5;`.",
+    "debugTip": "Set a breakpoint on line 6, call with \"local\", and use step over. Watch the execution arrow move from line 6 straight to line 8: stepping line by line reveals fall-through instantly.",
+    "buggyOutput": "local: 10\nnational: 10",
+    "fixedOutput": "local: 5\nnational: 10"
+  },
+  {
+    "id": "beg-a-10",
+    "level": "beginner",
+    "topic": "Control flow",
+    "title": "Silver members get every perk",
+    "kind": "output",
+    "scenario": "A level-2 (silver) member should receive only the silver perk. Predict what the program prints.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int level = 2;\n        String perks = \"\";\n        switch (level) {\n            case 1:\n                perks += \"[bronze]\";\n            case 2:\n                perks += \"[silver]\";\n            case 3:\n                perks += \"[gold]\";\n            default:\n                perks += \"[member]\";\n        }\n        System.out.println(perks);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What does this print?",
+    "options": [
+      "[silver]",
+      "[silver][member]",
+      "[silver][gold][member]",
+      "[bronze][silver][gold][member]"
+    ],
+    "answer": 2,
+    "explanation": "The switch jumps to `case 2`, so the bronze line is skipped. With no `break` statements, execution then falls through every case below it, including `default`. The result is silver, gold and member perks joined together.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int level = 2;\n        String perks = \"\";\n        switch (level) {\n            case 1:\n                perks += \"[bronze]\";\n                break;\n            case 2:\n                perks += \"[silver]\";\n                break;\n            case 3:\n                perks += \"[gold]\";\n                break;\n            default:\n                perks += \"[member]\";\n        }\n        System.out.println(perks);\n    }\n}",
+    "fixNote": "Added `break;` at the end of each case.",
+    "debugTip": "Put a watch on `perks` and step over from line 5. The watch value grows on each step, showing exactly which case bodies run.",
+    "buggyOutput": "[silver][gold][member]",
+    "fixedOutput": "[silver]"
+  },
+  {
+    "id": "beg-a-11",
+    "level": "beginner",
+    "topic": "Scope",
+    "title": "New player has no name",
+    "kind": "bug",
+    "scenario": "Creating a player called Ada with 42 points should print \"Ada: 42\". The score is right but the name comes out as null.",
+    "symptom": "null: 42",
+    "code": "public class Main {\n    static class Player {\n        String name;\n        int score;\n\n        Player(String name, int score) {\n            name = name;\n            this.score = score;\n        }\n    }\n\n    public static void main(String[] args) {\n        Player p = new Player(\"Ada\", 42);\n        System.out.println(p.name + \": \" + p.score);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "String fields can't be set inside a constructor",
+      "The object is printed before the constructor finishes",
+      "`p.name` must be read through a getter method",
+      "`name = name` assigns the parameter to itself; the field stays null"
+    ],
+    "answer": 3,
+    "explanation": "Inside the constructor, the parameter `name` shadows the field with the same name, so both sides of `name = name` refer to the parameter. The field is never assigned and keeps its default value, null. Use `this.name = name` to target the field, as line 8 already does for `score`.",
+    "fix": "public class Main {\n    static class Player {\n        String name;\n        int score;\n\n        Player(String name, int score) {\n            this.name = name;\n            this.score = score;\n        }\n    }\n\n    public static void main(String[] args) {\n        Player p = new Player(\"Ada\", 42);\n        System.out.println(p.name + \": \" + p.score);\n    }\n}",
+    "fixNote": "Changed `name = name;` to `this.name = name;`.",
+    "debugTip": "Set a breakpoint at the end of the constructor (line 8) and expand `this` in the variables view. You'll see `this.name` is still null while the local parameter `name` is \"Ada\".",
+    "buggyOutput": "null: 42",
+    "fixedOutput": "Ada: 42"
+  },
+  {
+    "id": "beg-a-12",
+    "level": "beginner",
+    "topic": "Scope",
+    "title": "Donation total never increases",
+    "kind": "bug",
+    "scenario": "Two donations of 5 and 7 are added, so the running total should be 12. The summary prints 0.",
+    "symptom": "Total: 0",
+    "code": "public class Main {\n    static int total = 0;\n\n    static void add(int amount) {\n        int total = 0;\n        total += amount;\n    }\n\n    public static void main(String[] args) {\n        add(5);\n        add(7);\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "A local `total` inside `add` hides the static field",
+      "Static fields are reset to 0 after each method call",
+      "`+=` doesn't work on static variables",
+      "`add` must return the new total to save it"
+    ],
+    "answer": 0,
+    "explanation": "Declaring `int total` inside `add` creates a new local variable that shadows the static field of the same name. The `+=` updates the local, which is thrown away when the method returns, so the field never changes from 0. Remove the local declaration so `total` refers to the field.",
+    "fix": "public class Main {\n    static int total = 0;\n\n    static void add(int amount) {\n        total += amount;\n    }\n\n    public static void main(String[] args) {\n        add(5);\n        add(7);\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "fixNote": "Deleted the local `int total = 0;` so `add` updates the static field.",
+    "debugTip": "Add a watch on `Main.total` (the field) and step into `add`. The local `total` in the variables view changes, but the watch on the field stays at 0: two variables, one name.",
+    "buggyOutput": "Total: 0",
+    "fixedOutput": "Total: 12"
+  },
+  {
+    "id": "beg-a-13",
+    "level": "beginner",
+    "topic": "Characters",
+    "title": "What comes after grade B?",
+    "kind": "output",
+    "scenario": "A report tries to print the grade letter after B. Predict what it shows.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        char grade = 'B';\n        System.out.println(grade + 1);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What does this print?",
+    "options": [
+      "C",
+      "B1",
+      "67",
+      "66"
+    ],
+    "answer": 2,
+    "explanation": "A char is a number underneath ('B' is 66). In arithmetic, `char + int` is promoted to int, so `grade + 1` is the int 67 and println prints it as a number. Cast back to char to get the letter: `(char) (grade + 1)` prints C.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        char grade = 'B';\n        System.out.println((char) (grade + 1));\n    }\n}",
+    "fixNote": "Cast the result back to char: `(char) (grade + 1)`.",
+    "debugTip": "Use evaluate expression on `grade + 1` while paused on line 4; the debugger shows the result's type as int. Checking the type of an expression is often faster than guessing.",
+    "buggyOutput": "67",
+    "fixedOutput": "C"
+  },
+  {
+    "id": "beg-a-14",
+    "level": "beginner",
+    "topic": "Characters",
+    "title": "Initials badge shows a number",
+    "kind": "bug",
+    "scenario": "The badge for Jane Doe should show her initials, JD. It shows 142 instead.",
+    "symptom": "Initials: 142",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String first = \"Jane\";\n        String last = \"Doe\";\n        String inits = first.charAt(0) + last.charAt(0) + \"\";\n        System.out.println(\"Initials: \" + inits);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`charAt(0)` returns the character's index, not the character",
+      "Adding `\"\"` at the end converts the letters to digits",
+      "`charAt` is zero-based, so it reads the wrong letters",
+      "char + char is numeric addition (74 + 68) before any String joins"
+    ],
+    "answer": 3,
+    "explanation": "`+` runs left to right. `charAt` returns a char, and char + char is integer addition: 'J' (74) + 'D' (68) = 142. Only then is 142 joined with \"\" to make a String. Start with a String so every `+` is concatenation: \"\" + first.charAt(0) + last.charAt(0).",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String first = \"Jane\";\n        String last = \"Doe\";\n        String inits = \"\" + first.charAt(0) + last.charAt(0);\n        System.out.println(\"Initials: \" + inits);\n    }\n}",
+    "fixNote": "Moved the empty String to the front so both chars are concatenated.",
+    "debugTip": "Set a breakpoint on line 5 and evaluate `first.charAt(0) + last.charAt(0)` alone. Seeing 142 with type int pinpoints the step where the letters turned into a number.",
+    "buggyOutput": "Initials: 142",
+    "fixedOutput": "Initials: JD"
+  },
+  {
+    "id": "beg-a-15",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Valid coupon code rejected",
+    "kind": "bug",
+    "scenario": "Coupon codes are stored in upper case, so the code uppercases what the user typed before checking it. Typing \"save10\" is still rejected.",
+    "symptom": "Invalid coupon: save10",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String coupon = \"save10\";\n        coupon.toUpperCase();\n        if (coupon.equals(\"SAVE10\")) {\n            System.out.println(\"Coupon applied\");\n        } else {\n            System.out.println(\"Invalid coupon: \" + coupon);\n        }\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`equals` is case-sensitive only for literals",
+      "`toUpperCase` returns a new String; the result is thrown away",
+      "Digits stop `toUpperCase` from changing the String",
+      "`toUpperCase` only works on single characters"
+    ],
+    "answer": 1,
+    "explanation": "Strings in Java are immutable: no method can change an existing String object. `toUpperCase` builds and returns a new String, and since the return value isn't stored, `coupon` still refers to \"save10\". Assign the result: `coupon = coupon.toUpperCase();`.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String coupon = \"save10\";\n        coupon = coupon.toUpperCase();\n        if (coupon.equals(\"SAVE10\")) {\n            System.out.println(\"Coupon applied\");\n        } else {\n            System.out.println(\"Invalid coupon: \" + coupon);\n        }\n    }\n}",
+    "fixNote": "Stored the result: `coupon = coupon.toUpperCase();`.",
+    "debugTip": "Add a watch on `coupon` and step over line 4. The watch value doesn't change, which tells you the call had no effect on the variable.",
+    "buggyOutput": "Invalid coupon: save10",
+    "fixedOutput": "Coupon applied"
+  },
+  {
+    "id": "beg-a-16",
+    "level": "beginner",
+    "topic": "Booleans",
+    "title": "Everyone gets the member discount",
+    "kind": "bug",
+    "scenario": "Only members should get 5 off the 50 price. A non-member is still charged 45.",
+    "symptom": "Price: 45",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        boolean isMember = false;\n        int price = 50;\n        if (isMember = true) {\n            price -= 5;\n        }\n        System.out.println(\"Price: \" + price);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`=` assigns true to isMember, and the condition uses that value",
+      "`price -= 5` runs even when the `if` is false",
+      "Booleans default to true inside an `if`",
+      "`isMember` must be compared with `.equals(true)`"
+    ],
+    "answer": 0,
+    "explanation": "`=` is assignment and `==` is comparison. An assignment is also an expression whose value is the value assigned, so `isMember = true` sets the variable to true and the `if` sees true every time. Java only allows this to compile because the variable is a boolean. Write `if (isMember)` instead, which avoids the typo entirely.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        boolean isMember = false;\n        int price = 50;\n        if (isMember) {\n            price -= 5;\n        }\n        System.out.println(\"Price: \" + price);\n    }\n}",
+    "fixNote": "Changed `if (isMember = true)` to `if (isMember)`.",
+    "debugTip": "Watch `isMember` and step over line 5. The value flips from false to true on a line that should only read it: a variable changing on an `if` line is a strong hint of `=` vs `==`.",
+    "buggyOutput": "Price: 45",
+    "fixedOutput": "Price: 50"
+  },
+  {
+    "id": "beg-a-17",
+    "level": "beginner",
+    "topic": "Loops",
+    "title": "Even-number count comes up short",
+    "kind": "bug",
+    "scenario": "The list 4, 4, 7, 2 contains three even numbers. The counter reports only two.",
+    "symptom": "Evens: 2",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int[] nums = {4, 4, 7, 2};\n        int evens = 0;\n        for (int i = 0; i < nums.length; i++) {\n            if (nums[i] % 2 == 0) {\n                evens++;\n                i++;\n            }\n        }\n        System.out.println(\"Evens: \" + evens);\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`% 2 == 0` is true for odd numbers",
+      "`evens++` runs before the comparison",
+      "The loop ends before reaching the last element",
+      "The extra `i++` skips the element after every even number"
+    ],
+    "answer": 3,
+    "explanation": "The `for` header already increments `i` after each pass. The extra `i++` inside the body moves `i` forward a second time whenever an even number is found, so the next element is never checked: the second 4 is skipped. Let the loop header be the only place that changes the counter.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int[] nums = {4, 4, 7, 2};\n        int evens = 0;\n        for (int i = 0; i < nums.length; i++) {\n            if (nums[i] % 2 == 0) {\n                evens++;\n            }\n        }\n        System.out.println(\"Evens: \" + evens);\n    }\n}",
+    "fixNote": "Removed the `i++` from inside the loop body.",
+    "debugTip": "Set a breakpoint on line 6 and watch `i`. Each time the breakpoint is hit, note the value: you'll see 0, 2, 3 instead of 0, 1, 2, 3, showing that index 1 is skipped.",
+    "buggyOutput": "Evens: 2",
+    "fixedOutput": "Evens: 3"
+  },
+  {
+    "id": "beg-a-18",
+    "level": "beginner",
+    "topic": "Arrays",
+    "title": "Guest list shows a mystery guest",
+    "kind": "bug",
+    "scenario": "Only Ann and Ben have signed up, but the printed guest list has a third entry.",
+    "symptom": "Guests: Ann Ben null",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String[] guests = new String[3];\n        int count = 0;\n        guests[count++] = \"Ann\";\n        guests[count++] = \"Ben\";\n        String list = \"\";\n        for (int i = 0; i < guests.length; i++) {\n            list += guests[i] + \" \";\n        }\n        System.out.println(\"Guests: \" + list.trim());\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`count++` writes both names into the same slot",
+      "`trim()` replaces trailing spaces with \"null\"",
+      "The loop reads all 3 slots; the unused one is still null",
+      "`new String[3]` fills the array with the text \"null\""
+    ],
+    "answer": 2,
+    "explanation": "A new array's elements start at default values: 0 for numbers, false for booleans and null for object types like String. Only two slots were filled, but the loop goes up to `guests.length` (3), so it also reads the empty slot, and String concatenation turns null into the text \"null\". Loop up to `count`, the number of slots actually used.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String[] guests = new String[3];\n        int count = 0;\n        guests[count++] = \"Ann\";\n        guests[count++] = \"Ben\";\n        String list = \"\";\n        for (int i = 0; i < count; i++) {\n            list += guests[i] + \" \";\n        }\n        System.out.println(\"Guests: \" + list.trim());\n    }\n}",
+    "fixNote": "Looped to `count` instead of `guests.length`.",
+    "debugTip": "Pause on line 8 and expand `guests` in the variables view. You'll see [\"Ann\", \"Ben\", null]: inspecting the whole array is the quickest way to spot unfilled slots.",
+    "buggyOutput": "Guests: Ann Ben null",
+    "fixedOutput": "Guests: Ann Ben"
+  },
+  {
+    "id": "beg-a-19",
+    "level": "beginner",
+    "topic": "Methods",
+    "title": "Sensor check misses a negative reading",
+    "kind": "bug",
+    "scenario": "allPositive should report false because one reading is -2. It reports true.",
+    "symptom": "All positive: true",
+    "code": "public class Main {\n    static boolean allPositive(int[] values) {\n        for (int v : values) {\n            if (v > 0) {\n                return true;\n            } else {\n                return false;\n            }\n        }\n        return true;\n    }\n\n    public static void main(String[] args) {\n        int[] readings = {3, 8, -2, 5};\n        boolean ok = allPositive(readings);\n        System.out.println(\"All positive: \" + ok);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "An enhanced for loop can't contain `return`",
+      "Both branches return, so only the first value is ever checked",
+      "`v > 0` treats negative numbers as positive",
+      "The final `return true` overrides the earlier returns"
+    ],
+    "answer": 1,
+    "explanation": "`return` exits the whole method immediately, not just the loop iteration. Because both the if and else branches return, the method decides after looking at the first value (3) and never sees -2. Return early only when you've found a counterexample, and return true after the loop has checked everything.",
+    "fix": "public class Main {\n    static boolean allPositive(int[] values) {\n        for (int v : values) {\n            if (v <= 0) {\n                return false;\n            }\n        }\n        return true;\n    }\n\n    public static void main(String[] args) {\n        int[] readings = {3, 8, -2, 5};\n        boolean ok = allPositive(readings);\n        System.out.println(\"All positive: \" + ok);\n    }\n}",
+    "fixNote": "Return false only when a non-positive value is found; return true after the loop.",
+    "debugTip": "Set a breakpoint inside the loop on line 4 and count how many times it is hit. If it stops only once for a four-element array, something is leaving the loop early.",
+    "buggyOutput": "All positive: true",
+    "fixedOutput": "All positive: false"
+  },
+  {
+    "id": "beg-a-20",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Reverse function returns the same word",
+    "kind": "bug",
+    "scenario": "The word \"debug\" should come out reversed as \"gubed\". The output is unchanged.",
+    "symptom": "Reversed: debug",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String word = \"debug\";\n        String reversed = \"\";\n        for (int i = 0; i < word.length(); i++) {\n            reversed += word.charAt(i);\n        }\n        System.out.println(\"Reversed: \" + reversed);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`charAt` reads the string from the end",
+      "`+=` can't append a char to a String",
+      "The loop should start at 1 to skip the first letter",
+      "`+=` appends each char to the end, rebuilding the original order"
+    ],
+    "answer": 3,
+    "explanation": "`reversed += c` means `reversed = reversed + c`, which adds the character on the right. Walking the word front to back and appending on the right simply copies it. To reverse, put each new character in front: `reversed = word.charAt(i) + reversed`.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String word = \"debug\";\n        String reversed = \"\";\n        for (int i = 0; i < word.length(); i++) {\n            reversed = word.charAt(i) + reversed;\n        }\n        System.out.println(\"Reversed: \" + reversed);\n    }\n}",
+    "fixNote": "Prepended each character: `reversed = word.charAt(i) + reversed;`.",
+    "debugTip": "Add a watch on `reversed` and step over line 6 a few times. After two steps it reads \"de\", not \"ed\", which shows the characters are going on the wrong end.",
+    "buggyOutput": "Reversed: debug",
+    "fixedOutput": "Reversed: gubed"
+  },
+  {
+    "id": "beg-a-21",
+    "level": "beginner",
+    "topic": "Loops",
+    "title": "Digit counter says zero has no digits",
+    "kind": "bug",
+    "scenario": "countDigits should return 4 for 4096 and 1 for 0. It returns 0 for 0.",
+    "symptom": "4096 -> 4\n0 -> 0",
+    "code": "public class Main {\n    static int countDigits(int n) {\n        int digits = 0;\n        while (n > 0) {\n            digits++;\n            n /= 10;\n        }\n        return digits;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(\"4096 -> \" + countDigits(4096));\n        System.out.println(\"0 -> \" + countDigits(0));\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "A `while` loop checks first, so for 0 the body never runs",
+      "`n /= 10` rounds 0 up to 1",
+      "`digits` should start at 1 for every input",
+      "The method needs to use `n >= 10` as its condition"
+    ],
+    "answer": 0,
+    "explanation": "A `while` loop tests its condition before the first pass, so it can run zero times. For n = 0, `n > 0` is false straight away and digits stays 0. Every number has at least one digit, so a `do-while` loop, which always runs its body once before checking, fits this problem.",
+    "fix": "public class Main {\n    static int countDigits(int n) {\n        int digits = 0;\n        do {\n            digits++;\n            n /= 10;\n        } while (n > 0);\n        return digits;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(\"4096 -> \" + countDigits(4096));\n        System.out.println(\"0 -> \" + countDigits(0));\n    }\n}",
+    "fixNote": "Turned the `while` loop into a `do-while` so the body runs at least once.",
+    "debugTip": "Set a conditional breakpoint on line 4 with the condition `n == 0`, then step over. The execution arrow jumps straight past the loop body, so you can see it never runs.",
+    "buggyOutput": "4096 -> 4\n0 -> 0",
+    "fixedOutput": "4096 -> 4\n0 -> 1"
+  },
+  {
+    "id": "beg-a-22",
+    "level": "beginner",
+    "topic": "Numbers",
+    "title": "Card charged one cent too little",
+    "kind": "bug",
+    "scenario": "An item costs 19.99, so the payment code should charge 1999 cents. The payment log shows 1998.",
+    "symptom": "Charge: 1998 cents",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        double price = 19.99;\n        int cents = (int) (price * 100);\n        System.out.println(\"Charge: \" + cents + \" cents\");\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`(int)` rounds to the nearest even number",
+      "19.99 can't be stored in a double at all",
+      "price * 100 is 1998.9999…, and `(int)` truncates it",
+      "Multiplying a double by an int gives an int"
+    ],
+    "answer": 2,
+    "explanation": "Most decimal fractions, like 19.99, can't be stored exactly in binary, so price * 100 is actually 1998.9999999999998. Casting a double to int drops everything after the decimal point (it truncates toward zero), giving 1998. Use `Math.round` to round to the nearest whole number; for real money, `BigDecimal` or storing cents as integers avoids the problem altogether.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        double price = 19.99;\n        int cents = (int) Math.round(price * 100);\n        System.out.println(\"Charge: \" + cents + \" cents\");\n    }\n}",
+    "fixNote": "Rounded with `Math.round` before converting to int.",
+    "debugTip": "Set a breakpoint on line 4 and evaluate `price * 100` before the cast. Printing or evaluating the intermediate double reveals the 1998.9999999999998 that the cast then chops.",
+    "buggyOutput": "Charge: 1998 cents",
+    "fixedOutput": "Charge: 1999 cents"
+  }
+]

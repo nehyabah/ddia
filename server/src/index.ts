@@ -7,8 +7,10 @@ import { HttpError } from "./http.js";
 import { account, auth } from "./routes/account.js";
 import { study } from "./routes/study.js";
 import { insights } from "./routes/insights.js";
+import { java, seedJava } from "./routes/java.js";
 
 seedContent();
+seedJava();
 
 const app = express();
 app.disable("x-powered-by");
@@ -19,7 +21,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 app.use("/api", auth);
-app.use("/api", requireUser, account, study, insights);
+app.use("/api", requireUser, account, study, insights, java);
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found" });
 });
