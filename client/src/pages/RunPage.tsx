@@ -129,7 +129,7 @@ export function RunPage({ mode }: { mode: RunMode }) {
             const cls = result ? (o.k === result.answer ? "right" : o.k === picked ? "wrong" : "") : "";
             return (
               <button key={o.k} className={`opt ${cls}`} disabled={!!result} onClick={() => choose(o.k)}>
-                <span className="k">{j + 1}</span>{o.t}
+                <span className="k">{j + 1}</span><span className="ot">{o.t}</span>
               </button>
             );
           })}

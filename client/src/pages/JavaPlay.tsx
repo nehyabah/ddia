@@ -158,7 +158,7 @@ export function JavaPlay() {
             return (
               <button key={k} className={`opt ${cls}`} disabled={!!result} onClick={() => setChoice(k)}
                 style={c.kind === "output" ? { fontFamily: "ui-monospace,Menlo,Consolas,monospace", whiteSpace: "pre-wrap" } : undefined}>
-                <span className="k">{k + 1}</span>{c.kind === "output" ? o : <Md text={o} />}
+                <span className="k">{k + 1}</span><span className="ot">{c.kind === "output" ? o : <Md text={o} />}</span>
               </button>
             );
           })}

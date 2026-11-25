@@ -489,3 +489,8 @@ details.explainbox{margin-top:14px}
 nav.tabs a.active,.bottomnav a.active{color:var(--accent)}
 .node:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
 .ic.bolt{background:var(--accentSoft);color:var(--accent)}
+
+/* answer options: keep content as one wrapping text block (inline code must not become flex columns) */
+.opt .ot{flex:1;min-width:0;overflow-wrap:anywhere}
+.opt code.ic,.explain code.ic,.box-tip code.ic,.glist code.ic,p code.ic,li code.ic{white-space:normal;overflow-wrap:anywhere}
+.qcard,.opts{min-width:0;max-width:100%}
