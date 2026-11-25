@@ -29,6 +29,8 @@ Your data lives in `data/ddia.sqlite`. Back up that file, or use **Settings → 
 
 ## Deploy to Railway
 
+Live at **https://ddia-production.up.railway.app**. Every push to `main` redeploys automatically.
+
 `railway.json` already holds the build, start and healthcheck settings.
 
 1. In Railway, create a new project with **Deploy from GitHub repo** and pick this repo. Every push to `main` redeploys.
