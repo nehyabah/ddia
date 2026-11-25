@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { api, type Profile } from "../api";
 import { useProfile } from "../state";
+import { Link } from "react-router-dom";
+import { Icon } from "../components/ui";
 
 const SNIPPET = `copy(localStorage.getItem("ddia-quest-v1"))`;
 
@@ -65,8 +67,12 @@ export function Settings() {
 
   return (
     <>
-      <h2>Settings</h2>
-      <p className="lede">Signed in as <b>{profile.user.username}</b>.</p>
+      <h2>{profile.user.username}</h2>
+      <p className="lede">Level {profile.level} · {profile.xp.toLocaleString()} XP · best streak {profile.bestStreak} {profile.bestStreak === 1 ? "day" : "days"}</p>
+      <div className="morelinks">
+        <Link to="/notes" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="notes" /></span><span className="tx"><h4>Notes & stars</h4><p style={{ margin: 0 }}>Your revision sheet</p></span><span className="go"><Icon name="arrow" /></span></Link>
+        <Link to="/search" className="trackcard"><span className="ti java" style={{ width: 40, height: 40 }}><Icon name="search" /></span><span className="tx"><h4>Search</h4><p style={{ margin: 0 }}>Cards, terms, questions</p></span><span className="go"><Icon name="arrow" /></span></Link>
+      </div>
 
       <form className="panel" onSubmit={saveGoal}>
         <h3>Daily goal</h3>

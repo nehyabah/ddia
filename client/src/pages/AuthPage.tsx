@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { useProfile } from "../state";
+import { Icon } from "../components/ui";
 
 export function AuthPage() {
   const { refresh } = useProfile();
@@ -26,6 +27,7 @@ export function AuthPage() {
 
   return (
     <div className="auth">
+      <span className="logo"><Icon name="logo" /></span>
       <h2>DDIA Quest</h2>
       <p className="lede">Study <em>Designing Data‑Intensive Applications</em> with flashcards, spaced‑repetition quizzes, term matching and interview drills. Your progress is saved to your account.</p>
       <form className="panel" onSubmit={submit}>

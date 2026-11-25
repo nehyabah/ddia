@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { api, type Badge, type JavaLesson } from "../api";
 import { useLoad, useProfile } from "../state";
 import { Md } from "../components/CodeView";
+import { Icon } from "../components/ui";
 
 const LEVELS = [["beginner", "Beginner"], ["intermediate", "Intermediate"], ["advanced", "Advanced"], ["expert", "Expert"]] as const;
 
@@ -27,7 +28,7 @@ export function JavaLessons() {
 
   return (
     <>
-      <Link className="back" to="/java">← Java</Link>
+      <Link className="back" to="/java"><Icon name="back" size={16} />Java</Link>
       <h2>Debugging skills</h2>
       <p className="lede">The techniques behind the challenges: from reading your first stack trace to heap dumps, JFR and bytecode.</p>
       {data.length === 0 && <p className="muted">No lessons loaded yet.</p>}

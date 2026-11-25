@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type ChapterDetail } from "../api";
 import { useLoad } from "../state";
+import { Icon, Ring } from "../components/ui";
 
 export function useChapter() {
   const { id } = useParams();
@@ -19,11 +20,11 @@ export function Chapter() {
 
   return (
     <>
-      <Link className="back" to="/">← All chapters</Link>
+      <Link className="back" to="/"><Icon name="back" size={16} />All chapters</Link>
       <h2>{c.tag ? "" : `${c.id}. `}{c.title}</h2>
       <p className="lede">{c.blurb}</p>
       <div className="mastery">
-        <div className="ring" style={{ ["--p" as string]: c.mastery }}><span>{c.mastery}%</span></div>
+        <Ring value={c.mastery} size={74} stroke={8}>{c.mastery}%</Ring>
         <div>
           <strong>Node health</strong><br />
           <span className="muted" style={{ fontSize: ".92rem" }}>
@@ -32,12 +33,12 @@ export function Chapter() {
         </div>
       </div>
       <div className="modes">
-        <button className="mode" onClick={() => go("learn")}><strong>📖 Learn</strong><small>Flip concept cards covering the whole chapter. Star the tricky ones and add notes.</small></button>
-        <button className="mode" onClick={() => go("quiz")}><strong>⚡ Quiz run</strong><small>10 questions: due first, then new, then weakest. Combos multiply XP.</small></button>
-        <button className="mode" onClick={() => go("match")}><strong>🧩 Term match</strong><small>Pair terms with meanings against the clock.</small></button>
-        {c.drills.length > 0 && <button className="mode" onClick={() => go("drill")}><strong>🎤 Explain it</strong><small>Answer as you would in the interview, then check the key points.</small></button>}
+        <button className="mode" onClick={() => go("learn")}><span className="mi"><Icon name="cards" /></span><strong>Learn</strong><small>Flip concept cards covering the whole chapter. Star the tricky ones and add notes.</small></button>
+        <button className="mode" onClick={() => go("quiz")}><span className="mi"><Icon name="bolt" /></span><strong>Quiz run</strong><small>10 questions: due first, then new, then weakest. Combos multiply XP.</small></button>
+        <button className="mode" onClick={() => go("match")}><span className="mi"><Icon name="puzzle" /></span><strong>Term match</strong><small>Pair terms with meanings against the clock.</small></button>
+        {c.drills.length > 0 && <button className="mode" onClick={() => go("drill")}><span className="mi"><Icon name="mic" /></span><strong>Explain it</strong><small>Answer as you would in the interview, then check the key points.</small></button>}
         <button className="mode boss" disabled={!bossOpen} onClick={() => go("boss")}>
-          <strong>👾 Boss fight</strong><small>{bossOpen ? `${c.bossCount} real‑world scenarios. 3 lives.` : "Unlocks at 50% node health."}</small>
+          <span className="mi"><Icon name="skull" /></span><strong>Boss fight</strong><small>{bossOpen ? `${c.bossCount} real‑world scenarios. 3 lives.` : "Unlocks at 50% node health."}</small>
         </button>
       </div>
 

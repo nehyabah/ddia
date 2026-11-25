@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, type JavaChallenge, type JavaResult } from "../api";
 import { useProfile } from "../state";
 import { CodeView, DiffView, Md, type LineMark } from "../components/CodeView";
+import { Icon, confetti } from "../components/ui";
 
 const KIND_LABEL = { bug: "Find the bug", output: "Predict the output", trace: "Read the stack trace" } as const;
 
@@ -62,6 +63,7 @@ export function JavaPlay() {
       setResult(r);
       setScore((s) => ({ correct: s.correct + (r.correct ? 1 : 0), exact: s.exact + (r.linesExact ? 1 : 0), xp: s.xp + r.xp }));
       reward(r.xp, r.newBadges);
+      if (r.correct && r.linesExact) confetti(40);
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     } catch (e) {
       setError((e as Error).message);
@@ -72,7 +74,11 @@ export function JavaPlay() {
 
   function next() {
     if (!list) return;
-    if (n >= list.length - 1) { setDone(true); refresh(); return; }
+    if (n >= list.length - 1) {
+      setDone(true); refresh();
+      if (list.length > 1 && score.correct === list.length) setTimeout(() => confetti(120), 200);
+      return;
+    }
     setN(n + 1);
     top.current?.scrollIntoView({ block: "start" });
   }
@@ -93,7 +99,7 @@ export function JavaPlay() {
   if (error) {
     return (
       <>
-        <Link className="back" to="/java">← Java</Link>
+        <Link className="back" to="/java"><Icon name="back" size={16} />Java</Link>
         <div className="qcard"><p className="qtext">{error}</p><button className="primary" onClick={() => nav("/java")}>Back to Java</button></div>
       </>
     );
@@ -103,6 +109,7 @@ export function JavaPlay() {
   if (done) {
     return (
       <div className="qcard summary">
+        <div className={`trophy ${score.correct === list.length ? "" : "cool"}`}><Icon name={score.correct === list.length ? "trophy" : "bug"} /></div>
         <span className="bignum">{score.correct}/{list.length}</span>
         <p className="qtext" style={{ marginTop: 10 }}>
           {score.correct === list.length ? "Every bug squashed." : "Misses come back in about 10 minutes — the fastest way to make them stick."}
@@ -119,7 +126,8 @@ export function JavaPlay() {
   const isTrace = c.kind === "trace";
   return (
     <div ref={top}>
-      <Link className="back" to={id ? "/java/all" : "/java"}>← {id ? "All challenges" : "Java"}</Link>
+      <Link className="back" to={id ? "/java/all" : "/java"}><Icon name="back" size={16} />{id ? "All challenges" : "Java"}</Link>
+      {list.length > 1 && <div className="runbar"><i style={{ width: `${((n + (result ? 1 : 0)) / list.length) * 100}%`, background: "var(--grad-warm)" }} /></div>}
       <div className="qhead">
         <span className="chips">
           <span className={`chip lv-${c.level}`}>{c.level}</span>
@@ -164,7 +172,7 @@ export function JavaPlay() {
         {result && (
           <div ref={resultRef}>
             <div className={`explain ${result.correct ? "" : "bad"}`}>
-              <b>{result.correct ? "Correct." : "Not quite."}{result.xp > 0 ? ` +${result.xp} XP` : ""}</b>
+              <b><Icon name={result.correct ? "check" : "x"} />{result.correct ? "Correct" : "Not quite"}{result.xp > 0 ? ` · +${result.xp} XP` : ""}</b>
               <Md text={result.explanation} />
             </div>
 
@@ -184,7 +192,7 @@ export function JavaPlay() {
             <p className="small" style={{ margin: "0 0 4px" }}><Md text={result.fixNote} /></p>
             <DiffView before={c.code} after={result.fix} />
 
-            <div className="box-tip"><b>🔎 How you'd catch it</b><span><Md text={result.debugTip} /></span></div>
+            <div className="box-tip"><b><Icon name="bulb" />How you'd catch it</b><span><Md text={result.debugTip} /></span></div>
 
             <div className="stickybar">
               <button className="primary" onClick={next}>{n >= list.length - 1 ? "Finish" : "Next bug"}</button>

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type Badge, type Profile } from "./api";
+import { confetti, Icon } from "./components/ui";
 
 type Toast = { id: number; text: string };
 
@@ -21,10 +22,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [floats, setFloats] = useState<{ id: number; xp: number }[]>([]);
   const seq = useRef(0);
+  const lastLevel = useRef<number | null>(null);
+  const [levelUp, setLevelUp] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      setProfile(await api.get<Profile>("/me"));
+      const p = await api.get<Profile>("/me");
+      if (lastLevel.current != null && p.level > lastLevel.current) {
+        setLevelUp(p.level);
+        confetti(140);
+      }
+      lastLevel.current = p.level;
+      setProfile(p);
     } catch {
       setProfile(null);
     } finally {
@@ -51,7 +60,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setFloats((f) => [...f, { id, xp }]);
       setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id)), 1200);
     }
-    badges.forEach((b) => toast(`🏅 Badge earned: ${b.label}`));
+    badges.forEach((b) => toast(`Badge earned: ${b.label}`));
+    if (badges.length) confetti(60);
     refresh();
   }, [refresh, toast]);
 
@@ -60,8 +70,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       {children}
       {floats.map((f) => <div key={f.id} className="float">+{f.xp} XP</div>)}
       <div className="toasts" aria-live="polite">
-        {toasts.map((t) => <div key={t.id} className="toast">{t.text}</div>)}
+        {toasts.map((t) => <div key={t.id} className="toast"><Icon name="sparkle" size={16} />{t.text}</div>)}
       </div>
+      {levelUp != null && (
+        <div className="modal-bg" onClick={() => setLevelUp(null)} role="dialog" aria-modal="true" aria-label="Level up">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="trophy"><Icon name="trophy" /></div>
+            <div className="small muted" style={{ fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>Level up</div>
+            <div className="big">{levelUp}</div>
+            <p className="muted" style={{ margin: "8px 0 0" }}>Keep the streak going — every level takes a little more XP.</p>
+            <button className="primary" style={{ width: "100%" }} autoFocus onClick={() => setLevelUp(null)}>Keep going</button>
+          </div>
+        </div>
+      )}
     </ProfileContext.Provider>
   );
 }

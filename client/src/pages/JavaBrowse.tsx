@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type JavaListItem } from "../api";
 import { useLoad } from "../state";
+import { Icon } from "../components/ui";
 
 const LEVELS = ["all", "beginner", "intermediate", "advanced", "expert"] as const;
 
@@ -22,7 +23,7 @@ export function JavaBrowse() {
 
   return (
     <>
-      <Link className="back" to="/java">← Java</Link>
+      <Link className="back" to="/java"><Icon name="back" size={16} />Java</Link>
       <h2>All challenges</h2>
       <p className="lede">Pick any bug to solve directly. Dots: grey new · amber learning · teal learned · red missed last time.</p>
       <div className="chips" style={{ marginBottom: 10 }}>

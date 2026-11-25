@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { api, type JavaOverview } from "../api";
 import { useLoad } from "../state";
+import { Icon, Ring } from "../components/ui";
 
 const BLURB: Record<string, string> = {
   beginner: "Off‑by‑ones, == vs equals, integer division, reading your first stack traces.",
@@ -37,7 +38,7 @@ export function JavaHome() {
         </p>
       )}
       <div className="row" style={{ marginBottom: 18 }}>
-        <button className="primary" style={{ marginTop: 0 }} onClick={() => play({})}>Mixed practice</button>
+        <button className="primary" style={{ marginTop: 0 }} onClick={() => play({})}><Icon name="bug" />Mixed practice</button>
         <Link className="ghost" style={{ marginTop: 0, textDecoration: "none" }} to="/java/lessons">Debugging skills</Link>
         <Link className="ghost" style={{ marginTop: 0, textDecoration: "none" }} to="/java/all">All challenges</Link>
       </div>
@@ -45,9 +46,13 @@ export function JavaHome() {
       <div className="levels">
         {data.levels.map((l) => (
           <div key={l.id} className="level">
-            <h3><span>{l.label}</span><span className="small muted">{l.tried}/{l.count} tried · {l.mastery}%</span></h3>
-            <p className="small muted" style={{ margin: 0 }}>{BLURB[l.id]}</p>
-            <div className="bar"><i style={{ width: `${l.mastery}%` }} /></div>
+            <div className="lvhead">
+              <Ring value={l.mastery} size={52} stroke={6} color={l.id === "expert" ? "url(#ringGrad)" : "url(#ringWarm)"}>{l.mastery}%</Ring>
+              <div className="t">
+                <h3>{l.label} <span className={`chip lv-${l.id}`} style={{ verticalAlign: "middle" }}>{l.tried}/{l.count} tried</span></h3>
+                <p className="small muted" style={{ margin: "2px 0 0" }}>{BLURB[l.id]}</p>
+              </div>
+            </div>
             <div className="chips">
               {l.topics.map((t) => (
                 <button key={t.topic} className="topicbtn" onClick={() => play({ level: l.id, topic: t.topic })}>

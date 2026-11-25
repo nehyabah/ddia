@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, type Badge, type Term } from "../api";
 import { shuffle, useProfile } from "../state";
 import { useChapter } from "./Chapter";
+import { Icon } from "../components/ui";
 
 type Tile = { side: "L" | "R"; i: number; text: string };
 
@@ -80,7 +81,7 @@ export function Match() {
 
   return (
     <>
-      <Link className="back" to={`/chapter/${c.id}`}>← {c.label}</Link>
+      <Link className="back" to={`/chapter/${c.id}`}><Icon name="back" size={16} />{c.label}</Link>
       <div className="qhead"><span>Pick a term, then its meaning</span><span>{elapsed} s · {misses} missed</span></div>
       <div className="match">
         <div className="col">{left.map(tile)}</div>

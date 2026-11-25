@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Badge } from "../api";
 import { useProfile } from "../state";
 import { useChapter } from "./Chapter";
+import { Icon } from "../components/ui";
 
 export function Learn() {
   const nav = useNavigate();
@@ -83,10 +84,10 @@ export function Learn() {
 
   return (
     <>
-      <Link className="back" to={`/chapter/${c.id}`}>← {c.label}</Link>
+      <Link className="back" to={`/chapter/${c.id}`}><Icon name="back" size={16} />{c.label}</Link>
       <div className="qhead">
         <span>Card {i + 1} of {count}{card.seen ? " · read" : ""}</span>
-        <span className="small"><kbd>Space</kbd> flip · <kbd>←</kbd><kbd>→</kbd> move · <kbd>S</kbd> star</span>
+        <span className="small kbdhint"><kbd>Space</kbd> flip · <kbd>←</kbd><kbd>→</kbd> move · <kbd>S</kbd> star</span>
       </div>
       <div className="dots" aria-label="Jump to card">
         {c.cards.map((k, j) => (

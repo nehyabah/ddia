@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, type Badge } from "../api";
 import { shuffle, useProfile } from "../state";
 import { useChapter } from "./Chapter";
+import { Icon } from "../components/ui";
 
 export function DrillPage() {
   const nav = useNavigate();
@@ -41,7 +42,7 @@ export function DrillPage() {
   const last = n === order.length - 1;
   return (
     <>
-      <Link className="back" to={`/chapter/${c.id}`}>← {c.label}</Link>
+      <Link className="back" to={`/chapter/${c.id}`}><Icon name="back" size={16} />{c.label}</Link>
       <div className="qhead"><span>Prompt {n + 1} of {order.length}</span><span>Say it out loud or type it</span></div>
       <div className="qcard">
         <p className="qtext">{d.prompt}</p>

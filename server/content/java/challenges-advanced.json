@@ -1,0 +1,673 @@
+[
+  {
+    "id": "adv-01",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "Four threads, one counter, wrong total",
+    "kind": "bug",
+    "scenario": "Four threads each increment a shared counter 100,000 times, so the total should be 400000. The total is lower and changes on every run; one run printed the value below.",
+    "symptom": "count = 273914",
+    "code": "import java.util.*;\n\npublic class Main {\n    static int count = 0;\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        List<Thread> ts = new ArrayList<>();\n        for (int t = 0; t < 4; t++) {\n            Thread th = new Thread(() -> {\n                for (int i = 0; i < 100_000; i++) {\n                    count++;\n                }\n            });\n            ts.add(th);\n            th.start();\n        }\n        for (Thread th : ts) th.join();\n        System.out.println(\"count = \" + count);\n    }\n}",
+    "bugLines": [
+      4,
+      12
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "join() returns before the threads finish, so main reads the count too early",
+      "count++ is a read-modify-write of three steps, so threads overwrite each other's increments",
+      "The int overflows past 2^31 and wraps around to a smaller value",
+      "Each lambda gets its own copy of the static field and only one copy is printed"
+    ],
+    "answer": 1,
+    "explanation": "count++ compiles to read, add, write. Two threads can read the same value, both add one, and both write back the same result, so one increment is lost. join() does give main a happens-before edge, so the problem is not visibility at the end; it is the non-atomic update in the middle. AtomicInteger.incrementAndGet() does the update as a single compare-and-set.",
+    "fix": "import java.util.*;\nimport java.util.concurrent.atomic.AtomicInteger;\n\npublic class Main {\n    static AtomicInteger count = new AtomicInteger();\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        List<Thread> ts = new ArrayList<>();\n        for (int t = 0; t < 4; t++) {\n            Thread th = new Thread(() -> {\n                for (int i = 0; i < 100_000; i++) {\n                    count.incrementAndGet();\n                }\n            });\n            ts.add(th);\n            th.start();\n        }\n        for (Thread th : ts) th.join();\n        System.out.println(\"count = \" + count.get());\n    }\n}",
+    "fixNote": "Replaced the int with an AtomicInteger and count++ with incrementAndGet().",
+    "debugTip": "Races hide under a single run, so stress-test: loop main 50 times, or raise the thread count, and assert the total. A breakpoint will not show it, because suspending a thread changes the interleaving. To confirm, use a conditional breakpoint set to \"suspend thread\" (not \"suspend all\") on line 12 and step two threads by hand through the same read.",
+    "buggyOutput": "count = 273914",
+    "fixedOutput": "count = 400000",
+    "deterministic": false
+  },
+  {
+    "id": "adv-02",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "The worker that ignores the stop flag",
+    "kind": "bug",
+    "scenario": "main sets stop = true after 100 ms and expects the spinning worker to exit. Without the join timeout and daemon flag, the process hung forever; with them, one run printed the line below, and \"worker stopped\" never appeared.",
+    "symptom": "alive after stop: true\n\n$ jstack <pid>  (taken while it hung)\n\"Thread-0\" #15 prio=5 os_prio=0 tid=0x... nid=0x... runnable\n   java.lang.Thread.State: RUNNABLE\n\tat Main.lambda$main$0(Main.java:8)",
+    "code": "public class Main {\n    static boolean stop = false;\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Thread worker = new Thread(() -> {\n            long spins = 0;\n            while (!stop) {\n                spins++;\n            }\n            System.out.println(\"worker stopped\");\n        });\n        worker.setDaemon(true);\n        worker.start();\n        Thread.sleep(100);\n        stop = true;\n        worker.join(1000);\n        System.out.println(\"alive after stop: \"\n                + worker.isAlive());\n    }\n}",
+    "bugLines": [
+      2,
+      8
+    ],
+    "question": "Why doesn't the worker see stop = true?",
+    "options": [
+      "Thread.sleep(100) holds a lock that blocks the worker from reading the field",
+      "setDaemon(true) makes the worker run at a priority too low to be scheduled",
+      "stop is not volatile, so the JIT may read it once and spin on a cached value",
+      "Static fields are thread-local unless they are declared final"
+    ],
+    "answer": 2,
+    "explanation": "Without volatile or synchronization there is no happens-before edge between the write in main and the reads in the worker. The JIT may legally hoist the read of stop out of the loop, turning it into while (true). Declaring the field volatile forces every read to see the latest write.",
+    "fix": "public class Main {\n    static volatile boolean stop = false;\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Thread worker = new Thread(() -> {\n            long spins = 0;\n            while (!stop) {\n                spins++;\n            }\n            System.out.println(\"worker stopped\");\n        });\n        worker.setDaemon(true);\n        worker.start();\n        Thread.sleep(100);\n        stop = true;\n        worker.join(1000);\n        System.out.println(\"alive after stop: \"\n                + worker.isAlive());\n    }\n}",
+    "fixNote": "Declared stop as volatile so the worker sees the write.",
+    "debugTip": "Take a thread dump while it hangs: `jcmd <pid> Thread.print` (or `jstack <pid>`) twice, a few seconds apart. A thread that stays RUNNABLE on the same loop line points to a spin on a stale field. The bug often vanishes in the debugger or with -Xint, because the interpreter rereads the field each time. That difference is a clue in itself.",
+    "buggyOutput": "alive after stop: true",
+    "fixedOutput": "worker stopped\nalive after stop: false",
+    "deterministic": false
+  },
+  {
+    "id": "adv-03",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "A lazy singleton that sometimes looks empty",
+    "kind": "bug",
+    "scenario": "Config is created lazily with double-checked locking. Almost every run prints port=8080 twice, but under load on ARM servers one run logged the output below.",
+    "symptom": "port=8080\nport=0",
+    "code": "public class Main {\n    static class Config {\n        int port;\n        Config() { port = 8080; }\n    }\n\n    private static Config instance;\n\n    static Config get() {\n        if (instance == null) {\n            synchronized (Main.class) {\n                if (instance == null) {\n                    instance = new Config();\n                }\n            }\n        }\n        return instance;\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Runnable r = () -> System.out.println(\n                \"port=\" + get().port);\n        Thread a = new Thread(r);\n        Thread b = new Thread(r);\n        a.start(); b.start();\n        a.join(); b.join();\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "How can a reader see port=0?",
+    "options": [
+      "Without volatile, the reference can be published before the constructor's write to port is visible",
+      "The synchronized block locks Main.class, but get() is called from a lambda",
+      "Two Config objects are created, and the second one has not run its constructor",
+      "int fields are not initialised until the class is fully loaded by both threads"
+    ],
+    "answer": 0,
+    "explanation": "The first check on line 10 reads instance outside any lock. Without volatile, the JVM and CPU may reorder the constructor's write to port after the write of the reference. A second thread can then see a non-null instance whose port is still the default 0. Declaring instance volatile adds the happens-before edge that safe publication needs.",
+    "fix": "public class Main {\n    static class Config {\n        int port;\n        Config() { port = 8080; }\n    }\n\n    private static volatile Config instance;\n\n    static Config get() {\n        if (instance == null) {\n            synchronized (Main.class) {\n                if (instance == null) {\n                    instance = new Config();\n                }\n            }\n        }\n        return instance;\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Runnable r = () -> System.out.println(\n                \"port=\" + get().port);\n        Thread a = new Thread(r);\n        Thread b = new Thread(r);\n        a.start(); b.start();\n        a.join(); b.join();\n    }\n}",
+    "fixNote": "Made instance volatile. A holder-class idiom or an enum singleton would also work.",
+    "debugTip": "You will rarely reproduce this on x86, whose memory model is strong. Stress-test on ARM, or use the OpenJDK jcstress harness, which runs millions of interleavings and reports forbidden results. In code review, flag any unsynchronized read of a lazily written field that is not volatile.",
+    "buggyOutput": "port=8080\nport=0",
+    "fixedOutput": "port=8080\nport=8080",
+    "deterministic": false
+  },
+  {
+    "id": "adv-04",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "Two transfers that never finish",
+    "kind": "bug",
+    "scenario": "Two daemon workers each take two locks and record a transfer. The program waits 2 s per worker and then reports. In production the workers were not daemons and the service froze, and a thread dump showed the excerpt below.",
+    "symptom": "stuck: true, transfers: 0\n\n$ jstack <pid>\nFound one Java-level deadlock:\n=============================\n\"t1\":\n  waiting to lock monitor 0x00007f8b2c004e00 (object 0x0000000711c0a1b8, a java.lang.Object),\n  which is held by \"t2\"\n\"t2\":\n  waiting to lock monitor 0x00007f8b2c002f00 (object 0x0000000711c0a1a8, a java.lang.Object),\n  which is held by \"t1\"\n\nJava stack information for the threads listed above:\n===================================================\n\"t1\":\n\tat Main.lambda$worker$0(Main.java:10)\n\t- waiting to lock <0x0000000711c0a1b8> (a java.lang.Object)\n\t- locked <0x0000000711c0a1a8> (a java.lang.Object)\n\"t2\":\n\tat Main.lambda$worker$0(Main.java:10)\n\t- waiting to lock <0x0000000711c0a1a8> (a java.lang.Object)\n\t- locked <0x0000000711c0a1b8> (a java.lang.Object)\n\nFound 1 deadlock.",
+    "code": "public class Main {\n    static final Object A = new Object();\n    static final Object B = new Object();\n    static int transfers = 0;\n    static Thread worker(Object first, Object second,\n                         String name) {\n        Thread t = new Thread(() -> {\n            synchronized (first) {\n                pause(50);\n                synchronized (second) {\n                    transfers++;\n                }\n            }\n        }, name);\n        t.setDaemon(true);\n        return t;\n    }\n\n    static void pause(long ms) {\n        try { Thread.sleep(ms); }\n        catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Thread t1 = worker(A, B, \"t1\");\n        Thread t2 = worker(B, A, \"t2\");\n        t1.start(); t2.start();\n        t1.join(2000); t2.join(2000);\n        System.out.println(\"stuck: \" + t1.isAlive()\n                + \", transfers: \" + transfers);\n    }\n}",
+    "bugLines": [
+      28,
+      29
+    ],
+    "question": "Which fix removes the deadlock?",
+    "options": [
+      "Make transfers volatile so each thread sees the other's progress",
+      "Increase the join timeout so the threads have time to finish",
+      "Remove pause(50) so the threads are less likely to overlap",
+      "Make both workers take the locks in the same order: A, then B"
+    ],
+    "answer": 3,
+    "explanation": "t1 holds A and waits for B while t2 holds B and waits for A: a cycle in the wait-for graph, so neither can continue. Monitors have no timeout, so they wait forever. A global lock order (always A before B) makes the cycle impossible. Removing the sleep only makes the deadlock rarer.",
+    "fix": "public class Main {\n    static final Object A = new Object();\n    static final Object B = new Object();\n    static int transfers = 0;\n    static Thread worker(Object first, Object second,\n                         String name) {\n        Thread t = new Thread(() -> {\n            synchronized (first) {\n                pause(50);\n                synchronized (second) {\n                    transfers++;\n                }\n            }\n        }, name);\n        t.setDaemon(true);\n        return t;\n    }\n\n    static void pause(long ms) {\n        try { Thread.sleep(ms); }\n        catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Thread t1 = worker(A, B, \"t1\");\n        Thread t2 = worker(A, B, \"t2\");\n        t1.start(); t2.start();\n        t1.join(2000); t2.join(2000);\n        System.out.println(\"stuck: \" + t1.isAlive()\n                + \", transfers: \" + transfers);\n    }\n}",
+    "fixNote": "t2 now acquires A before B, the same order as t1.",
+    "debugTip": "When a JVM freezes, run `jstack <pid>` or `jcmd <pid> Thread.print`. The JVM detects monitor cycles itself and prints \"Found one Java-level deadlock\", naming each thread, the lock it holds and the lock it wants. Giving threads names, as on lines 28-29, makes that report readable. In a debugger, \"suspend all\" plus the threads view shows the same waiting-on and owned monitors.",
+    "buggyOutput": "stuck: true, transfers: 0",
+    "fixedOutput": "stuck: false, transfers: 2",
+    "deterministic": false
+  },
+  {
+    "id": "adv-05",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "Hit counter loses hits under load",
+    "kind": "bug",
+    "scenario": "Four pool tasks each record 10,000 hits across 10 keys, so the total should be 40000. The total varies from run to run; one run printed the value below. Exceptions thrown inside the tasks are silently discarded.",
+    "symptom": "total = 31876",
+    "code": "import java.util.*;\nimport java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args)\n            throws InterruptedException {\n        Map<String, Integer> hits = new HashMap<>();\n        ExecutorService pool =\n                Executors.newFixedThreadPool(4);\n        for (int t = 0; t < 4; t++) {\n            pool.submit(() -> {\n                for (int i = 0; i < 10_000; i++) {\n                    hits.merge(\"k\" + i % 10, 1,\n                            Integer::sum);\n                }\n            });\n        }\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        int total = 0;\n        for (int v : hits.values()) total += v;\n        System.out.println(\"total = \" + total);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Integer::sum overflows when four threads add to the same key",
+      "HashMap is not thread-safe, so concurrent merge() calls lose updates or corrupt the table",
+      "awaitTermination returns before the tasks finish, so values are missing",
+      "\"k\" + i % 10 evaluates to \"k\" + i and creates too many keys"
+    ],
+    "answer": 1,
+    "explanation": "HashMap has no internal synchronization. Concurrent merge calls race on the same bucket, and a resize can drop entries. Since Java 9, merge() may also throw ConcurrentModificationException, and executor.submit hides it. ConcurrentHashMap.merge is atomic per key, so every hit is counted. Also, % binds tighter than +, so the 10 keys are k0..k9 as intended.",
+    "fix": "import java.util.*;\nimport java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args)\n            throws InterruptedException {\n        Map<String, Integer> hits = new ConcurrentHashMap<>();\n        ExecutorService pool =\n                Executors.newFixedThreadPool(4);\n        for (int t = 0; t < 4; t++) {\n            pool.submit(() -> {\n                for (int i = 0; i < 10_000; i++) {\n                    hits.merge(\"k\" + i % 10, 1,\n                            Integer::sum);\n                }\n            });\n        }\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        int total = 0;\n        for (int v : hits.values()) total += v;\n        System.out.println(\"total = \" + total);\n    }\n}",
+    "fixNote": "Swapped HashMap for ConcurrentHashMap, whose merge() is atomic.",
+    "debugTip": "Keep the Futures that submit() returns and call get() on them: a hidden ConcurrentModificationException then surfaces. Stress-test by repeating the run in a loop and asserting the total. A JFR recording (`-XX:StartFlightRecording`) with the thread view shows four pool threads writing to the same map.",
+    "buggyOutput": "total = 31876",
+    "fixedOutput": "total = 40000",
+    "deterministic": false
+  },
+  {
+    "id": "adv-06",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "Cache loads the same key several times",
+    "kind": "bug",
+    "scenario": "get() should call the expensive load() only once per key. With 8 concurrent requests for the same key, the load counter is often above 1; one run printed the value below.",
+    "symptom": "loads = 3",
+    "code": "import java.util.concurrent.*;\nimport java.util.concurrent.atomic.AtomicInteger;\n\npublic class Main {\n    static final ConcurrentHashMap<String, String> cache =\n            new ConcurrentHashMap<>();\n    static final AtomicInteger loads = new AtomicInteger();\n\n    static String load(String key) {\n        loads.incrementAndGet();\n        return key.toUpperCase();\n    }\n\n    static String get(String key) {\n        if (!cache.containsKey(key)) {\n            cache.put(key, load(key));\n        }\n        return cache.get(key);\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        ExecutorService pool =\n                Executors.newFixedThreadPool(8);\n        for (int i = 0; i < 8; i++) {\n            pool.submit(() -> get(\"user:42\"));\n        }\n        pool.shutdown();\n        pool.awaitTermination(5, TimeUnit.SECONDS);\n        System.out.println(\"loads = \" + loads.get());\n    }\n}",
+    "bugLines": [
+      15,
+      16
+    ],
+    "question": "Why is load() called more than once?",
+    "options": [
+      "Each call is atomic, but the check and the put are two calls, so several threads can pass the check",
+      "ConcurrentHashMap.put replaces the value, which calls load() again",
+      "containsKey uses a stale snapshot that is never refreshed",
+      "AtomicInteger counts a call twice when two threads increment it together"
+    ],
+    "answer": 0,
+    "explanation": "A thread-safe map makes each method atomic, not a sequence of methods. Several threads can see containsKey return false before any of them puts. computeIfAbsent does the check and the insert as one atomic step, and runs the loader at most once per key.",
+    "fix": "import java.util.concurrent.*;\nimport java.util.concurrent.atomic.AtomicInteger;\n\npublic class Main {\n    static final ConcurrentHashMap<String, String> cache =\n            new ConcurrentHashMap<>();\n    static final AtomicInteger loads = new AtomicInteger();\n\n    static String load(String key) {\n        loads.incrementAndGet();\n        return key.toUpperCase();\n    }\n\n    static String get(String key) {\n        return cache.computeIfAbsent(key, Main::load);\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        ExecutorService pool =\n                Executors.newFixedThreadPool(8);\n        for (int i = 0; i < 8; i++) {\n            pool.submit(() -> get(\"user:42\"));\n        }\n        pool.shutdown();\n        pool.awaitTermination(5, TimeUnit.SECONDS);\n        System.out.println(\"loads = \" + loads.get());\n    }\n}",
+    "fixNote": "Replaced containsKey + put with a single atomic computeIfAbsent.",
+    "debugTip": "Log the thread name inside load() (`Thread.currentThread().getName()`): several different pool threads loading the same key proves the race. To widen the window, put a breakpoint set to \"suspend thread\" on line 16 and let several threads stop there before you resume them.",
+    "buggyOutput": "loads = 3",
+    "fixedOutput": "loads = 1",
+    "deterministic": false
+  },
+  {
+    "id": "adv-07",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "synchronized, yet still racing",
+    "kind": "bug",
+    "scenario": "add() is synchronized, so the shared total should reach 200000. Every run prints less; one run printed the value below.",
+    "symptom": "total = 143502",
+    "code": "import java.util.*;\n\npublic class Main {\n    static int total = 0;\n\n    synchronized void add() {\n        total++;\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        List<Thread> ts = new ArrayList<>();\n        for (int t = 0; t < 4; t++) {\n            Main counter = new Main();\n            Thread th = new Thread(() -> {\n                for (int i = 0; i < 50_000; i++) {\n                    counter.add();\n                }\n            });\n            ts.add(th);\n            th.start();\n        }\n        for (Thread th : ts) th.join();\n        System.out.println(\"total = \" + total);\n    }\n}",
+    "bugLines": [
+      6,
+      14
+    ],
+    "question": "Why doesn't synchronized protect total?",
+    "options": [
+      "synchronized methods are not reentrant, so the lock is released after each loop",
+      "The lambda captures counter by value, so add() runs without the lock",
+      "Each thread locks its own Main instance, but total is a single static field they all share",
+      "synchronized only works on methods that return a value"
+    ],
+    "answer": 2,
+    "explanation": "A synchronized instance method locks this. Four threads use four different Main objects, so they hold four different locks and never exclude each other. Static state needs a lock that every thread shares: a static synchronized method (which locks Main.class) or a single shared lock object.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static int total = 0;\n\n    static synchronized void add() {\n        total++;\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        List<Thread> ts = new ArrayList<>();\n        for (int t = 0; t < 4; t++) {\n            Main counter = new Main();\n            Thread th = new Thread(() -> {\n                for (int i = 0; i < 50_000; i++) {\n                    counter.add();\n                }\n            });\n            ts.add(th);\n            th.start();\n        }\n        for (Thread th : ts) th.join();\n        System.out.println(\"total = \" + total);\n    }\n}",
+    "fixNote": "Made add() static synchronized so every thread locks Main.class.",
+    "debugTip": "Use \"suspend all\" at a breakpoint on line 7 and open the threads view. The debugger shows which monitor each thread owns, and you will see four different Main instances. In a thread dump (`jstack`), the \"- locked <0x...> (a Main)\" lines show different addresses, which confirms the threads use different locks.",
+    "buggyOutput": "total = 143502",
+    "fixedOutput": "total = 200000",
+    "deterministic": false
+  },
+  {
+    "id": "adv-08",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "Consumer crashes on an empty queue",
+    "kind": "trace",
+    "scenario": "Two consumers block on a shared queue. main adds job-1 and calls notifyAll, and adds job-2 later. Only one job was consumed, and a consumer thread died with the trace below.",
+    "symptom": "got job-1\nException in thread \"Thread-1\" java.util.NoSuchElementException\n\tat java.base/java.util.ArrayDeque.removeFirst(ArrayDeque.java:362)\n\tat Main.take(Main.java:11)\n\tat Main.lambda$main$0(Main.java:19)\n\tat java.base/java.lang.Thread.run(Thread.java:833)",
+    "code": "import java.util.*;\n\npublic class Main {\n    static final Deque<String> q = new ArrayDeque<>();\n\n    static String take() throws InterruptedException {\n        synchronized (q) {\n            if (q.isEmpty()) {\n                q.wait();\n            }\n            return q.removeFirst();\n        }\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Runnable consumer = () -> {\n            try {\n                System.out.println(\"got \" + take());\n            } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n            }\n        };\n        Thread c1 = new Thread(consumer);\n        Thread c2 = new Thread(consumer);\n        c1.start(); c2.start();\n        Thread.sleep(100);\n        synchronized (q) {\n            q.add(\"job-1\");\n            q.notifyAll();\n        }\n        c1.join(500); c2.join(500);\n        synchronized (q) { q.add(\"job-2\"); q.notifyAll(); }\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "notifyAll wakes the threads before job-1 is added to the queue",
+      "wait() releases the lock permanently, so removeFirst runs unsynchronized",
+      "ArrayDeque.removeFirst throws whenever two threads have called it",
+      "The condition is checked with if, so a woken thread does not re-check that the queue is still non-empty"
+    ],
+    "answer": 3,
+    "explanation": "notifyAll wakes both consumers. The first reacquires the lock and takes job-1. The second then returns from wait() and goes straight to removeFirst() on an empty queue. The condition may have changed by the time a thread wakes, and spurious wakeups are allowed too, so wait() must always be called in a while loop that re-checks the condition.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static final Deque<String> q = new ArrayDeque<>();\n\n    static String take() throws InterruptedException {\n        synchronized (q) {\n            while (q.isEmpty()) {\n                q.wait();\n            }\n            return q.removeFirst();\n        }\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Runnable consumer = () -> {\n            try {\n                System.out.println(\"got \" + take());\n            } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n            }\n        };\n        Thread c1 = new Thread(consumer);\n        Thread c2 = new Thread(consumer);\n        c1.start(); c2.start();\n        Thread.sleep(100);\n        synchronized (q) {\n            q.add(\"job-1\");\n            q.notifyAll();\n        }\n        c1.join(500); c2.join(500);\n        synchronized (q) { q.add(\"job-2\"); q.notifyAll(); }\n    }\n}",
+    "fixNote": "Changed if to while so a woken consumer waits again if the queue is empty.",
+    "debugTip": "Put a breakpoint set to \"suspend thread\" on line 11 with the condition `q.isEmpty()`. It stops only in the consumer that woke up and found nothing. Logging the thread name before and after wait() shows both consumers waking from a single notifyAll. In real code, prefer a BlockingQueue, which handles this for you.",
+    "buggyOutput": "got job-1",
+    "fixedOutput": "got job-1\ngot job-2",
+    "deterministic": false
+  },
+  {
+    "id": "adv-09",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "The program prints \"main done\" but lingers",
+    "kind": "bug",
+    "scenario": "A CLI tool computes one value on a pool and prints it. Both lines appear at once, but the process keeps running for about a minute before it exits.",
+    "symptom": "answer = 42\nmain done\n(process keeps running for ~60 s)\n\n$ jstack <pid>\n\"pool-1-thread-1\" #15 prio=5 os_prio=0 ... waiting on condition\n   java.lang.Thread.State: TIMED_WAITING (parking)\n\tat jdk.internal.misc.Unsafe.park(java.base@17/Native Method)\n\t...\n\tat java.util.concurrent.SynchronousQueue.poll(java.base@17/SynchronousQueue.java:903)\n\tat java.util.concurrent.ThreadPoolExecutor.getTask(java.base@17/ThreadPoolExecutor.java:1061)",
+    "code": "import java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args)\n            throws Exception {\n        ExecutorService pool =\n                Executors.newCachedThreadPool();\n        Future<Integer> f =\n                pool.submit(() -> 6 * 7);\n        System.out.println(\"answer = \" + f.get());\n        System.out.println(\"main done\");\n    }\n}",
+    "bugLines": [
+      7,
+      11
+    ],
+    "question": "Why does the JVM not exit when main returns?",
+    "options": [
+      "The pool's worker is a non-daemon thread that idles for 60 s, because the pool is never shut down",
+      "f.get() leaves a lock held, which blocks JVM shutdown",
+      "The lambda is still running in the background after get() returns",
+      "main must call System.exit, because a JVM never exits on its own"
+    ],
+    "answer": 0,
+    "explanation": "The JVM exits only when every non-daemon thread has ended. Executors create non-daemon worker threads. A cached pool keeps an idle worker for 60 seconds, and a fixed pool keeps its workers forever. Calling shutdown() (in a finally block, or with try-with-resources on Java 19+) lets the workers end as soon as the queue is empty.",
+    "fix": "import java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args)\n            throws Exception {\n        ExecutorService pool =\n                Executors.newCachedThreadPool();\n        Future<Integer> f =\n                pool.submit(() -> 6 * 7);\n        System.out.println(\"answer = \" + f.get());\n        pool.shutdown();\n        System.out.println(\"main done\");\n    }\n}",
+    "fixNote": "Called pool.shutdown() once the work is done.",
+    "debugTip": "When a JVM will not exit, take a thread dump (`jcmd <pid> Thread.print`) and look for threads that are not marked \"daemon\". Here \"pool-1-thread-1\" is parked in ThreadPoolExecutor.getTask, which means an executor nobody shut down. Pause the program in the debugger to see the same thread list.",
+    "buggyOutput": "answer = 42\nmain done",
+    "fixedOutput": "answer = 42\nmain done"
+  },
+  {
+    "id": "adv-10",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "A bad row disappears without a trace",
+    "kind": "bug",
+    "scenario": "Each row is parsed on an executor and added to a sum. The row \"x3\" is malformed, yet the program prints a sum with no error anywhere in the logs.",
+    "symptom": "sum = 30",
+    "code": "import java.util.*;\nimport java.util.concurrent.*;\n\npublic class Main {\n    static int parse(String s) {\n        return Integer.parseInt(s.trim());\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        ExecutorService pool =\n                Executors.newSingleThreadExecutor();\n        List<String> rows = List.of(\"10\", \" 20\", \"x3\");\n        int[] sum = {0};\n        for (String r : rows) {\n            pool.submit(() -> { sum[0] += parse(r); });\n        }\n        pool.shutdown();\n        pool.awaitTermination(5, TimeUnit.SECONDS);\n        System.out.println(\"sum = \" + sum[0]);\n    }\n}",
+    "bugLines": [
+      16
+    ],
+    "question": "Where did the NumberFormatException go?",
+    "options": [
+      "trim() turns \"x3\" into \"3\", so no exception is thrown",
+      "The single-thread executor restarts the task and the retry succeeds",
+      "submit() stores it in the returned Future, which nobody calls get() on",
+      "parseInt returns 0 for invalid input instead of throwing"
+    ],
+    "answer": 2,
+    "explanation": "submit() wraps the task in a FutureTask, which catches every exception and keeps it until Future.get() rethrows it as an ExecutionException. If you discard the Future, the failure is silent: nothing reaches the uncaught-exception handler. execute() would at least print the trace, but checking each Future is the reliable fix.",
+    "fix": "import java.util.*;\nimport java.util.concurrent.*;\n\npublic class Main {\n    static int parse(String s) {\n        return Integer.parseInt(s.trim());\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        ExecutorService pool =\n                Executors.newSingleThreadExecutor();\n        List<String> rows = List.of(\"10\", \" 20\", \"x3\");\n        int[] sum = {0};\n        List<Future<?>> fs = new ArrayList<>();\n        for (String r : rows) {\n            fs.add(pool.submit(\n                    () -> { sum[0] += parse(r); }));\n        }\n        for (Future<?> f : fs) {\n            try {\n                f.get();\n            } catch (ExecutionException e) {\n                System.out.println(\"bad row: \"\n                        + e.getCause().getMessage());\n            }\n        }\n        pool.shutdown();\n        System.out.println(\"sum = \" + sum[0]);\n    }\n}",
+    "fixNote": "Kept the Futures and called get(), reporting each ExecutionException's cause.",
+    "debugTip": "Add an exception breakpoint on NumberFormatException (caught and uncaught). It fires inside the pool thread even though nothing is logged. In code review, a submit() whose Future is discarded is a warning sign. Use execute(), or keep the Future and check it.",
+    "buggyOutput": "sum = 30",
+    "fixedOutput": "bad row: For input string: \"x3\"\nsum = 30"
+  },
+  {
+    "id": "adv-11",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "The async price lookup never reports",
+    "kind": "bug",
+    "scenario": "A price is fetched asynchronously and printed. The output is only \"done\": no price and no error, even though fetchPrice threw.",
+    "symptom": "done",
+    "code": "import java.util.concurrent.*;\n\npublic class Main {\n    static int fetchPrice(String sku) {\n        if (sku.isEmpty()) {\n            throw new IllegalArgumentException(\"empty sku\");\n        }\n        return 100;\n    }\n\n    public static void main(String[] args) {\n        CompletableFuture\n                .supplyAsync(() -> fetchPrice(\"\"))\n                .thenApply(p -> \"price \" + p)\n                .thenAccept(System.out::println);\n        System.out.println(\"done\");\n    }\n}",
+    "bugLines": [
+      15
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "supplyAsync runs fetchPrice on main, so the exception is swallowed by println",
+      "The failed future is never joined or handled, so its exception is just stored and dropped",
+      "thenApply catches the exception and turns it into a null price",
+      "Common-pool threads print exceptions only when the JVM exits normally"
+    ],
+    "answer": 1,
+    "explanation": "A CompletableFuture completes exceptionally and skips every later thenApply/thenAccept stage. Nothing is printed unless some code calls join()/get(), or attaches exceptionally/handle/whenComplete. Here no one does, and main can also exit before the daemon common-pool thread finishes. exceptionally() receives the CompletionException that wraps the original exception.",
+    "fix": "import java.util.concurrent.*;\n\npublic class Main {\n    static int fetchPrice(String sku) {\n        if (sku.isEmpty()) {\n            throw new IllegalArgumentException(\"empty sku\");\n        }\n        return 100;\n    }\n\n    public static void main(String[] args) {\n        String msg = CompletableFuture\n                .supplyAsync(() -> fetchPrice(\"\"))\n                .thenApply(p -> \"price \" + p)\n                .exceptionally(\n                        ex -> \"failed: \" + ex.getMessage())\n                .join();\n        System.out.println(msg);\n        System.out.println(\"done\");\n    }\n}",
+    "fixNote": "Added exceptionally() to handle the failure and join() to wait for the result.",
+    "debugTip": "Set an exception breakpoint on IllegalArgumentException. It stops in a \"ForkJoinPool.commonPool-worker\" thread, which shows the failure happens off main. At the end of every async chain, ask what calls join(), or where exceptionally/whenComplete logs the error.",
+    "buggyOutput": "done",
+    "fixedOutput": "failed: java.lang.IllegalArgumentException: empty sku\ndone"
+  },
+  {
+    "id": "adv-12",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "Anonymous request, familiar user",
+    "kind": "output",
+    "scenario": "Each request stores the caller in a ThreadLocal. The second request is anonymous and should log null. Both run on the same single-thread executor.",
+    "code": "import java.util.concurrent.*;\n\npublic class Main {\n    static final ThreadLocal<String> user =\n            new ThreadLocal<>();\n\n    static void handle(String who) {\n        if (who != null) {\n            user.set(who);\n        }\n        System.out.println(\"request by \" + user.get());\n    }\n\n    public static void main(String[] args)\n            throws Exception {\n        ExecutorService pool =\n                Executors.newSingleThreadExecutor();\n        pool.submit(() -> handle(\"alice\")).get();\n        pool.submit(() -> handle(null)).get();\n        pool.shutdown();\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What does this print?",
+    "options": [
+      "request by alice\nrequest by null",
+      "request by null\nrequest by null",
+      "request by alice\n(then IllegalStateException)",
+      "request by alice\nrequest by alice"
+    ],
+    "answer": 3,
+    "explanation": "A ThreadLocal value belongs to the thread, not to the task. Pool threads are reused, so the value set by the first task is still there when the next task runs on the same thread. Always clear it with remove() in a finally block. Leftover values leak data between users and keep objects alive, which also causes memory leaks.",
+    "fix": "import java.util.concurrent.*;\n\npublic class Main {\n    static final ThreadLocal<String> user =\n            new ThreadLocal<>();\n\n    static void handle(String who) {\n        try {\n            if (who != null) {\n                user.set(who);\n            }\n            System.out.println(\"request by \" + user.get());\n        } finally {\n            user.remove();\n        }\n    }\n\n    public static void main(String[] args)\n            throws Exception {\n        ExecutorService pool =\n                Executors.newSingleThreadExecutor();\n        pool.submit(() -> handle(\"alice\")).get();\n        pool.submit(() -> handle(null)).get();\n        pool.shutdown();\n    }\n}",
+    "fixNote": "Wrapped the handler in try/finally and called user.remove().",
+    "debugTip": "Log the thread name next to the ThreadLocal value: the same \"pool-1-thread-1\" serving both requests explains the carry-over. In a heap dump (`jcmd <pid> GC.heap_dump`, opened in Eclipse MAT), look for stale ThreadLocalMap entries held by pool threads.",
+    "buggyOutput": "request by alice\nrequest by alice",
+    "fixedOutput": "request by alice\nrequest by null"
+  },
+  {
+    "id": "adv-13",
+    "level": "advanced",
+    "topic": "Streams",
+    "title": "Parallel stream drops even numbers",
+    "kind": "bug",
+    "scenario": "There are 5000 even numbers in [0, 10000). The size varies on each run, and sometimes an ArrayIndexOutOfBoundsException is thrown; one run printed the output below.",
+    "symptom": "size = 4873",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> evens = new ArrayList<>();\n        IntStream.range(0, 10_000)\n                .parallel()\n                .filter(i -> i % 2 == 0)\n                .boxed()\n                .forEach(evens::add);\n        System.out.println(\"size = \" + evens.size());\n    }\n}",
+    "bugLines": [
+      6,
+      11
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Let the stream build the list: .boxed().collect(Collectors.toList())",
+      "Replace ArrayList with LinkedList, which has no backing array to overflow",
+      "Declare evens as volatile so every thread sees the latest list",
+      "Call .sequential() after .boxed() so only forEach runs serially"
+    ],
+    "answer": 0,
+    "explanation": "forEach on a parallel stream runs the consumer on several ForkJoin threads at once, and ArrayList.add is not thread-safe, so elements are lost or the array overflows. LinkedList is not thread-safe either. A collector builds a list per thread and merges them safely. sequential() is not local: the last parallel()/sequential() call applies to the whole pipeline.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> evens = IntStream.range(0, 10_000)\n                .parallel()\n                .filter(i -> i % 2 == 0)\n                .boxed()\n                .collect(Collectors.toList());\n        System.out.println(\"size = \" + evens.size());\n    }\n}",
+    "fixNote": "Replaced the side-effecting forEach with collect(Collectors.toList()).",
+    "debugTip": "Log Thread.currentThread().getName() inside a peek(): you will see main and several \"ForkJoinPool.commonPool-worker\" threads. Any shared mutable state touched from a parallel pipeline is a race. Stress-test by running it 100 times and asserting the size.",
+    "buggyOutput": "size = 4873",
+    "fixedOutput": "size = 5000",
+    "deterministic": false
+  },
+  {
+    "id": "adv-14",
+    "level": "advanced",
+    "topic": "Streams",
+    "title": "Count first, then print the names",
+    "kind": "trace",
+    "scenario": "The code counts the three-letter names and then prints them, reusing the same filtered stream. The count prints, then main crashes.",
+    "symptom": "count = 3\nException in thread \"main\" java.lang.IllegalStateException: stream has already been operated upon or closed\n\tat java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:229)\n\tat java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:596)\n\tat Main.main(Main.java:12)",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> names =\n                List.of(\"ann\", \"bob\", \"cy\", \"dee\");\n        Stream<String> threeLetter = names.stream()\n                .filter(n -> n.length() == 3);\n        long count = threeLetter.count();\n        System.out.println(\"count = \" + count);\n        threeLetter.forEach(System.out::println);\n    }\n}",
+    "bugLines": [
+      10,
+      12
+    ],
+    "question": "Why does line 12 throw?",
+    "options": [
+      "List.of returns an immutable list that can be streamed only once",
+      "count() closes the underlying list, so forEach cannot read it",
+      "A Stream can be consumed only once, and count() already ran its terminal operation",
+      "filter() is lazy and has not run yet, so forEach has no source"
+    ],
+    "answer": 2,
+    "explanation": "A Stream is a one-shot pipeline, not a collection. After a terminal operation such as count(), the pipeline is marked as consumed, and any further operation throws IllegalStateException. Collect the results into a List when you need them more than once, or create a fresh stream each time (for example with a Supplier<Stream<T>>).",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> names =\n                List.of(\"ann\", \"bob\", \"cy\", \"dee\");\n        List<String> threeLetter = names.stream()\n                .filter(n -> n.length() == 3)\n                .toList();\n        long count = threeLetter.size();\n        System.out.println(\"count = \" + count);\n        threeLetter.forEach(System.out::println);\n    }\n}",
+    "fixNote": "Collected the filtered names into a List once and reused the list.",
+    "debugTip": "Read the trace from the bottom up: the first Main frame (line 12) is the second terminal operation on the same variable. An IDE inspection that flags \"stream used more than once\" catches this. Watching the stream variable in the debugger shows linkedOrConsumed = true after count().",
+    "buggyOutput": "count = 3",
+    "throws": "java.lang.IllegalStateException",
+    "fixedOutput": "count = 3\nann\nbob\ndee"
+  },
+  {
+    "id": "adv-15",
+    "level": "advanced",
+    "topic": "Streams",
+    "title": "The audit list stays empty",
+    "kind": "output",
+    "scenario": "peek() should record every element that goes through the pipeline into an audit list.",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> audit = new ArrayList<>();\n        Stream<String> s = Stream.of(\"a\", \"b\", \"c\")\n                .peek(audit::add)\n                .map(String::toUpperCase);\n        System.out.println(\"audit = \" + audit);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What does this print?",
+    "options": [
+      "audit = [a, b, c]",
+      "audit = []",
+      "audit = [A, B, C]",
+      "audit = null"
+    ],
+    "answer": 1,
+    "explanation": "Intermediate operations such as peek, map and filter are lazy. They only describe the pipeline, and nothing flows through it until a terminal operation (collect, toList, forEach, count...) runs. Without one, peek never runs, so the audit list stays empty. Add a terminal operation, and don't rely on peek for required side effects.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> audit = new ArrayList<>();\n        List<String> up = Stream.of(\"a\", \"b\", \"c\")\n                .peek(audit::add)\n                .map(String::toUpperCase)\n                .toList();\n        System.out.println(\"audit = \" + audit);\n        System.out.println(\"up = \" + up);\n    }\n}",
+    "fixNote": "Added a terminal toList() so the pipeline actually runs.",
+    "debugTip": "Put a breakpoint inside the peek lambda: it is never hit. That alone tells you no terminal operation ran. Many IDEs also show a \"result of map() is ignored\" warning on the unused stream variable.",
+    "buggyOutput": "audit = []",
+    "fixedOutput": "audit = [a, b, c]\nup = [A, B, C]"
+  },
+  {
+    "id": "adv-16",
+    "level": "advanced",
+    "topic": "Optional",
+    "title": "Looking up an email that isn't there",
+    "kind": "trace",
+    "scenario": "Users are looked up by name. The first lookup works; the second crashes with the trace below.",
+    "symptom": "ann@x.io\nException in thread \"main\" java.util.NoSuchElementException: No value present\n\tat java.base/java.util.Optional.get(Optional.java:143)\n\tat Main.main(Main.java:18)",
+    "code": "import java.util.*;\n\npublic class Main {\n    record User(String name, String email) {}\n\n    static Optional<User> find(List<User> users,\n                               String name) {\n        return users.stream()\n                .filter(u -> u.name().equals(name))\n                .findFirst();\n    }\n\n    public static void main(String[] args) {\n        List<User> users = List.of(\n                new User(\"ann\", \"ann@x.io\"),\n                new User(\"bob\", \"bob@x.io\"));\n        System.out.println(find(users, \"ann\").get().email());\n        System.out.println(find(users, \"cat\").get().email());\n    }\n}",
+    "bugLines": [
+      18
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "findFirst() returns null when nothing matches, and .get() is called on null",
+      "The record's email() accessor throws because the field was never set",
+      "filter() throws NoSuchElementException as soon as one element does not match",
+      "find returns Optional.empty() for \"cat\", and get() on an empty Optional throws"
+    ],
+    "answer": 3,
+    "explanation": "Optional.get() (like orElseThrow()) throws NoSuchElementException(\"No value present\") when the Optional is empty. The point of Optional is to make the absent case explicit, so map the value and supply a fallback with orElse/orElseGet, or throw a meaningful exception with orElseThrow(() -> ...).",
+    "fix": "import java.util.*;\n\npublic class Main {\n    record User(String name, String email) {}\n\n    static Optional<User> find(List<User> users,\n                               String name) {\n        return users.stream()\n                .filter(u -> u.name().equals(name))\n                .findFirst();\n    }\n\n    public static void main(String[] args) {\n        List<User> users = List.of(\n                new User(\"ann\", \"ann@x.io\"),\n                new User(\"bob\", \"bob@x.io\"));\n        System.out.println(find(users, \"ann\").get().email());\n        System.out.println(find(users, \"cat\")\n                .map(User::email).orElse(\"(none)\"));\n    }\n}",
+    "fixNote": "Mapped the Optional and supplied a fallback instead of calling get().",
+    "debugTip": "Add an exception breakpoint on NoSuchElementException, then evaluate `find(users, \"cat\")` in the stopped frame: it shows Optional.empty. Static analysis tools flag \"Optional.get() without isPresent()\", so treat that warning as a bug.",
+    "buggyOutput": "ann@x.io",
+    "throws": "java.util.NoSuchElementException",
+    "fixedOutput": "ann@x.io\n(none)"
+  },
+  {
+    "id": "adv-17",
+    "level": "advanced",
+    "topic": "Optional",
+    "title": "Counting calls to the default loader",
+    "kind": "output",
+    "scenario": "The cached value is present, so the default should never be needed. The code counts how often the \"database\" is hit anyway.",
+    "code": "import java.util.*;\n\npublic class Main {\n    static int dbCalls = 0;\n\n    static String loadDefault() {\n        dbCalls++;\n        return \"guest\";\n    }\n\n    public static void main(String[] args) {\n        Optional<String> cached = Optional.of(\"ann\");\n        for (int i = 0; i < 3; i++) {\n            String u = cached.orElse(loadDefault());\n            System.out.print(u + \" \");\n        }\n        System.out.println(\"| dbCalls = \" + dbCalls);\n    }\n}",
+    "bugLines": [
+      14
+    ],
+    "question": "What does this print?",
+    "options": [
+      "ann ann ann | dbCalls = 0",
+      "guest guest guest | dbCalls = 3",
+      "ann ann ann | dbCalls = 3",
+      "ann ann ann | dbCalls = 1"
+    ],
+    "answer": 2,
+    "explanation": "orElse(x) is an ordinary method call, so Java evaluates its argument before the call, whether or not the Optional has a value. loadDefault() runs on every iteration even though \"ann\" is returned. orElseGet(Main::loadDefault) takes a Supplier and calls it only when the Optional is empty.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static int dbCalls = 0;\n\n    static String loadDefault() {\n        dbCalls++;\n        return \"guest\";\n    }\n\n    public static void main(String[] args) {\n        Optional<String> cached = Optional.of(\"ann\");\n        for (int i = 0; i < 3; i++) {\n            String u = cached.orElseGet(Main::loadDefault);\n            System.out.print(u + \" \");\n        }\n        System.out.println(\"| dbCalls = \" + dbCalls);\n    }\n}",
+    "fixNote": "Used orElseGet with a Supplier so the default is computed lazily.",
+    "debugTip": "Put a breakpoint in loadDefault() and look at the call stack when it is hit: the caller is main line 14 even though the Optional holds a value. In production, a JFR recording (`-XX:StartFlightRecording`) or a profiler shows the unexpected hot path to the \"default\" query.",
+    "buggyOutput": "ann ann ann | dbCalls = 3",
+    "fixedOutput": "ann ann ann | dbCalls = 0"
+  },
+  {
+    "id": "adv-18",
+    "level": "advanced",
+    "topic": "Streams",
+    "title": "Indexing staff by department",
+    "kind": "trace",
+    "scenario": "Staff are collected into a map from department to name. The program crashes before printing anything.",
+    "symptom": "Exception in thread \"main\" java.lang.IllegalStateException: Duplicate key eng (attempted merging values ann and cy)\n\tat java.base/java.util.stream.Collectors.duplicateKeyException(Collectors.java:135)\n\tat java.base/java.util.stream.Collectors.lambda$uniqKeysMapAccumulator$1(Collectors.java:182)\n\t...\n\tat java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)\n\tat Main.main(Main.java:13)",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    record Emp(String dept, String name) {}\n\n    public static void main(String[] args) {\n        List<Emp> staff = List.of(\n                new Emp(\"eng\", \"ann\"),\n                new Emp(\"ops\", \"bob\"),\n                new Emp(\"eng\", \"cy\"));\n        Map<String, String> byDept = staff.stream()\n                .collect(Collectors.toMap(\n                        Emp::dept, Emp::name));\n        System.out.println(new TreeMap<>(byDept));\n    }\n}",
+    "bugLines": [
+      14
+    ],
+    "question": "Which fix keeps every name?",
+    "options": [
+      "Pass a merge function: toMap(Emp::dept, Emp::name, (a, b) -> a + \",\" + b)",
+      "Collect into a TreeMap directly, since TreeMap accepts duplicate keys",
+      "Call .distinct() before collect so the duplicate entry is removed",
+      "Swap the key and value mappers: toMap(Emp::name, Emp::dept)"
+    ],
+    "answer": 0,
+    "explanation": "The two-argument Collectors.toMap throws IllegalStateException as soon as two elements map to the same key. Since Java 9 the message names the key and both values. The three-argument overload takes a merge function that decides how to combine the values. If you need every value, groupingBy is often clearer. distinct() compares whole records, and (\"eng\",\"ann\") and (\"eng\",\"cy\") are different records.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    record Emp(String dept, String name) {}\n\n    public static void main(String[] args) {\n        List<Emp> staff = List.of(\n                new Emp(\"eng\", \"ann\"),\n                new Emp(\"ops\", \"bob\"),\n                new Emp(\"eng\", \"cy\"));\n        Map<String, String> byDept = staff.stream()\n                .collect(Collectors.toMap(\n                        Emp::dept, Emp::name,\n                        (a, b) -> a + \",\" + b));\n        System.out.println(new TreeMap<>(byDept));\n    }\n}",
+    "fixNote": "Added a merge function to toMap that joins names that share a department.",
+    "debugTip": "The exception message already names the key and the two clashing values. Set an exception breakpoint on IllegalStateException to inspect the source data at the moment of the clash. For larger inputs, run a quick groupingBy(..., counting()) in evaluate-expression to find every duplicate key.",
+    "buggyOutput": "",
+    "throws": "java.lang.IllegalStateException",
+    "fixedOutput": "{eng=ann,cy, ops=bob}"
+  },
+  {
+    "id": "adv-19",
+    "level": "advanced",
+    "topic": "Streams",
+    "title": "Counting orders per region",
+    "kind": "trace",
+    "scenario": "Orders are counted per region into a sorted map. One order has no region, and the job dies with the trace below.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException: element cannot be mapped to a null key\n\tat java.base/java.util.Objects.requireNonNull(Objects.java:233)\n\tat java.base/java.util.stream.Collectors.lambda$groupingBy$53(Collectors.java:1104)\n\t...\n\tat java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:682)\n\tat Main.main(Main.java:13)",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    record Order(String id, String region) {}\n\n    public static void main(String[] args) {\n        List<Order> orders = List.of(\n                new Order(\"o1\", \"EU\"),\n                new Order(\"o2\", null),\n                new Order(\"o3\", \"US\"));\n        Map<String, Long> perRegion = orders.stream()\n                .collect(Collectors.groupingBy(\n                        Order::region,\n                        TreeMap::new,\n                        Collectors.counting()));\n        System.out.println(perRegion);\n    }\n}",
+    "bugLines": [
+      10,
+      14
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "TreeMap::new cannot be used as a map factory for groupingBy",
+      "groupingBy rejects a null key, and order o2's classifier returns null",
+      "Collectors.counting() returns null for a group with a single element",
+      "Records cannot hold null components, so o2 is built with a broken field"
+    ],
+    "answer": 1,
+    "explanation": "Collectors.groupingBy calls Objects.requireNonNull on each classifier result, with the message \"element cannot be mapped to a null key\". It does this whatever map factory you use. Replace null with a sentinel key, filter those elements out first, or use partitioningBy for a yes/no split.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    record Order(String id, String region) {}\n\n    public static void main(String[] args) {\n        List<Order> orders = List.of(\n                new Order(\"o1\", \"EU\"),\n                new Order(\"o2\", null),\n                new Order(\"o3\", \"US\"));\n        Map<String, Long> perRegion = orders.stream()\n                .collect(Collectors.groupingBy(\n                        o -> Objects.requireNonNullElse(\n                                o.region(), \"UNKNOWN\"),\n                        TreeMap::new,\n                        Collectors.counting()));\n        System.out.println(perRegion);\n    }\n}",
+    "fixNote": "The classifier now maps a null region to \"UNKNOWN\".",
+    "debugTip": "Set an exception breakpoint on NullPointerException and go down to the lambda frame in the debugger's frame list to see which element was being classified. On large data, a conditional breakpoint inside the classifier with `o.region() == null` stops on the culprit directly.",
+    "buggyOutput": "",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "{EU=1, UNKNOWN=1, US=1}"
+  },
+  {
+    "id": "adv-20",
+    "level": "advanced",
+    "topic": "JVM Runtime",
+    "title": "Summing the digits of 9045",
+    "kind": "trace",
+    "scenario": "sumDigits should return 18 for 9045. Instead the JVM prints a very long, repetitive stack trace.",
+    "symptom": "Exception in thread \"main\" java.lang.StackOverflowError\n\tat Main.sumDigits(Main.java:3)\n\tat Main.sumDigits(Main.java:3)\n\tat Main.sumDigits(Main.java:3)\n\tat Main.sumDigits(Main.java:3)\n\t... (1024 identical frames printed in total)",
+    "code": "public class Main {\n    static long sumDigits(long n) {\n        return n % 10 + sumDigits(n / 10);\n    }\n\n    public static void main(String[] args) {\n        System.out.println(sumDigits(9045));\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "long division rounds toward negative infinity, so n never reaches 0",
+      "The default thread stack is too small for 4 levels of recursion",
+      "n % 10 overflows on the last digit and makes n negative",
+      "There is no base case: once n reaches 0 it calls sumDigits(0) forever"
+    ],
+    "answer": 3,
+    "explanation": "Every recursive method needs a base case that stops calling itself. Here n goes 9045, 904, 90, 9, 0, and then 0 / 10 is 0 again, so the calls never end until the thread stack is exhausted. The JVM prints at most 1024 frames (-XX:MaxJavaStackTraceDepth), so the trace is a wall of identical lines, and the repeating frame is the loop. Raising -Xss only delays the crash.",
+    "fix": "public class Main {\n    static long sumDigits(long n) {\n        if (n == 0) return 0;\n        return n % 10 + sumDigits(n / 10);\n    }\n\n    public static void main(String[] args) {\n        System.out.println(sumDigits(9045));\n    }\n}",
+    "fixNote": "Added the base case if (n == 0) return 0.",
+    "debugTip": "In a StackOverflowError, find the shortest set of frames that repeats; that is the cycle. Here it is one frame, Main.java:3. Set a conditional breakpoint on line 3 with `n == 0`: the second time it is hit, n is still 0 and you have found the missing exit.",
+    "buggyOutput": "",
+    "throws": "java.lang.StackOverflowError",
+    "fixedOutput": "18"
+  },
+  {
+    "id": "adv-21",
+    "level": "advanced",
+    "topic": "JVM Runtime",
+    "title": "Heap grows with every batch",
+    "kind": "bug",
+    "scenario": "This is a scaled-down request handler. In production it ran for hours and then died with the OutOfMemoryError below. Here it just prints how many payloads stay reachable after each batch.",
+    "symptom": "batch 1 retained=1000\nbatch 2 retained=2000\nbatch 3 retained=3000\n\nProduction, after ~4M requests:\nException in thread \"main\" java.lang.OutOfMemoryError: Java heap space\n\tat Main.handle(Main.java:7)\n\tat Main.main(Main.java:15)\n\n$ jmap -histo:live <pid> | head -5\n num     #instances         #bytes  class name (module)\n-------------------------------------------------------\n   1:       4093211     4256939440  [B (java.base@17)\n   2:             1       33554448  [Ljava.lang.Object; (java.base@17)\n   3:          4210         402816  java.lang.Class (java.base@17)",
+    "code": "import java.util.*;\n\npublic class Main {\n    static final List<byte[]> AUDIT = new ArrayList<>();\n\n    static int handle(int requestId) {\n        byte[] payload = new byte[1024];\n        AUDIT.add(payload);\n        return payload.length;\n    }\n\n    public static void main(String[] args) {\n        for (int batch = 1; batch <= 3; batch++) {\n            for (int i = 0; i < 1000; i++) {\n                handle(i);\n            }\n            System.out.println(\"batch \" + batch\n                    + \" retained=\" + AUDIT.size());\n        }\n    }\n}",
+    "bugLines": [
+      4,
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "byte[] arrays are allocated off-heap and are never garbage-collected",
+      "The GC does not run while main is still in its loop",
+      "A static list keeps a reference to every payload, so the GC can never free them",
+      "new byte[1024] inside a method allocates permanently in Metaspace"
+    ],
+    "answer": 2,
+    "explanation": "The GC frees only unreachable objects. A static field is a GC root that lives as long as its class, so everything added to AUDIT stays reachable forever. The histogram's top entry, millions of [B (byte[]) objects, plus a single huge Object[] (the ArrayList's backing array) point straight at an unbounded collection. Bound it, evict old entries, or don't keep the payload at all.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static final Deque<byte[]> AUDIT = new ArrayDeque<>();\n    static final int MAX = 100;\n\n    static int handle(int requestId) {\n        byte[] payload = new byte[1024];\n        AUDIT.addLast(payload);\n        if (AUDIT.size() > MAX) AUDIT.removeFirst();\n        return payload.length;\n    }\n\n    public static void main(String[] args) {\n        for (int batch = 1; batch <= 3; batch++) {\n            for (int i = 0; i < 1000; i++) {\n                handle(i);\n            }\n            System.out.println(\"batch \" + batch\n                    + \" retained=\" + AUDIT.size());\n        }\n    }\n}",
+    "fixNote": "Bounded the audit buffer to the last 100 payloads.",
+    "debugTip": "Run `jmap -histo:live <pid>` (or `jcmd <pid> GC.class_histogram`) twice, a few minutes apart: classes whose instance counts only go up are leaking. Then take `jcmd <pid> GC.heap_dump /tmp/h.hprof`, open it in Eclipse MAT, and use \"Path to GC Roots\" on the large Object[]. It leads to the static field Main.AUDIT. Also add -XX:+HeapDumpOnOutOfMemoryError in production.",
+    "buggyOutput": "batch 1 retained=1000\nbatch 2 retained=2000\nbatch 3 retained=3000",
+    "fixedOutput": "batch 1 retained=100\nbatch 2 retained=100\nbatch 3 retained=100"
+  },
+  {
+    "id": "adv-22",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "Which thread runs the job?",
+    "kind": "output",
+    "scenario": "A job is handed to a new Thread so it runs in the background. Both the job and main print the name of the thread they run on.",
+    "code": "public class Main {\n    public static void main(String[] args)\n            throws InterruptedException {\n        Runnable job = () -> {\n            String who = Thread.currentThread().getName();\n            System.out.println(\"job on \" + who);\n        };\n        Thread t = new Thread(job);\n        t.run();\n        t.join();\n        System.out.println(\"main on \"\n                + Thread.currentThread().getName());\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What does this print?",
+    "options": [
+      "job on main\nmain on main",
+      "job on Thread-0\nmain on main",
+      "main on main\njob on Thread-0",
+      "job on Thread-0\nmain on Thread-0"
+    ],
+    "answer": 0,
+    "explanation": "Thread.run() is an ordinary method that calls the Runnable on the current thread. It does not create a new thread. Only start() asks the JVM to start a new thread, which then calls run(). join() on a thread that was never started returns immediately, because the thread is not alive. With start(), the job runs on \"Thread-0\", and join() makes the order deterministic.",
+    "fix": "public class Main {\n    public static void main(String[] args)\n            throws InterruptedException {\n        Runnable job = () -> {\n            String who = Thread.currentThread().getName();\n            System.out.println(\"job on \" + who);\n        };\n        Thread t = new Thread(job);\n        t.start();\n        t.join();\n        System.out.println(\"main on \"\n                + Thread.currentThread().getName());\n    }\n}",
+    "fixNote": "Called t.start() instead of t.run().",
+    "debugTip": "Put a breakpoint inside the Runnable and check the debugger's threads view: the paused thread is \"main\", and the call stack shows Main.main -> Thread.run. Logging thread names in every log line (for example %t in a logging pattern) makes this mistake obvious in production logs.",
+    "buggyOutput": "job on main\nmain on main",
+    "fixedOutput": "job on Thread-0\nmain on main"
+  },
+  {
+    "id": "adv-23",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "The worker ignores cancellation",
+    "kind": "bug",
+    "scenario": "main interrupts the worker at about 300 ms, during its second tick, and expects it to stop. The worker always runs all 5 ticks (about 1 s).",
+    "symptom": "worker ticks = 5\nmain done",
+    "code": "public class Main {\n    static void sleepQuietly(long ms) {\n        try {\n            Thread.sleep(ms);\n        } catch (InterruptedException e) {\n            // ignore\n        }\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Thread worker = new Thread(() -> {\n            int ticks = 0;\n            while (!Thread.currentThread().isInterrupted()\n                    && ticks < 5) {\n                ticks++;\n                sleepQuietly(200);\n            }\n            System.out.println(\"worker ticks = \" + ticks);\n        });\n        worker.start();\n        Thread.sleep(300);\n        worker.interrupt();\n        worker.join();\n        System.out.println(\"main done\");\n    }\n}",
+    "bugLines": [
+      5,
+      6
+    ],
+    "question": "Why does the loop never see the interrupt?",
+    "options": [
+      "interrupt() only works on threads that are marked as daemons",
+      "isInterrupted() checks the main thread, not the worker",
+      "The lambda runs on a copy of the thread object, so the flag is never set",
+      "Thread.sleep clears the interrupt flag when it throws, and the catch never sets it again"
+    ],
+    "answer": 3,
+    "explanation": "When a blocking call such as sleep() is interrupted, it clears the thread's interrupt status and throws InterruptedException. Swallowing the exception throws away the only record of the cancellation request, so isInterrupted() returns false and the loop keeps going. Either propagate the exception, or restore the flag with Thread.currentThread().interrupt().",
+    "fix": "public class Main {\n    static void sleepQuietly(long ms) {\n        try {\n            Thread.sleep(ms);\n        } catch (InterruptedException e) {\n            Thread.currentThread().interrupt();\n        }\n    }\n\n    public static void main(String[] args)\n            throws InterruptedException {\n        Thread worker = new Thread(() -> {\n            int ticks = 0;\n            while (!Thread.currentThread().isInterrupted()\n                    && ticks < 5) {\n                ticks++;\n                sleepQuietly(200);\n            }\n            System.out.println(\"worker ticks = \" + ticks);\n        });\n        worker.start();\n        Thread.sleep(300);\n        worker.interrupt();\n        worker.join();\n        System.out.println(\"main done\");\n    }\n}",
+    "fixNote": "The catch block now restores the interrupt flag with Thread.currentThread().interrupt().",
+    "debugTip": "Set an exception breakpoint on InterruptedException (caught). It fires in sleepQuietly, which proves the interrupt arrived and was swallowed. In code review, flag every empty catch of InterruptedException. If shutdown hangs, a thread dump (`jstack`) showing the thread still in sleep() after cancellation is the symptom.",
+    "buggyOutput": "worker ticks = 5\nmain done",
+    "fixedOutput": "worker ticks = 2\nmain done",
+    "deterministic": false
+  },
+  {
+    "id": "adv-24",
+    "level": "advanced",
+    "topic": "Concurrency",
+    "title": "A periodic job that quietly stops",
+    "kind": "bug",
+    "scenario": "A task scheduled every 10 ms should run at least five times within a second. It ran a few times, then stopped for good, with nothing in the logs.",
+    "symptom": "five runs: false",
+    "code": "import java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args)\n            throws InterruptedException {\n        ScheduledExecutorService ses =\n                Executors.newScheduledThreadPool(1);\n        CountDownLatch fiveRuns = new CountDownLatch(5);\n        int[] run = {0};\n        ses.scheduleAtFixedRate(() -> {\n            fiveRuns.countDown();\n            if (++run[0] == 3) {\n                throw new IllegalStateException(\"flaky\");\n            }\n        }, 0, 10, TimeUnit.MILLISECONDS);\n        boolean ok = fiveRuns.await(1, TimeUnit.SECONDS);\n        ses.shutdownNow();\n        System.out.println(\"five runs: \" + ok);\n    }\n}",
+    "bugLines": [
+      10,
+      13
+    ],
+    "question": "Why did the task stop after the third run?",
+    "options": [
+      "scheduleAtFixedRate allows at most three runs unless a limit is passed",
+      "If a periodic task throws, the executor cancels every later run and keeps the error in the Future",
+      "The latch blocks the pool thread once it reaches 3, so no more runs happen",
+      "The exception kills the JVM's timer thread, which restarts after one second"
+    ],
+    "answer": 1,
+    "explanation": "The scheduleAtFixedRate contract says that if any execution throws, later executions are suppressed. The exception is stored in the returned ScheduledFuture, which nobody checks, so the job just stops. Wrap the body of a periodic task in try/catch and log the error, so one bad run does not cancel the schedule.",
+    "fix": "import java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args)\n            throws InterruptedException {\n        ScheduledExecutorService ses =\n                Executors.newScheduledThreadPool(1);\n        CountDownLatch fiveRuns = new CountDownLatch(5);\n        int[] run = {0};\n        ses.scheduleAtFixedRate(() -> {\n            fiveRuns.countDown();\n            try {\n                if (++run[0] == 3) {\n                    throw new IllegalStateException(\"flaky\");\n                }\n            } catch (RuntimeException e) {\n                System.out.println(\"run \" + run[0]\n                        + \" failed: \" + e.getMessage());\n            }\n        }, 0, 10, TimeUnit.MILLISECONDS);\n        boolean ok = fiveRuns.await(1, TimeUnit.SECONDS);\n        ses.shutdownNow();\n        System.out.println(\"five runs: \" + ok);\n    }\n}",
+    "fixNote": "Wrapped the task body in try/catch so one failure is logged and the schedule continues.",
+    "debugTip": "Take a thread dump with `jcmd <pid> Thread.print`: the \"pool-1-thread-1\" worker is parked in DelayedWorkQueue.take with nothing scheduled, so the job is gone, not slow. An exception breakpoint on IllegalStateException catches the failing run in the act. In production, call get() on the ScheduledFuture from a watchdog to surface the stored error.",
+    "buggyOutput": "five runs: false",
+    "fixedOutput": "run 3 failed: flaky\nfive runs: true"
+  }
+]

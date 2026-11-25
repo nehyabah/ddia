@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type AnswerResult, type Run, type RunMode } from "../api";
 import { shuffle, useProfile } from "../state";
+import { Icon, confetti } from "../components/ui";
 
 export function RunPage({ mode }: { mode: RunMode }) {
   const { id } = useParams();
@@ -16,6 +17,7 @@ export function RunPage({ mode }: { mode: RunMode }) {
   const [combo, setCombo] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  const [shake, setShake] = useState(false);
   const busy = useRef(false);
   const nextBtn = useRef<HTMLButtonElement>(null);
 
@@ -42,6 +44,9 @@ export function RunPage({ mode }: { mode: RunMode }) {
       setResult(r);
       setLives(r.lives);
       setCombo(r.combo);
+      if (r.correct && r.combo > 0 && r.combo % 5 === 0) confetti(50);
+      if (!r.correct) { setShake(true); setTimeout(() => setShake(false), 450); }
+      if (r.summary && ((run.mode === "boss" && (r.lives ?? 0) > 0) || (run.mode === "quiz" && r.summary.correct === r.summary.total))) setTimeout(() => confetti(120), 300);
       reward(r.xp + (r.summary?.bonus ?? 0), r.newBadges);
       setTimeout(() => nextBtn.current?.focus(), 0);
     } catch (e) {
@@ -90,6 +95,7 @@ export function RunPage({ mode }: { mode: RunMode }) {
   if (s) {
     return (
       <div className="qcard summary">
+        <div className={`trophy ${s.correct === s.answered ? "" : "cool"}`}><Icon name={s.correct === s.answered ? "trophy" : "sparkle"} /></div>
         <span className="bignum">{s.correct}/{s.answered}</span>
         <p className="qtext" style={{ marginTop: 10 }}>{s.message}</p>
         <p className="muted">+{s.xp} XP this run{s.bonus ? ` (incl. +${s.bonus} bonus)` : ""}{s.mastery != null ? ` · node health now ${s.mastery}%` : ""}</p>
@@ -106,16 +112,17 @@ export function RunPage({ mode }: { mode: RunMode }) {
   const title = mode === "boss" ? "Boss" : mode === "review" ? "Review" : "Question";
   return (
     <>
-      <Link className="back" to={backTo}>← Quit run</Link>
+      <Link className="back" to={backTo}><Icon name="x" size={16} />Quit run</Link>
+      <div className="runbar"><i style={{ width: `${((n + (result ? 1 : 0)) / run.questions.length) * 100}%` }} /></div>
       <div className="qhead">
         <span>{title} {n + 1} / {run.questions.length}{mode === "review" ? ` · ${q.chapterLabel}` : ""}</span>
         <span>
           {mode === "boss" && lives != null
             ? <span className="hearts">{"❤️".repeat(lives)}{"🖤".repeat(3 - lives)}</span>
-            : <span className="combo">{combo >= 2 ? `Combo ×${combo}` : ""}</span>}
+            : combo >= 2 ? <span key={combo} className="combo"><Icon name="flame" />×{combo}</span> : null}
         </span>
       </div>
-      <div className="qcard">
+      <div className={`qcard ${shake ? "shake" : ""}`}>
         <p className="qtext">{q.prompt}</p>
         <div className="opts">
           {order.map((o, j) => {
@@ -129,11 +136,11 @@ export function RunPage({ mode }: { mode: RunMode }) {
         </div>
         {result && (
           <>
-            <div className={`explain ${result.correct ? "" : "bad"}`}><b>{result.correct ? "Correct." : "Not quite."}</b>{result.explanation}</div>
+            <div className={`explain ${result.correct ? "" : "bad"}`}><b><Icon name={result.correct ? "check" : "x"} />{result.correct ? "Correct" : "Not quite"}{result.xp > 0 ? ` · +${result.xp} XP` : ""}</b>{result.explanation}</div>
             <button ref={nextBtn} className="primary" onClick={next}>{result.finished ? "See results" : "Next question"}</button>
           </>
         )}
-        {!result && <p className="small muted" style={{ marginTop: 14 }}>Press <kbd>1</kbd>–<kbd>{order.length}</kbd> to answer, <kbd>Enter</kbd> to continue.</p>}
+        {!result && <p className="small muted kbdhint" style={{ marginTop: 14 }}>Press <kbd>1</kbd>–<kbd>{order.length}</kbd> to answer, <kbd>Enter</kbd> to continue.</p>}
       </div>
     </>
   );
