@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, type Badge } from "../api";
 import { shuffle, useProfile } from "../state";
 import { useChapter } from "./Chapter";
+import { GradeBox } from "../components/GradeBox";
 import { Icon } from "../components/ui";
 
 export function DrillPage() {
@@ -52,8 +53,9 @@ export function DrillPage() {
             <p className="small" style={{ whiteSpace: "pre-wrap" }}>{d.lastAnswer}</p>
           </details>
         )}
+        <GradeBox kind="drill" id={d.id} answer={answer} onAnswer={setAnswer} hideInput />
         {!revealed ? (
-          <button className="primary" onClick={() => setRevealed(true)}>Show key points</button>
+          <button className="ghost" onClick={() => setRevealed(true)}>Self-check key points</button>
         ) : (
           <>
             <div className="explain">

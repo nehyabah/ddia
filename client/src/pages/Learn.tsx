@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Badge } from "../api";
 import { useProfile } from "../state";
 import { useChapter } from "./Chapter";
+import { GradeBox } from "../components/GradeBox";
 import { Icon } from "../components/ui";
 
 export function Learn() {
@@ -14,6 +15,7 @@ export function Learn() {
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [explainOpen, setExplainOpen] = useState(false);
   const fcRef = useRef<HTMLDivElement>(null);
 
   const count = c?.cards.length ?? 0;
@@ -111,7 +113,9 @@ export function Learn() {
       <div className="cardtools">
         <button className={`iconbtn ${card.starred ? "on" : ""}`} onClick={toggleStar}>{card.starred ? "★ Starred" : "☆ Star"}</button>
         <button className={`iconbtn ${noteOpen ? "on" : ""}`} onClick={() => setNoteOpen((o) => !o)}>✎ {card.note ? "Edit note" : "Add note"}</button>
+        <button className={`iconbtn ${explainOpen ? "on" : ""}`} onClick={() => setExplainOpen((o) => !o)}>✦ Explain it to Claude</button>
       </div>
+      {explainOpen && <GradeBox kind="card" id={card.id} title="Explain this concept" placeholder={`Explain “${card.title}” in your own words — try before flipping the card…`} />}
       {noteOpen && (
         <div className="notebox">
           <textarea className="field" value={note} onChange={(e) => setNote(e.target.value)} onBlur={saveNote}

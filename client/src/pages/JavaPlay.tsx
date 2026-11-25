@@ -4,6 +4,7 @@ import { api, type JavaChallenge, type JavaResult } from "../api";
 import { useProfile } from "../state";
 import { CodeView, DiffView, Md, type LineMark } from "../components/CodeView";
 import { Icon, confetti } from "../components/ui";
+import { GradeBox } from "../components/GradeBox";
 
 const KIND_LABEL = { bug: "Find the bug", output: "Predict the output", trace: "Read the stack trace" } as const;
 
@@ -193,6 +194,9 @@ export function JavaPlay() {
             <DiffView before={c.code} after={result.fix} />
 
             <div className="box-tip"><b><Icon name="bulb" />How you'd catch it</b><span><Md text={result.debugTip} /></span></div>
+            <details className="reveal explainbox"><summary>✦ Explain this bug to Claude (interview practice)</summary>
+              <GradeBox kind="java" id={c.id} placeholder="What is the bug, why does Java behave this way, and how would you fix and catch it?" />
+            </details>
 
             <div className="stickybar">
               <button className="primary" onClick={next}>{n >= list.length - 1 ? "Finish" : "Next bug"}</button>

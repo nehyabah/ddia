@@ -416,3 +416,21 @@ pre.console.ok{border-left:4px solid #2DD4A0}
 @media (hover:none),(max-width:760px){.kbdhint{display:none!important}}
 @media (max-width:520px){.hero .cta .primary,.hero .cta .ghost{flex:1;padding:11px 12px;font-size:.92rem}.hero .top{align-items:flex-start}.hero .ringwrap{transform:scale(.85);transform-origin:top right}}
 .hero .cta .primary,.hero .cta .ghost{white-space:nowrap}
+
+/* ---------- AI grading ---------- */
+.gradebox{margin-top:14px}
+.gradebox textarea{min-height:110px}
+.primary.ai{background:linear-gradient(135deg,#D97757,#B65C3E);box-shadow:0 6px 18px -6px rgba(217,119,87,.7)}
+.primary.ai:disabled{background:var(--surface3);box-shadow:none}
+.graded{margin-top:14px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-sm);animation:pagein .3s ease}
+.graded .gh{display:flex;gap:14px;align-items:center;margin-bottom:10px}
+.graded .gh .ringwrap .lab{font-size:1rem}
+.graded .gh .ringwrap .lab small{font-size:.6rem;color:var(--muted);margin-left:1px}
+.glist{margin-top:10px;padding:10px 14px;border-radius:12px;border:1px solid}
+.glist .gt{display:flex;align-items:center;gap:6px;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+.glist ul{margin:6px 0 0;padding-left:20px;font-size:.93rem}
+.glist li{margin-bottom:4px}
+.glist.ok{background:color-mix(in srgb,var(--teal) 8%,var(--surface));border-color:color-mix(in srgb,var(--teal) 30%,transparent)} .glist.ok .gt{color:var(--teal)}
+.glist.warn{background:color-mix(in srgb,var(--amber) 9%,var(--surface));border-color:color-mix(in srgb,var(--amber) 32%,transparent)} .glist.warn .gt{color:var(--amber)}
+.glist.bad{background:color-mix(in srgb,var(--red) 8%,var(--surface));border-color:color-mix(in srgb,var(--red) 30%,transparent)} .glist.bad .gt{color:var(--red)}
+details.explainbox{margin-top:14px}
