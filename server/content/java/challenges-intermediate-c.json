@@ -1,0 +1,689 @@
+[
+  {
+    "id": "int-c-01",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "The order of the upload log lines",
+    "kind": "output",
+    "scenario": "upload() logs each step and fails on an empty file. The caller catches the failure. Predict the exact log.",
+    "code": "public class Main {\n    static void upload(int size) {\n        try {\n            System.out.println(\"start\");\n            if (size == 0) {\n                throw new IllegalStateException(\"empty\");\n            }\n            System.out.println(\"sent\");\n        } finally {\n            System.out.println(\"cleanup\");\n        }\n    }\n\n    public static void main(String[] args) {\n        try {\n            upload(0);\n        } catch (IllegalStateException e) {\n            System.out.println(\"caught \" + e.getMessage());\n        }\n        System.out.println(\"done\");\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What does this print?",
+    "options": [
+      "start\ncleanup\ncaught empty\ndone",
+      "start\ncaught empty\ncleanup\ndone",
+      "start\nsent\ncleanup\ncaught empty\ndone",
+      "start\ncaught empty\ndone"
+    ],
+    "answer": 0,
+    "explanation": "When the throw happens, the rest of the try block is skipped, so \"sent\" never prints. Before the exception leaves upload(), the JVM runs that method's finally block, so \"cleanup\" prints while the exception is still in flight. Only then does the exception reach the caller's catch block, which prints \"caught empty\", and execution continues normally after the try statement. The rule: finally runs on the way out of its own try, before any outer catch sees the exception.",
+    "fix": "public class Main {\n    static void upload(int size) {\n        try {\n            System.out.println(\"start\");\n            if (size == 0) {\n                System.out.println(\"skip empty\");\n                return;\n            }\n            System.out.println(\"sent\");\n        } finally {\n            System.out.println(\"cleanup\");\n        }\n    }\n\n    public static void main(String[] args) {\n        upload(0);\n        System.out.println(\"done\");\n    }\n}",
+    "fixNote": "Handle the empty case with an early return; finally still runs.",
+    "debugTip": "Set an exception breakpoint on IllegalStateException and step over repeatedly; watch the stepper jump into finally before reaching the catch in main.",
+    "buggyOutput": "start\ncleanup\ncaught empty\ndone\n",
+    "fixedOutput": "start\nskip empty\ncleanup\ndone\n"
+  },
+  {
+    "id": "int-c-02",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "A quantity parser that always says zero",
+    "kind": "bug",
+    "scenario": "parseQty should return the parsed number, or 0 if the text is bad. Every valid input comes back as 0 too.",
+    "symptom": "0\nbad: x\n0",
+    "code": "public class Main {\n    static int parseQty(String s) {\n        int qty = 0;\n        try {\n            qty = Integer.parseInt(s);\n            return qty;\n        } catch (NumberFormatException e) {\n            System.out.println(\"bad: \" + s);\n        } finally {\n            return 0;\n        }\n    }\n\n    public static void main(String[] args) {\n        System.out.println(parseQty(\"12\"));\n        System.out.println(parseQty(\"x\"));\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "parseInt throws for every input, so catch always runs",
+      "The return in finally replaces the try's return value",
+      "qty is reset to 0 because it is a local variable",
+      "return inside try is ignored when a catch block exists"
+    ],
+    "answer": 1,
+    "explanation": "A finally block always runs, including after try executes `return qty`. The pending return value is remembered, but if finally completes abruptly with its own return, that new return wins and the old value is discarded. The same thing happens to exceptions: a return in finally silently swallows any exception in flight. That is why most linters flag return (or throw) inside finally; put the fallback after the try statement instead.",
+    "fix": "public class Main {\n    static int parseQty(String s) {\n        int qty = 0;\n        try {\n            qty = Integer.parseInt(s);\n            return qty;\n        } catch (NumberFormatException e) {\n            System.out.println(\"bad: \" + s);\n        }\n        return 0;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(parseQty(\"12\"));\n        System.out.println(parseQty(\"x\"));\n    }\n}",
+    "fixNote": "Move return 0 out of finally to after the try statement.",
+    "debugTip": "Set a breakpoint on line 6, step over, and watch execution jump to line 10 before leaving the method.",
+    "buggyOutput": "0\nbad: x\n0\n",
+    "fixedOutput": "12\nbad: x\n0\n"
+  },
+  {
+    "id": "int-c-03",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "Which connection closes first?",
+    "kind": "output",
+    "scenario": "Two resources are opened in one try-with-resources header. Each prints when it opens and closes. Predict the log.",
+    "code": "public class Main {\n    static class Res implements AutoCloseable {\n        final String name;\n        Res(String name) {\n            this.name = name;\n            System.out.println(\"open \" + name);\n        }\n        public void close() {\n            System.out.println(\"close \" + name);\n        }\n    }\n\n    public static void main(String[] args) {\n        try (Res db = new Res(\"db\");\n             Res tx = new Res(\"tx\")) {\n            System.out.println(\"work\");\n        }\n        System.out.println(\"end\");\n    }\n}",
+    "bugLines": [
+      14
+    ],
+    "question": "What does this print?",
+    "options": [
+      "open db\nopen tx\nwork\nclose db\nclose tx\nend",
+      "open db\nopen tx\nclose tx\nclose db\nwork\nend",
+      "open db\nopen tx\nwork\nclose tx\nclose db\nend",
+      "open tx\nopen db\nwork\nclose db\nclose tx\nend"
+    ],
+    "answer": 2,
+    "explanation": "Resources in a try-with-resources header are initialised left to right and closed in the reverse order, like a stack. That matters because later resources often depend on earlier ones: a transaction must be closed before the connection it lives on. close() runs right after the body finishes, before the code after the try statement. The fix shows the equivalent nested form, which makes the reverse order obvious.",
+    "fix": "public class Main {\n    static class Res implements AutoCloseable {\n        final String name;\n        Res(String name) {\n            this.name = name;\n            System.out.println(\"open \" + name);\n        }\n        public void close() {\n            System.out.println(\"close \" + name);\n        }\n    }\n\n    public static void main(String[] args) {\n        try (Res db = new Res(\"db\")) {\n            try (Res tx = new Res(\"tx\")) {\n                System.out.println(\"work\");\n            }\n        }\n        System.out.println(\"end\");\n    }\n}",
+    "fixNote": "Equivalent nested form; the order is the same, just explicit.",
+    "debugTip": "Put breakpoints in close() and look at the call stack each time it is hit to see which resource is being released.",
+    "buggyOutput": "open db\nopen tx\nwork\nclose tx\nclose db\nend\n",
+    "fixedOutput": "open db\nopen tx\nwork\nclose tx\nclose db\nend\n"
+  },
+  {
+    "id": "int-c-04",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "The close failure nobody logged",
+    "kind": "bug",
+    "scenario": "The job fails while writing, and the stream also fails when closing. The log only shows the write error, so ops never learn the disk is full.",
+    "symptom": "error: write failed",
+    "code": "public class Main {\n    static class Out implements AutoCloseable {\n        public void write() {\n            throw new IllegalStateException(\"write failed\");\n        }\n        public void close() {\n            throw new IllegalStateException(\"disk full\");\n        }\n    }\n\n    public static void main(String[] args) {\n        try (Out out = new Out()) {\n            out.write();\n        } catch (IllegalStateException e) {\n            System.out.println(\"error: \" + e.getMessage());\n        }\n    }\n}",
+    "bugLines": [
+      15
+    ],
+    "question": "Where did the \"disk full\" exception go?",
+    "options": [
+      "It replaced the write error, so getMessage is stale",
+      "It is attached to the write error as a suppressed exception",
+      "close() is never called when the body throws",
+      "It was thrown away because only one exception can exist"
+    ],
+    "answer": 3,
+    "explanation": "When the body throws and close() also throws, try-with-resources keeps the body's exception as the primary one and attaches the close exception to it with addSuppressed. Nothing is lost, but it is only visible through e.getSuppressed() or in a printed stack trace, which shows it under a \"Suppressed:\" heading. Logging just getMessage() hides it. This is an improvement over a hand-written finally, where the close exception would replace the original one entirely.",
+    "fix": "public class Main {\n    static class Out implements AutoCloseable {\n        public void write() {\n            throw new IllegalStateException(\"write failed\");\n        }\n        public void close() {\n            throw new IllegalStateException(\"disk full\");\n        }\n    }\n\n    public static void main(String[] args) {\n        try (Out out = new Out()) {\n            out.write();\n        } catch (IllegalStateException e) {\n            System.out.println(\"error: \" + e.getMessage());\n            for (Throwable s : e.getSuppressed()) {\n                System.out.println(\n                    \"also: \" + s.getMessage());\n            }\n        }\n    }\n}",
+    "fixNote": "Loop over e.getSuppressed() and log each one.",
+    "debugTip": "In the catch block, evaluate `e.getSuppressed()` in the debugger, or log the whole exception with printStackTrace to see the Suppressed section.",
+    "buggyOutput": "error: write failed\n",
+    "fixedOutput": "error: write failed\nalso: disk full\n"
+  },
+  {
+    "id": "int-c-05",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "Reading a trace with two exceptions",
+    "kind": "trace",
+    "scenario": "Loading a price list crashes. The top of the trace says RuntimeException in load(), but load() only wraps errors.",
+    "symptom": "Exception in thread \"main\" java.lang.RuntimeException: bad row: 2,50\n\tat Main.load(Main.java:14)\n\tat Main.main(Main.java:23)\nCaused by: java.lang.NumberFormatException: For input string: \"2,50\"\n\tat java.base/java.lang.NumberFormatException.forInputString(NumberFormatException.java:67)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:662)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:778)\n\tat Main.toCents(Main.java:5)\n\tat Main.load(Main.java:12)\n\t... 1 more",
+    "code": "import java.util.*;\n\npublic class Main {\n    static int toCents(String s) {\n        return Integer.parseInt(s.replace(\".\", \"\"));\n    }\n\n    static List<Integer> load(List<String> rows) {\n        List<Integer> out = new ArrayList<>();\n        for (String r : rows) {\n            try {\n                out.add(toCents(r));\n            } catch (NumberFormatException e) {\n                throw new RuntimeException(\n                    \"bad row: \" + r, e);\n            }\n        }\n        return out;\n    }\n\n    public static void main(String[] args) {\n        List<String> rows = List.of(\"1.99\", \"2,50\");\n        System.out.println(load(rows));\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "Which line actually failed first?",
+    "options": [
+      "Line 14, where the RuntimeException is created",
+      "Line 23, where main prints the list",
+      "Line 12, because add() rejects the value",
+      "Line 5, the parse shown under \"Caused by:\""
+    ],
+    "answer": 0,
+    "explanation": "A chained exception prints its own frames first, then a \"Caused by:\" section for the exception passed as the cause. The original failure is the deepest Caused by, and its first Main frame (Main.toCents, line 5) is where things really went wrong: \"2,50\" still contains a comma after removing dots. The \"... 1 more\" line means the remaining frames are identical to the outer trace. Always read a chained trace from the bottom-most Caused by upward.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static int toCents(String s) {\n        return Integer.parseInt(s.replace(\",\", \".\")\n                .replace(\".\", \"\"));\n    }\n\n    static List<Integer> load(List<String> rows) {\n        List<Integer> out = new ArrayList<>();\n        for (String r : rows) {\n            try {\n                out.add(toCents(r));\n            } catch (NumberFormatException e) {\n                throw new RuntimeException(\n                    \"bad row: \" + r, e);\n            }\n        }\n        return out;\n    }\n\n    public static void main(String[] args) {\n        List<String> rows = List.of(\"1.99\", \"2,50\");\n        System.out.println(load(rows));\n    }\n}",
+    "fixNote": "Normalise a comma decimal separator before parsing.",
+    "debugTip": "Read the last \"Caused by:\" first and jump to its topmost Main frame; or set an exception breakpoint on NumberFormatException.",
+    "buggyOutput": "",
+    "throws": "java.lang.RuntimeException",
+    "fixedOutput": "[199, 250]\n"
+  },
+  {
+    "id": "int-c-06",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "The wrapped error with no cause",
+    "kind": "bug",
+    "scenario": "Config errors are wrapped in IllegalStateException. Support asks for the original exception type, but the handler reports the cause as null.",
+    "symptom": "bad port: For input string: \"80 80\"\ncause: null",
+    "code": "public class Main {\n    static int port(String raw) {\n        try {\n            return Integer.parseInt(raw);\n        } catch (NumberFormatException e) {\n            throw new IllegalStateException(\n                \"bad port: \" + e.getMessage());\n        }\n    }\n\n    public static void main(String[] args) {\n        try {\n            port(\"80 80\");\n        } catch (IllegalStateException e) {\n            System.out.println(e.getMessage());\n            System.out.println(\"cause: \" + e.getCause());\n        }\n    }\n}",
+    "bugLines": [
+      6,
+      7
+    ],
+    "question": "Why is the cause null?",
+    "options": [
+      "getCause only works for checked exceptions",
+      "Copying the message does not link the original exception",
+      "parseInt throws without a stack trace",
+      "The catch in main receives a copy of the exception"
+    ],
+    "answer": 1,
+    "explanation": "Building a new exception from e.getMessage() copies the text but throws away the original object, its type and its stack trace. To keep them, pass the caught exception as the cause argument: new IllegalStateException(msg, e). The cause then appears in getCause() and as a \"Caused by:\" section in stack traces. Most standard exceptions have a (String, Throwable) constructor for exactly this purpose.",
+    "fix": "public class Main {\n    static int port(String raw) {\n        try {\n            return Integer.parseInt(raw);\n        } catch (NumberFormatException e) {\n            throw new IllegalStateException(\n                \"bad port: \" + raw, e);\n        }\n    }\n\n    public static void main(String[] args) {\n        try {\n            port(\"80 80\");\n        } catch (IllegalStateException e) {\n            System.out.println(e.getMessage());\n            System.out.println(\"cause: \" + e.getCause());\n        }\n    }\n}",
+    "fixNote": "Pass e as the cause: new IllegalStateException(msg, e).",
+    "debugTip": "Breakpoint in main's catch and expand `e` in the variables view; the cause field shows whether the original exception was kept.",
+    "buggyOutput": "bad port: For input string: \"80 80\"\ncause: null\n",
+    "fixedOutput": "bad port: 80 80\ncause: java.lang.NumberFormatException: For input string: \"80 80\"\n"
+  },
+  {
+    "id": "int-c-07",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "An overdraft error with no message",
+    "kind": "bug",
+    "scenario": "A custom exception reports why a withdrawal failed. The handler prints the message, but it comes out as null.",
+    "symptom": "null\nshort by 30",
+    "code": "class InsufficientFundsException extends Exception {\n    final int shortBy;\n    InsufficientFundsException(String msg, int shortBy) {\n        this.shortBy = shortBy;\n    }\n}\n\npublic class Main {\n    static void withdraw(int bal, int amt)\n            throws InsufficientFundsException {\n        if (amt > bal) {\n            throw new InsufficientFundsException(\n                \"need more funds\", amt - bal);\n        }\n    }\n\n    public static void main(String[] args) {\n        try {\n            withdraw(50, 80);\n        } catch (InsufficientFundsException e) {\n            System.out.println(e.getMessage());\n            System.out.println(\"short by \" + e.shortBy);\n        }\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The constructor never passes msg to super(msg)",
+      "getMessage must be overridden in every subclass",
+      "Checked exceptions cannot carry a message",
+      "The message is lost when crossing the throws clause"
+    ],
+    "answer": 2,
+    "explanation": "getMessage() returns the detail message stored by Throwable's constructor. A subclass constructor that does not call super(msg) implicitly calls the no-arg super(), so the stored message is null. Custom exceptions should forward the message (and ideally a cause) to super. Extending Exception makes it checked, which is why withdraw must declare it with throws; extending RuntimeException would make it unchecked.",
+    "fix": "class InsufficientFundsException extends Exception {\n    final int shortBy;\n    InsufficientFundsException(String msg, int shortBy) {\n        super(msg);\n        this.shortBy = shortBy;\n    }\n}\n\npublic class Main {\n    static void withdraw(int bal, int amt)\n            throws InsufficientFundsException {\n        if (amt > bal) {\n            throw new InsufficientFundsException(\n                \"need more funds\", amt - bal);\n        }\n    }\n\n    public static void main(String[] args) {\n        try {\n            withdraw(50, 80);\n        } catch (InsufficientFundsException e) {\n            System.out.println(e.getMessage());\n            System.out.println(\"short by \" + e.shortBy);\n        }\n    }\n}",
+    "fixNote": "Call super(msg) in the custom exception's constructor.",
+    "debugTip": "Set a breakpoint after the throw is constructed and inspect the exception's detailMessage field.",
+    "buggyOutput": "null\nshort by 30\n",
+    "fixedOutput": "need more funds\nshort by 30\n"
+  },
+  {
+    "id": "int-c-08",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "Every port is the default port",
+    "kind": "bug",
+    "scenario": "The server reads its port from settings and falls back to 8080 only if the value is not a number. The setting is \"9000\", yet it always starts on 8080.",
+    "symptom": "invalid port, default\n8080",
+    "code": "import java.util.*;\n\npublic class Main {\n    static int port(Map<String, String> cfg) {\n        try {\n            String raw = cfg.get(\"prot\");\n            return Integer.parseInt(raw.trim());\n        } catch (Exception e) {\n            System.out.println(\"invalid port, default\");\n            return 8080;\n        }\n    }\n\n    public static void main(String[] args) {\n        Map<String, String> cfg = Map.of(\"port\", \" 9000\");\n        System.out.println(port(cfg));\n    }\n}",
+    "bugLines": [
+      6,
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Map.of returns values in an unknown order",
+      "A key typo causes an NPE that catch (Exception) hides",
+      "8080 is cached as a constant at compile time",
+      "parseInt rejects the leading space"
+    ],
+    "answer": 3,
+    "explanation": "The lookup uses \"prot\", returns null, and raw.trim() throws NullPointerException. Because the handler catches Exception, the programming error is treated exactly like a bad number and turned into the fallback. Catch the narrowest exception you can actually handle, here NumberFormatException; then a bug like this crashes loudly at the real line instead of silently changing behaviour.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static int port(Map<String, String> cfg) {\n        try {\n            String raw = cfg.get(\"port\");\n            return Integer.parseInt(raw.trim());\n        } catch (NumberFormatException e) {\n            System.out.println(\"invalid port, default\");\n            return 8080;\n        }\n    }\n\n    public static void main(String[] args) {\n        Map<String, String> cfg = Map.of(\"port\", \" 9000\");\n        System.out.println(port(cfg));\n    }\n}",
+    "fixNote": "Fix the key and catch only NumberFormatException.",
+    "debugTip": "Breakpoint in the catch block and inspect the type of `e`; seeing NullPointerException instead of NumberFormatException reveals the real problem.",
+    "buggyOutput": "invalid port, default\n8080\n",
+    "fixedOutput": "9000\n"
+  },
+  {
+    "id": "int-c-09",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "A ratio check that still crashes",
+    "kind": "trace",
+    "scenario": "ratio() should report bad input and return 0 instead of crashing. It handles text fine, but a zero divisor crashes the program.",
+    "symptom": "Exception in thread \"main\" java.lang.ArithmeticException: / by zero\n\tat Main.ratio(Main.java:6)\n\tat Main.main(Main.java:15)",
+    "code": "public class Main {\n    static int ratio(String a, String b) {\n        try {\n            int x = Integer.parseInt(a);\n            int y = Integer.parseInt(b);\n            return x / y;\n        } catch (NumberFormatException e) {\n            System.out.println(\"bad input\");\n            return 0;\n        }\n    }\n\n    public static void main(String[] args) {\n        System.out.println(ratio(\"8\", \"x\"));\n        System.out.println(ratio(\"8\", \"0\"));\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Catch ArithmeticException too, with a multi-catch",
+      "Wrap the division in Integer.valueOf",
+      "Move the division into a finally block",
+      "Declare throws ArithmeticException on ratio"
+    ],
+    "answer": 0,
+    "explanation": "Integer division by zero throws ArithmeticException, which is unrelated to NumberFormatException, so the existing catch does not match and the exception escapes. A multi-catch, catch (A | B e), lets one handler cover several unrelated types without catching everything. The alternatives in a multi-catch must not be subclasses of each other, and e is implicitly final. Declaring throws on an unchecked exception changes nothing at runtime.",
+    "fix": "public class Main {\n    static int ratio(String a, String b) {\n        try {\n            int x = Integer.parseInt(a);\n            int y = Integer.parseInt(b);\n            return x / y;\n        } catch (NumberFormatException\n                 | ArithmeticException e) {\n            System.out.println(\"bad input\");\n            return 0;\n        }\n    }\n\n    public static void main(String[] args) {\n        System.out.println(ratio(\"8\", \"x\"));\n        System.out.println(ratio(\"8\", \"0\"));\n    }\n}",
+    "fixNote": "Use catch (NumberFormatException | ArithmeticException e).",
+    "debugTip": "Set an exception breakpoint for ArithmeticException; it stops on line 6 with y == 0 in the variables view.",
+    "buggyOutput": "bad input\n0\n",
+    "throws": "java.lang.ArithmeticException",
+    "fixedOutput": "bad input\n0\nbad input\n0\n"
+  },
+  {
+    "id": "int-c-10",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "A crash before the first line of config",
+    "kind": "trace",
+    "scenario": "Config holds settings in static fields. Touching Config.PORT crashes with an error that is not the exception you would expect.",
+    "symptom": "Exception in thread \"main\" java.lang.ExceptionInInitializerError\n\tat Main.main(Main.java:9)\nCaused by: java.lang.NumberFormatException: For input string: \"80a\"\n\tat java.base/java.lang.NumberFormatException.forInputString(NumberFormatException.java:67)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:662)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:778)\n\tat Config.<clinit>(Main.java:3)\n\t... 1 more",
+    "code": "class Config {\n    static final String RAW = \"80a\";\n    static final int PORT = Integer.parseInt(RAW);\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(\"booting\");\n        System.out.println(Config.PORT);\n    }\n}",
+    "bugLines": [
+      2
+    ],
+    "question": "What does ExceptionInInitializerError mean here?",
+    "options": [
+      "Config's static initialiser threw while the class loaded",
+      "main threw before printing anything",
+      "Config.PORT is null because it was not assigned",
+      "The JVM could not find the Config class file"
+    ],
+    "answer": 1,
+    "explanation": "Static field initialisers run once, when the class is first used. If one throws, the JVM wraps the exception in ExceptionInInitializerError, and the real problem appears under \"Caused by:\" with a <clinit> frame pointing at the failing line. The class is then marked unusable: any later access throws NoClassDefFoundError, which is far more confusing. Keep fallible work out of static initialisers, or validate config explicitly at startup.",
+    "fix": "class Config {\n    static final String RAW = \"8080\";\n    static final int PORT = Integer.parseInt(RAW);\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(\"booting\");\n        System.out.println(Config.PORT);\n    }\n}",
+    "fixNote": "Use a valid number for the static port value.",
+    "debugTip": "Read the \"Caused by:\" section and its <clinit> frame; or set an exception breakpoint on NumberFormatException.",
+    "buggyOutput": "booting\n",
+    "throws": "java.lang.ExceptionInInitializerError",
+    "fixedOutput": "booting\n8080\n"
+  },
+  {
+    "id": "int-c-11",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "File sizes from a manifest",
+    "kind": "trace",
+    "scenario": "A manifest lists file sizes in bytes. Small files are fine, but a 3 GB file crashes the parser even though the text is a valid number.",
+    "symptom": "Exception in thread \"main\" java.lang.NumberFormatException: For input string: \"3000000000\"\n\tat java.base/java.lang.NumberFormatException.forInputString(NumberFormatException.java:67)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:662)\n\tat java.base/java.lang.Integer.parseInt(Integer.java:778)\n\tat Main.main(Main.java:6)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String[] sizes = {\"1048576\", \"3000000000\"};\n        long total = 0;\n        for (String s : sizes) {\n            total += Integer.parseInt(s);\n            System.out.println(\"ok \" + s);\n        }\n        System.out.println(\"total \" + total);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "Why does a valid number fail to parse?",
+    "options": [
+      "parseInt cannot read more than nine digits",
+      "total is long, so parseInt must return long",
+      "The value overflows int, so parseInt rejects it",
+      "The array literal stores the number with a space"
+    ],
+    "answer": 2,
+    "explanation": "Integer.parseInt throws NumberFormatException not only for non-digits but also for values outside the int range (-2147483648 to 2147483647). 3000000000 is larger than Integer.MAX_VALUE, so the parser refuses it instead of wrapping around. The message still says For input string, which looks like a format problem. Use Long.parseLong (or BigInteger) for values that can exceed 2^31 - 1.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String[] sizes = {\"1048576\", \"3000000000\"};\n        long total = 0;\n        for (String s : sizes) {\n            total += Long.parseLong(s);\n            System.out.println(\"ok \" + s);\n        }\n        System.out.println(\"total \" + total);\n    }\n}",
+    "fixNote": "Parse with Long.parseLong.",
+    "debugTip": "Set an exception breakpoint on NumberFormatException and evaluate `s.length()` and `Integer.MAX_VALUE` to compare.",
+    "buggyOutput": "ok 1048576\n",
+    "throws": "java.lang.NumberFormatException",
+    "fixedOutput": "ok 1048576\nok 3000000000\ntotal 3001048576\n"
+  },
+  {
+    "id": "int-c-12",
+    "level": "intermediate",
+    "topic": "Exceptions",
+    "title": "The retry that never retries",
+    "kind": "trace",
+    "scenario": "fetch() wraps I/O errors so it can be used in lambdas. The caller retries on IOException, but the program crashes on the first failure.",
+    "symptom": "Exception in thread \"main\" java.io.UncheckedIOException: java.io.IOException: timeout\n\tat Main.fetch(Main.java:9)\n\tat Main.main(Main.java:18)\nCaused by: java.io.IOException: timeout\n\t... 2 more",
+    "code": "import java.io.*;\n\npublic class Main {\n    static int calls = 0;\n\n    static String fetch() {\n        calls++;\n        if (calls == 1) {\n            throw new UncheckedIOException(\n                new IOException(\"timeout\"));\n        }\n        return \"data\";\n    }\n\n    public static void main(String[] args) {\n        for (int i = 0; i < 2; i++) {\n            try {\n                System.out.println(fetch());\n                break;\n            } catch (Exception e) {\n                if (!(e instanceof IOException)) throw e;\n                System.out.println(\"retry\");\n            }\n        }\n    }\n}",
+    "bugLines": [
+      21
+    ],
+    "question": "Why is the failure rethrown?",
+    "options": [
+      "UncheckedIOException is not an IOException; it wraps one",
+      "The loop breaks before the catch block runs",
+      "instanceof is always false for exceptions",
+      "fetch must declare throws IOException to be retried"
+    ],
+    "answer": 3,
+    "explanation": "IOException is a checked exception: the compiler forces callers to catch or declare it. UncheckedIOException is a RuntimeException that carries an IOException as its cause, so it can escape lambdas and methods without throws clauses. It is not itself an IOException, so the instanceof test fails and the exception is rethrown. Catch UncheckedIOException (and use getCause() for the I/O detail), or unwrap the cause before testing.",
+    "fix": "import java.io.*;\n\npublic class Main {\n    static int calls = 0;\n\n    static String fetch() {\n        calls++;\n        if (calls == 1) {\n            throw new UncheckedIOException(\n                new IOException(\"timeout\"));\n        }\n        return \"data\";\n    }\n\n    public static void main(String[] args) {\n        for (int i = 0; i < 2; i++) {\n            try {\n                System.out.println(fetch());\n                break;\n            } catch (UncheckedIOException e) {\n                System.out.println(\"retry\");\n            }\n        }\n    }\n}",
+    "fixNote": "Catch UncheckedIOException directly.",
+    "debugTip": "Breakpoint in the catch and evaluate `e.getClass()` and `e.getCause().getClass()`.",
+    "buggyOutput": "",
+    "throws": "java.io.UncheckedIOException",
+    "fixedOutput": "retry\ndata\n"
+  },
+  {
+    "id": "int-c-13",
+    "level": "intermediate",
+    "topic": "Generics",
+    "title": "Timeouts from a legacy loader",
+    "kind": "trace",
+    "scenario": "An old helper with raw types fills a Map<String, Integer> of timeouts. The crash happens later, on a line that only reads the map.",
+    "symptom": "Exception in thread \"main\" java.lang.ClassCastException: class java.lang.String cannot be cast to class java.lang.Integer (java.lang.String and java.lang.Integer are in module java.base of loader 'bootstrap')\n\tat Main.main(Main.java:14)",
+    "code": "import java.util.*;\n\npublic class Main {\n    @SuppressWarnings(\"unchecked\")\n    static void loadLegacy(Map m) {\n        m.put(\"db\", \"30\");\n        m.put(\"cache\", 5);\n    }\n\n    public static void main(String[] args) {\n        Map<String, Integer> timeouts = new HashMap<>();\n        loadLegacy(timeouts);\n        System.out.println(\"loaded \" + timeouts.size());\n        int db = timeouts.get(\"db\");\n        System.out.println(\"db \" + db);\n    }\n}",
+    "bugLines": [
+      5,
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "HashMap converts \"30\" to an Integer on get",
+      "get returns null and unboxing fails",
+      "Line 14 casts the wrong key type",
+      "A raw Map let a String into a Map<String, Integer>"
+    ],
+    "answer": 0,
+    "explanation": "Generic types are erased at runtime, so a Map<String, Integer> is just a Map to the JVM. Passing it to a raw Map parameter turns off compile-time checking, and put(\"db\", \"30\") stores a String without complaint (heap pollution). The compiler inserts a hidden cast to Integer where the value is read, so the ClassCastException appears at line 14, far from the real bug. Generics are also invariant for the same safety reason: List<String> is not a List<Object>, and raw types are the loophole.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static void loadLegacy(Map<String, Integer> m) {\n        m.put(\"db\", Integer.parseInt(\"30\"));\n        m.put(\"cache\", 5);\n    }\n\n    public static void main(String[] args) {\n        Map<String, Integer> timeouts = new HashMap<>();\n        loadLegacy(timeouts);\n        System.out.println(\"loaded \" + timeouts.size());\n        int db = timeouts.get(\"db\");\n        System.out.println(\"db \" + db);\n    }\n}",
+    "fixNote": "Give the helper a typed parameter and store real Integers.",
+    "debugTip": "Never suppress unchecked warnings blindly; compile with -Xlint:unchecked, or add a watch on the map's entries right after loadLegacy returns.",
+    "buggyOutput": "loaded 2\n",
+    "throws": "java.lang.ClassCastException",
+    "fixedOutput": "loaded 2\ndb 30\n"
+  },
+  {
+    "id": "int-c-14",
+    "level": "intermediate",
+    "topic": "Generics",
+    "title": "The largest version number",
+    "kind": "output",
+    "scenario": "A generic max() is used to find the newest build number from a list of strings. Predict what it prints.",
+    "code": "import java.util.*;\n\npublic class Main {\n    static <T extends Comparable<T>> T max(List<T> xs) {\n        T best = xs.get(0);\n        for (T x : xs) {\n            if (x.compareTo(best) > 0) best = x;\n        }\n        return best;\n    }\n\n    public static void main(String[] args) {\n        List<String> builds = List.of(\"10\", \"9\", \"100\");\n        System.out.println(max(builds));\n    }\n}",
+    "bugLines": [
+      13
+    ],
+    "question": "What does this print?",
+    "options": [
+      "100",
+      "9",
+      "10",
+      "0"
+    ],
+    "answer": 1,
+    "explanation": "The bound T extends Comparable<T> means max can call compareTo, and it uses whatever natural order T defines. For String that order is lexicographic, character by character, so \"9\" beats \"100\" and \"10\" because '9' > '1'. The generic code is correct; the type argument is the problem. Store numbers as Integer (or pass a Comparator) to get numeric ordering.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static <T extends Comparable<T>> T max(List<T> xs) {\n        T best = xs.get(0);\n        for (T x : xs) {\n            if (x.compareTo(best) > 0) best = x;\n        }\n        return best;\n    }\n\n    public static void main(String[] args) {\n        List<Integer> builds = List.of(10, 9, 100);\n        System.out.println(max(builds));\n    }\n}",
+    "fixNote": "Use List<Integer> so compareTo compares numbers.",
+    "debugTip": "Add a watch on `x.compareTo(best)` inside the loop and step through each element.",
+    "buggyOutput": "9\n",
+    "fixedOutput": "100\n"
+  },
+  {
+    "id": "int-c-15",
+    "level": "intermediate",
+    "topic": "Generics",
+    "title": "A total that drops the cents",
+    "kind": "bug",
+    "scenario": "sum() accepts any list of numbers so it works for Integer and Double. Totals of doubles come out too low.",
+    "symptom": "6.0\n3.0",
+    "code": "import java.util.*;\n\npublic class Main {\n    static double sum(List<? extends Number> xs) {\n        double total = 0;\n        for (Number n : xs) {\n            total += n.intValue();\n        }\n        return total;\n    }\n\n    public static void main(String[] args) {\n        List<Integer> qty = List.of(1, 2, 3);\n        List<Double> price = List.of(1.5, 2.5, 0.75);\n        System.out.println(sum(qty));\n        System.out.println(sum(price));\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Elements read through the wildcard are only Numbers, and intValue truncates",
+      "A List<Double> cannot be passed to sum at all",
+      "? extends Number turns Doubles into Integers",
+      "double total loses precision after three additions"
+    ],
+    "answer": 2,
+    "explanation": "List<? extends Number> accepts a List<Integer> or List<Double>, because generics are invariant and the wildcard is what allows subtypes. Reading gives you elements typed as Number, so you only get Number's methods, and intValue() truncates 1.5 to 1. You also cannot add anything but null to such a list: it is a producer (read-only). The PECS rule says: use ? extends for sources you read from, ? super for sinks you write into.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    static double sum(List<? extends Number> xs) {\n        double total = 0;\n        for (Number n : xs) {\n            total += n.doubleValue();\n        }\n        return total;\n    }\n\n    public static void main(String[] args) {\n        List<Integer> qty = List.of(1, 2, 3);\n        List<Double> price = List.of(1.5, 2.5, 0.75);\n        System.out.println(sum(qty));\n        System.out.println(sum(price));\n    }\n}",
+    "fixNote": "Use doubleValue() when summing Numbers.",
+    "debugTip": "Add a watch on `n` and `n.intValue()` inside the loop to see each fractional part disappear.",
+    "buggyOutput": "6.0\n3.0\n",
+    "fixedOutput": "6.0\n4.75\n"
+  },
+  {
+    "id": "int-c-16",
+    "level": "intermediate",
+    "topic": "Wrappers",
+    "title": "A discount lookup that crashes on members",
+    "kind": "trace",
+    "scenario": "Members get a stored discount; non-members get 0. The ternary crashes for a member whose discount is not in the map yet.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException: Cannot invoke \"java.lang.Integer.intValue()\" because the return value of \"java.util.Map.get(Object)\" is null\n\tat Main.main(Main.java:10)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> pct = new HashMap<>();\n        pct.put(\"ana\", 10);\n        String[] users = {\"ana\", \"ben\"};\n        for (String u : users) {\n            boolean member = true;\n            Integer d = member ? pct.get(u) : 0;\n            System.out.println(u + \" \" + d);\n        }\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "Why does assigning to an Integer throw NPE?",
+    "options": [
+      "Integer variables cannot hold null",
+      "The ternary's type is int, so null is unboxed",
+      "println cannot print a null Integer",
+      "HashMap.get throws for missing keys"
+    ],
+    "answer": 3,
+    "explanation": "When one branch of ?: is Integer and the other is the primitive int 0, the whole expression has type int. Java therefore unboxes pct.get(u) by calling intValue() on it, and for \"ben\" that value is null, giving NullPointerException before anything is assigned. The helpful NPE message even names Integer.intValue(). Make both branches the same reference type, or avoid null with getOrDefault.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> pct = new HashMap<>();\n        pct.put(\"ana\", 10);\n        String[] users = {\"ana\", \"ben\"};\n        for (String u : users) {\n            boolean member = true;\n            Integer d = member ? pct.getOrDefault(u, 0) : 0;\n            System.out.println(u + \" \" + d);\n        }\n    }\n}",
+    "fixNote": "Use getOrDefault so no null reaches the unboxing.",
+    "debugTip": "Read the helpful NPE message: it names intValue() and the expression; set a conditional breakpoint on line 10 for u.equals(\"ben\").",
+    "buggyOutput": "ana 10\n",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "ana 10\nben 0\n"
+  },
+  {
+    "id": "int-c-17",
+    "level": "intermediate",
+    "topic": "Wrappers",
+    "title": "Version check that fails for big builds",
+    "kind": "bug",
+    "scenario": "The app checks whether the installed build matches the server build. It works for build 100 but reports a mismatch for build 1000.",
+    "symptom": "true\nfalse",
+    "code": "public class Main {\n    static boolean same(String a, String b) {\n        Integer x = Integer.valueOf(a);\n        Integer y = Integer.valueOf(b);\n        return x == y;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(same(\"100\", \"100\"));\n        System.out.println(same(\"1000\", \"1000\"));\n    }\n}",
+    "bugLines": [
+      3,
+      4,
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "valueOf returns Integer objects, and == compares references",
+      "parseInt and valueOf disagree for numbers above 999",
+      "Strings longer than three chars are not interned",
+      "valueOf rounds 1000 to a cached value"
+    ],
+    "answer": 0,
+    "explanation": "Integer.parseInt returns a primitive int, while Integer.valueOf returns an Integer object. valueOf reuses cached objects only for -128 to 127, so two calls for 100 give the same object but two calls for 1000 give different objects. == on references checks identity, not value. Use parseInt when you want a number, and equals (or unboxing) when comparing wrapper objects.",
+    "fix": "public class Main {\n    static boolean same(String a, String b) {\n        int x = Integer.parseInt(a);\n        int y = Integer.parseInt(b);\n        return x == y;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(same(\"100\", \"100\"));\n        System.out.println(same(\"1000\", \"1000\"));\n    }\n}",
+    "fixNote": "Parse to primitive int with parseInt and compare with ==.",
+    "debugTip": "In the debugger, look at the object ids shown for x and y; different ids mean == is false.",
+    "buggyOutput": "true\nfalse\n",
+    "fixedOutput": "true\ntrue\n"
+  },
+  {
+    "id": "int-c-18",
+    "level": "intermediate",
+    "topic": "Wrappers",
+    "title": "A blocked user gets through",
+    "kind": "bug",
+    "scenario": "Blocked user ids are stored as Long. User 42 is blocked, but the check lets them in.",
+    "symptom": "welcome\nfalse",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Set<Long> blocked = new HashSet<>();\n        blocked.add(42L);\n        int userId = 42;\n        if (blocked.contains(userId)) {\n            System.out.println(\"denied\");\n        } else {\n            System.out.println(\"welcome\");\n        }\n        System.out.println(Long.valueOf(42).equals(42));\n    }\n}",
+    "bugLines": [
+      7,
+      8
+    ],
+    "question": "Why is user 42 not found?",
+    "options": [
+      "contains(Object) boxes the int to Integer, which never equals a Long",
+      "HashSet hashes Long and int to different buckets randomly",
+      "42L and 42 are different numbers in Java",
+      "The set must be sorted before contains works"
+    ],
+    "answer": 1,
+    "explanation": "contains takes an Object, so there is no conversion to Long: the int is autoboxed to Integer. Long.equals returns true only if the argument is also a Long with the same value, so an Integer 42 is never equal to a Long 42, and the last line prints false for the same reason. The compiler does not warn because any Object is allowed. Use the same wrapper type on both sides, here a long id that boxes to Long.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Set<Long> blocked = new HashSet<>();\n        blocked.add(42L);\n        long userId = 42;\n        if (blocked.contains(userId)) {\n            System.out.println(\"denied\");\n        } else {\n            System.out.println(\"welcome\");\n        }\n        System.out.println(Long.valueOf(42).equals(42L));\n    }\n}",
+    "fixNote": "Declare the id as long so it boxes to Long.",
+    "debugTip": "Evaluate `((Object) userId).getClass()` at line 8; it shows Integer, not Long.",
+    "buggyOutput": "welcome\nfalse\n",
+    "fixedOutput": "denied\ntrue\n"
+  },
+  {
+    "id": "int-c-19",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "Digit sum of a mixed code",
+    "kind": "bug",
+    "scenario": "digitSum should add up only the digits in a product code like \"a1b2\". It returns 24 instead of 3.",
+    "symptom": "3\n24",
+    "code": "public class Main {\n    static int digitSum(String code) {\n        int sum = 0;\n        for (char c : code.toCharArray()) {\n            sum += Character.getNumericValue(c);\n        }\n        return sum;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(digitSum(\"12\"));\n        System.out.println(digitSum(\"a1b2\"));\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "toCharArray includes a hidden terminator character",
+      "getNumericValue gives letters values too: 'a' is 10",
+      "getNumericValue returns the char code, like (int) c",
+      "sum overflows when letters are added"
+    ],
+    "answer": 2,
+    "explanation": "Character.getNumericValue is designed for any numeric-looking character, including letters used as digits in bases up to 36, so 'a' is 10 and 'b' is 11 (and it returns -1 for characters with no numeric value). That gives 10 + 1 + 11 + 2 = 24. Filter first with Character.isDigit, or use c - '0' after checking c is between '0' and '9'. The Character class has many such helpers (isLetter, isWhitespace, toUpperCase); read what each actually accepts.",
+    "fix": "public class Main {\n    static int digitSum(String code) {\n        int sum = 0;\n        for (char c : code.toCharArray()) {\n            if (Character.isDigit(c)) {\n                sum += Character.getNumericValue(c);\n            }\n        }\n        return sum;\n    }\n\n    public static void main(String[] args) {\n        System.out.println(digitSum(\"12\"));\n        System.out.println(digitSum(\"a1b2\"));\n    }\n}",
+    "fixNote": "Only add characters that pass Character.isDigit.",
+    "debugTip": "Put a watch on `c` and `Character.getNumericValue(c)` and step through the loop.",
+    "buggyOutput": "3\n24\n",
+    "fixedOutput": "3\n3\n"
+  },
+  {
+    "id": "int-c-20",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "A path that never gets its slash",
+    "kind": "bug",
+    "scenario": "ensureSlash should make sure a folder path ends in \"/\" before a file name is appended. The final path has no separator.",
+    "symptom": "/home/ananotes.txt",
+    "code": "public class Main {\n    static void ensureSlash(String path) {\n        if (!path.endsWith(\"/\")) {\n            path = path + \"/\";\n        }\n    }\n\n    public static void main(String[] args) {\n        String dir = \"/home/ana\";\n        ensureSlash(dir);\n        System.out.println(dir + \"notes.txt\");\n    }\n}",
+    "bugLines": [
+      4,
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "String concatenation is optimised away by the compiler",
+      "The method needs a StringBuilder parameter instead",
+      "The method rebinds its own copy of the reference",
+      "endsWith is case-sensitive and misses the slash"
+    ],
+    "answer": 3,
+    "explanation": "Java passes the reference by value: path starts as a copy of dir's reference. path + \"/\" creates a brand-new String, because Strings are immutable, and assigning it to path changes only the local variable. The caller's dir still points at the original object. Return the new String and reassign it in the caller.",
+    "fix": "public class Main {\n    static String ensureSlash(String path) {\n        if (!path.endsWith(\"/\")) {\n            path = path + \"/\";\n        }\n        return path;\n    }\n\n    public static void main(String[] args) {\n        String dir = \"/home/ana\";\n        dir = ensureSlash(dir);\n        System.out.println(dir + \"notes.txt\");\n    }\n}",
+    "fixNote": "Return the new string and assign it back to dir.",
+    "debugTip": "Step into ensureSlash and watch both `path` and the caller's `dir` in the frames view; only one changes.",
+    "buggyOutput": "/home/ananotes.txt\n",
+    "fixedOutput": "/home/ana/notes.txt\n"
+  },
+  {
+    "id": "int-c-21",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "Logging a password that was never set",
+    "kind": "trace",
+    "scenario": "A debug log prints account fields with String.valueOf. The username prints fine, then logging an unset char[] secret crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException: Cannot read the array length because \"value\" is null\n\tat java.base/java.lang.String.<init>(String.java:278)\n\tat java.base/java.lang.String.valueOf(String.java:4468)\n\tat Main.main(Main.java:8)",
+    "code": "public class Main {\n    static String user = null;\n    static char[] secret = null;\n\n    public static void main(String[] args) {\n        System.out.println(\"user=\" + String.valueOf(user));\n        System.out.println(\"secret=\"\n            + String.valueOf(secret));\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "Why does one valueOf print null and the other throw?",
+    "options": [
+      "valueOf(char[]) is a different overload that reads the array",
+      "Static char arrays are not initialised until used",
+      "valueOf throws whenever the argument is null",
+      "String concatenation cannot handle char arrays"
+    ],
+    "answer": 0,
+    "explanation": "Overload resolution happens at compile time on the static type. String.valueOf(user) picks valueOf(Object), which returns \"null\" for null. String.valueOf(secret) picks the more specific valueOf(char[]), which builds a new String from the array's contents and throws NullPointerException when the array is null. Never print secrets anyway: mask them, and check for null explicitly.",
+    "fix": "public class Main {\n    static String user = null;\n    static char[] secret = null;\n\n    public static void main(String[] args) {\n        System.out.println(\"user=\" + String.valueOf(user));\n        System.out.println(\"secret=\"\n            + (secret == null ? \"null\" : \"***\"));\n    }\n}",
+    "fixNote": "Check for null and mask the secret instead of converting it.",
+    "debugTip": "Step into String.valueOf on line 8 to see which overload the compiler chose.",
+    "buggyOutput": "user=null\n",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "user=null\nsecret=null\n"
+  },
+  {
+    "id": "int-c-22",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "An email template with a mystery gap",
+    "kind": "output",
+    "scenario": "A text block builds an email body and the code prints its length and the body wrapped in brackets. Predict the output.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String body = \"\"\"\n            Hi Ana,\n              Your order shipped.\n            \"\"\";\n        System.out.println(body.length());\n        System.out.println(\"[\" + body + \"]\");\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What does this print?",
+    "options": [
+      "27\n[Hi Ana,\nYour order shipped.]",
+      "30\n[Hi Ana,\n  Your order shipped.\n]",
+      "54\n[            Hi Ana,\n              Your order shipped.\n]",
+      "28\n[Hi Ana,\n  Your order shipped.]"
+    ],
+    "answer": 1,
+    "explanation": "A text block strips incidental indentation: the smallest common indent of its lines, including the line with the closing delimiter, is removed, so \"Hi Ana,\" starts at column 0 while the extra two spaces before \"Your\" stay. Trailing spaces on each line are also stripped. Because the closing \"\"\" is on its own line, the content ends with a newline, which is why the bracket appears on the next line. Put the closing delimiter at the end of the last line to avoid the trailing newline.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String body = \"\"\"\n            Hi Ana,\n              Your order shipped.\"\"\";\n        System.out.println(body.length());\n        System.out.println(\"[\" + body + \"]\");\n    }\n}",
+    "fixNote": "Close the text block on the last content line to drop the trailing newline.",
+    "debugTip": "Evaluate `body.chars().filter(c -> c == '\\n').count()` or print body with replace(\"\\n\", \"\\\\n\") to see invisible newlines.",
+    "buggyOutput": "30\n[Hi Ana,\n  Your order shipped.\n]\n",
+    "fixedOutput": "29\n[Hi Ana,\n  Your order shipped.]\n"
+  },
+  {
+    "id": "int-c-23",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "A list label missing its bracket",
+    "kind": "bug",
+    "scenario": "The builder should produce \"[a,b]\". The output has the closing bracket but no opening one.",
+    "symptom": "a,b]\n4 91",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String[] items = {\"a\", \"b\"};\n        StringBuilder sb = new StringBuilder('[');\n        for (int i = 0; i < items.length; i++) {\n            if (i > 0) sb.append(',');\n            sb.append(items[i]);\n        }\n        sb.append(']');\n        System.out.println(sb);\n        System.out.println(sb.length() + \" \"\n            + sb.capacity());\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The char '[' is widened to int 91 and used as capacity",
+      "StringBuilder trims leading brackets",
+      "append(char) skips the first character",
+      "println calls toString on an empty builder"
+    ],
+    "answer": 2,
+    "explanation": "StringBuilder has no constructor taking a char. The char '[' is widened to the int 91, which matches StringBuilder(int capacity), so you get an empty builder with room for 91 characters. Capacity is just the size of the internal buffer; length is the number of characters actually stored. Pass a String, new StringBuilder(\"[\"), to set initial content.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String[] items = {\"a\", \"b\"};\n        StringBuilder sb = new StringBuilder(\"[\");\n        for (int i = 0; i < items.length; i++) {\n            if (i > 0) sb.append(',');\n            sb.append(items[i]);\n        }\n        sb.append(']');\n        System.out.println(sb);\n        System.out.println(sb.length() + \" \"\n            + sb.capacity());\n    }\n}",
+    "fixNote": "Use new StringBuilder(\"[\") so it starts with content.",
+    "debugTip": "Right after line 4, evaluate `sb.length()` and `sb.capacity()`; length 0 with capacity 91 reveals the overload.",
+    "buggyOutput": "a,b]\n4 91\n",
+    "fixedOutput": "[a,b]\n5 17\n"
+  },
+  {
+    "id": "int-c-24",
+    "level": "intermediate",
+    "topic": "Strings",
+    "title": "A CSV row with blank optional fields",
+    "kind": "trace",
+    "scenario": "Each row is name,email,phone,notes. When the last fields are empty, reading the notes column crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 2\n\tat Main.main(Main.java:8)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String[] rows = {\n            \"ana,a@x.io,555,vip\", \"ben,b@x.io,,\"};\n        for (String row : rows) {\n            String[] f = row.split(\",\");\n            System.out.println(f[0] + \" n=\" + f.length);\n            System.out.println(\"notes=\" + f[3]);\n        }\n        System.out.println(String.join(\"|\", \"x\", \"\", \"y\"));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "Why does ben's row have fewer fields?",
+    "options": [
+      "split treats ,, as a single separator everywhere",
+      "The email contains a dot, which is a regex wildcard",
+      "String.join removed the empty values earlier",
+      "split removes trailing empty strings by default"
+    ],
+    "answer": 3,
+    "explanation": "split(regex) is split(regex, 0), and a limit of 0 discards trailing empty strings, so \"ben,b@x.io,,\" yields only 2 elements. Empty strings in the middle are kept; only the trailing ones vanish. Passing a negative limit, split(\",\", -1), keeps every field; a positive limit caps the number of pieces. String.join, by contrast, keeps empty elements as they are, as the last line would show.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String[] rows = {\n            \"ana,a@x.io,555,vip\", \"ben,b@x.io,,\"};\n        for (String row : rows) {\n            String[] f = row.split(\",\", -1);\n            System.out.println(f[0] + \" n=\" + f.length);\n            System.out.println(\"notes=\" + f[3]);\n        }\n        System.out.println(String.join(\"|\", \"x\", \"\", \"y\"));\n    }\n}",
+    "fixNote": "Use split(\",\", -1) to keep trailing empty fields.",
+    "debugTip": "Set an exception breakpoint on ArrayIndexOutOfBoundsException and inspect `f` and `row` when it stops.",
+    "buggyOutput": "ana n=4\nnotes=vip\nben n=2\n",
+    "throws": "java.lang.ArrayIndexOutOfBoundsException",
+    "fixedOutput": "ana n=4\nnotes=vip\nben n=4\nnotes=\nx||y\n"
+  },
+  {
+    "id": "int-c-25",
+    "level": "intermediate",
+    "topic": "Wrappers",
+    "title": "A running total that allocates",
+    "kind": "bug",
+    "scenario": "The report sums a million readings and gives the right answer, but profiling shows millions of short-lived objects created by this loop.",
+    "symptom": "2999997\ntrue 10",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        Long total = 0L;\n        for (int i = 0; i < 1_000_000; i++) {\n            total += i % 7;\n        }\n        System.out.println(total);\n        Long a = 5L, b = 5L;\n        System.out.println(a.equals(b) + \" \" + (a + b));\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What creates the garbage?",
+    "options": [
+      "i % 7 allocates a new Integer each time",
+      "println boxes total at the end of the loop",
+      "total += unboxes, adds and boxes a new Long each pass",
+      "The underscore literal creates a BigInteger"
+    ],
+    "answer": 0,
+    "explanation": "total is a Long, an immutable wrapper object. total += x compiles to total = Long.valueOf(total.longValue() + x): unbox, add, then box the result. Only values from -128 to 127 come from the cache, so almost every iteration allocates a new Long. Use primitive long for accumulators and counters, and keep wrappers for collections and nullable values.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        long total = 0L;\n        for (int i = 0; i < 1_000_000; i++) {\n            total += i % 7;\n        }\n        System.out.println(total);\n        Long a = 5L, b = 5L;\n        System.out.println(a.equals(b) + \" \" + (a + b));\n    }\n}",
+    "fixNote": "Declare the accumulator as primitive long.",
+    "debugTip": "Profile with JFR (jcmd <pid> JFR.start) and look at allocation samples, or decompile with javap -c to see Long.valueOf in the loop.",
+    "buggyOutput": "2999997\ntrue 10\n",
+    "fixedOutput": "2999997\ntrue 10\n"
+  }
+]

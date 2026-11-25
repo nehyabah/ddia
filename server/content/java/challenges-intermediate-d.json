@@ -1,0 +1,687 @@
+[
+  {
+    "id": "int-d-01",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "A list built with room for ten",
+    "kind": "trace",
+    "scenario": "The seating chart pre-sizes an ArrayList for ten seats and then assigns seat 0. It crashes before printing anything.",
+    "symptom": "Exception in thread \"main\" java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0\n\tat java.base/jdk.internal.util.Preconditions.outOfBounds(Preconditions.java:100)\n\tat java.base/jdk.internal.util.Preconditions.outOfBoundsCheckIndex(Preconditions.java:106)\n\tat java.base/jdk.internal.util.Preconditions.checkIndex(Preconditions.java:302)\n\tat java.base/java.util.Objects.checkIndex(Objects.java:385)\n\tat java.base/java.util.ArrayList.set(ArrayList.java:470)\n\tat Main.main(Main.java:6)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> seats = new ArrayList<>(10);\n        seats.set(0, \"Ana\");\n        System.out.println(seats);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "10 is capacity, not size; the list is empty so set(0) is out of range",
+      "ArrayList(10) creates an immutable list that rejects set()",
+      "set() needs a LinkedList; ArrayList only supports add()",
+      "The capacity must be a power of two, so 10 is rejected"
+    ],
+    "answer": 0,
+    "explanation": "The int argument to new ArrayList<>(10) is the initial capacity of the backing array, not the number of elements. A fresh list always has size() == 0 regardless of capacity. List.set(index, e) replaces an existing element and requires 0 <= index < size(), so set(0) on an empty list throws IndexOutOfBoundsException. Use add() to grow a list, or Collections.nCopies / Arrays.asList when you really want pre-filled slots.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> seats = new ArrayList<>(10);\n        seats.add(\"Ana\");\n        System.out.println(seats);\n    }\n}",
+    "fixNote": "Used seats.add(\"Ana\") instead of set(0, ...), since the list starts empty.",
+    "debugTip": "Set a breakpoint on line 6 and evaluate seats.size(); it is 0, so no index is valid for set().",
+    "buggyOutput": "",
+    "throws": "java.lang.IndexOutOfBoundsException",
+    "fixedOutput": "[Ana]"
+  },
+  {
+    "id": "int-d-02",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "The VIP jumps the queue and someone vanishes",
+    "kind": "bug",
+    "scenario": "A VIP should be inserted at position 1 of the waiting list, pushing everyone else back. Instead the list stays the same length and Bo is gone.",
+    "symptom": "Prints:\n[Al, VIP, Cy] size=3",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> q = new ArrayList<>(\n            List.of(\"Al\", \"Bo\", \"Cy\"));\n        q.set(1, \"VIP\");\n        System.out.println(q + \" size=\" + q.size());\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "List.of made the copy immutable, so the insert was partly ignored",
+      "set(1, x) overwrites the element at 1; add(1, x) inserts and shifts",
+      "Indexes start at 1 in List, so set(1) replaced the first person",
+      "set() appends to the end and then removes the duplicate entry"
+    ],
+    "answer": 1,
+    "explanation": "List.set(index, e) replaces the element at that position and returns the old one; the size never changes. List.add(index, e) inserts at that position and shifts the current element and everything after it one place to the right, growing the list by one. Because set was used, Bo was overwritten by VIP. The copy into new ArrayList<>(...) is fully mutable, so immutability is not the problem.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> q = new ArrayList<>(\n            List.of(\"Al\", \"Bo\", \"Cy\"));\n        q.add(1, \"VIP\");\n        System.out.println(q + \" size=\" + q.size());\n    }\n}",
+    "fixNote": "Replaced q.set(1, \"VIP\") with q.add(1, \"VIP\") to insert instead of overwrite.",
+    "debugTip": "Step over line 7 with a watch on q and q.size(); the size staying at 3 shows an overwrite, not an insert.",
+    "buggyOutput": "[Al, VIP, Cy] size=3",
+    "fixedOutput": "[Al, VIP, Bo, Cy] size=4"
+  },
+  {
+    "id": "int-d-03",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Staff grouped by team, sorted by name",
+    "kind": "bug",
+    "scenario": "The roster should be grouped by team (A before B) and alphabetical within each team. It comes out purely alphabetical with teams mixed.",
+    "symptom": "Prints:\nB Amy\nB Bob\nA Kim\nA Zed",
+    "code": "import java.util.*;\n\npublic class Main {\n    record P(String name, String team) {}\n    public static void main(String[] args) {\n        List<P> ps = new ArrayList<>(List.of(\n            new P(\"Zed\", \"A\"), new P(\"Amy\", \"B\"),\n            new P(\"Kim\", \"A\"), new P(\"Bob\", \"B\")));\n        ps.sort(Comparator.comparing(P::team));\n        ps.sort(Comparator.comparing(P::name));\n        for (P p : ps) {\n            System.out.println(p.team() + \" \" + p.name());\n        }\n    }\n}",
+    "bugLines": [
+      9,
+      10
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Use Collections.sort instead, because List.sort is not stable",
+      "Sort by team twice so the grouping survives the name sort",
+      "Sort by name first, then by team; the stable second sort keeps names",
+      "Replace both sorts with a single sort on name, then reverse()"
+    ],
+    "answer": 2,
+    "explanation": "List.sort and Collections.sort are both guaranteed stable: elements that compare equal keep their existing relative order. With two passes, the LAST sort becomes the primary key and the earlier sort only decides ties. Sorting by team last means the team grouping wins and the earlier name order survives inside each team. A single comparator, comparing(P::team).thenComparing(P::name), says the same thing more directly.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    record P(String name, String team) {}\n    public static void main(String[] args) {\n        List<P> ps = new ArrayList<>(List.of(\n            new P(\"Zed\", \"A\"), new P(\"Amy\", \"B\"),\n            new P(\"Kim\", \"A\"), new P(\"Bob\", \"B\")));\n        ps.sort(Comparator.comparing(P::name));\n        ps.sort(Comparator.comparing(P::team));\n        for (P p : ps) {\n            System.out.println(p.team() + \" \" + p.name());\n        }\n    }\n}",
+    "fixNote": "Swapped the two sorts so team (the primary key) is sorted last.",
+    "debugTip": "Put a breakpoint after line 9 and after line 10 and inspect ps each time; the second sort scrambles the grouping the first one built.",
+    "buggyOutput": "B Amy\nB Bob\nA Kim\nA Zed",
+    "fixedOutput": "A Kim\nA Zed\nB Amy\nB Bob"
+  },
+  {
+    "id": "int-d-04",
+    "level": "intermediate",
+    "topic": "Lambdas",
+    "title": "Oldest first, ties alphabetical",
+    "kind": "bug",
+    "scenario": "Players should be listed by age, oldest first, and players of the same age alphabetically. The ties come out in reverse alphabetical order.",
+    "symptom": "Prints:\n30 Bea\n30 Ann\n25 Dan\n25 Cal",
+    "code": "import java.util.*;\n\npublic class Main {\n    record U(String name, int age) {}\n    public static void main(String[] args) {\n        List<U> us = new ArrayList<>(List.of(\n            new U(\"Ann\", 30), new U(\"Cal\", 25),\n            new U(\"Bea\", 30), new U(\"Dan\", 25)));\n        us.sort(Comparator.comparingInt(U::age)\n            .thenComparing(U::name)\n            .reversed());\n        us.forEach(u -> System.out.println(\n            u.age() + \" \" + u.name()));\n    }\n}",
+    "bugLines": [
+      11
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "thenComparing only runs when ages differ, so names are never compared",
+      "comparingInt boxes the ages, so equal ages compare as different objects",
+      "List.sort is unstable, so ties end up in an arbitrary order",
+      "reversed() at the end reverses the whole chain, including the name tie-break"
+    ],
+    "answer": 3,
+    "explanation": "Each Comparator method returns a new comparator wrapping everything built so far. Calling reversed() last wraps the entire age-then-name comparator, so both keys are flipped: ages descend, but names descend too. To reverse only the age, call reversed() straight after comparingInt(U::age) and then add thenComparing(U::name). Alternatively write comparing(U::age, Comparator.reverseOrder()) so the reversal is scoped to that key.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    record U(String name, int age) {}\n    public static void main(String[] args) {\n        List<U> us = new ArrayList<>(List.of(\n            new U(\"Ann\", 30), new U(\"Cal\", 25),\n            new U(\"Bea\", 30), new U(\"Dan\", 25)));\n        us.sort(Comparator.comparingInt(U::age)\n            .reversed()\n            .thenComparing(U::name));\n        us.forEach(u -> System.out.println(\n            u.age() + \" \" + u.name()));\n    }\n}",
+    "fixNote": "Moved reversed() to apply only to the age comparator, before thenComparing(U::name).",
+    "debugTip": "Evaluate the comparator on two same-age users (Ann, Bea) in the debugger; a positive result shows names are being compared in reverse.",
+    "buggyOutput": "30 Bea\n30 Ann\n25 Dan\n25 Cal",
+    "fixedOutput": "30 Ann\n30 Bea\n25 Cal\n25 Dan"
+  },
+  {
+    "id": "int-d-05",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "What does put hand back?",
+    "kind": "output",
+    "scenario": "A developer logs the result of each put call on a price map, assuming it echoes the value just stored.",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> price = new HashMap<>();\n        System.out.println(price.put(\"tea\", 3));\n        System.out.println(price.put(\"tea\", 5));\n        System.out.println(price.get(\"tea\"));\n    }\n}",
+    "bugLines": [
+      6,
+      7
+    ],
+    "question": "What does this print?",
+    "options": [
+      "null\n3\n5",
+      "3\n5\n5",
+      "null\nnull\n5",
+      "3\n3\n5"
+    ],
+    "answer": 0,
+    "explanation": "Map.put returns the PREVIOUS value associated with the key, or null if there was none. The first put has nothing to replace, so it returns null; the second replaces 3 and returns 3. The map then holds 5. This return value is handy for detecting overwrites, but a null result is ambiguous if the map can store null values, in which case use containsKey.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> price = new HashMap<>();\n        price.put(\"tea\", 3);\n        Integer old = price.put(\"tea\", 5);\n        System.out.println(\"was \" + old + \", now \"\n            + price.get(\"tea\"));\n    }\n}",
+    "fixNote": "Captured put's return value as the old value and labelled it explicitly.",
+    "debugTip": "Use evaluate expression on price.put(...) at a breakpoint before line 6 to see what is returned, then inspect the map entry.",
+    "buggyOutput": "null\n3\n5",
+    "fixedOutput": "was 3, now 5"
+  },
+  {
+    "id": "int-d-06",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Every word appears exactly once?",
+    "kind": "bug",
+    "scenario": "The word counter should report how many times each word appears. Every count comes out as 1, even for repeated words.",
+    "symptom": "Prints:\n{a=1, b=1, c=1}",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        String[] ws = \"a b a c b a\".split(\" \");\n        Map<String, Integer> n = new TreeMap<>();\n        for (String w : ws) {\n            n.merge(w, 1, (old, one) -> one);\n        }\n        System.out.println(n);\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "merge only inserts absent keys and ignores keys already present",
+      "The remapping function returns the new value 1 instead of old + 1",
+      "TreeMap.merge resets values to the default when keys are equal",
+      "split(\" \") yields distinct String objects, so keys never match"
+    ],
+    "answer": 1,
+    "explanation": "Map.merge(key, value, fn) stores value if the key is absent; if it is present, it stores fn.apply(oldValue, value), and if fn returns null the entry is removed. Here fn returns its second argument, the fresh 1, so every repeat just overwrites the count with 1. Integer::sum combines old and new, giving a proper counter. Keys match fine because maps compare with equals/compareTo, not identity.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        String[] ws = \"a b a c b a\".split(\" \");\n        Map<String, Integer> n = new TreeMap<>();\n        for (String w : ws) {\n            n.merge(w, 1, Integer::sum);\n        }\n        System.out.println(n);\n    }\n}",
+    "fixNote": "Used Integer::sum as the remapping function so repeats add to the count.",
+    "debugTip": "Set a breakpoint inside the lambda on line 8 and watch old and one; you will see old grow nowhere because the lambda discards it.",
+    "buggyOutput": "{a=1, b=1, c=1}",
+    "fixedOutput": "{a=3, b=2, c=1}"
+  },
+  {
+    "id": "int-d-07",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Grouping orders by customer",
+    "kind": "trace",
+    "scenario": "Orders should be collected into a list per customer. The program crashes on the very first order.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException: Cannot invoke \"java.util.List.add(Object)\" because the return value of \"java.util.Map.putIfAbsent(Object, Object)\" is null\n\tat Main.main(Main.java:10)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, List<Integer>> byCust =\n            new TreeMap<>();\n        String[] cs = {\"ann\", \"bob\", \"ann\"};\n        for (int i = 0; i < cs.length; i++) {\n            byCust.putIfAbsent(cs[i], new ArrayList<>())\n                  .add(i);\n        }\n        System.out.println(byCust);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "TreeMap rejects ArrayList values because lists are not Comparable",
+      "The new ArrayList is garbage-collected before add() runs",
+      "putIfAbsent returns the previous value, which is null on first insert",
+      "putIfAbsent throws when the key is absent, by design"
+    ],
+    "answer": 2,
+    "explanation": "putIfAbsent(k, v) returns the value that was already mapped, or null if it just inserted v. On the first order for a customer it inserts the list but returns null, so .add(i) is called on null. computeIfAbsent(k, fn) instead returns the current (existing or newly computed) value, which is exactly what you want to chain on. It also only creates the list when needed rather than allocating one on every call.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, List<Integer>> byCust =\n            new TreeMap<>();\n        String[] cs = {\"ann\", \"bob\", \"ann\"};\n        for (int i = 0; i < cs.length; i++) {\n            byCust.computeIfAbsent(cs[i],\n                k -> new ArrayList<>()).add(i);\n        }\n        System.out.println(byCust);\n    }\n}",
+    "fixNote": "Switched to computeIfAbsent(cs[i], k -> new ArrayList<>()), which returns the list in the map.",
+    "debugTip": "Add an exception breakpoint on NullPointerException; at line 9, evaluate the putIfAbsent result to see it is null.",
+    "buggyOutput": "",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "{ann=[0, 2], bob=[1]}"
+  },
+  {
+    "id": "int-d-08",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Undo restores the oldest edit",
+    "kind": "bug",
+    "scenario": "An undo stack should pop the most recent edit first. Undo returns the very first edit instead.",
+    "symptom": "Prints:\nundo: type A\nundo: type B",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Deque<String> undo = new ArrayDeque<>();\n        undo.offer(\"type A\");\n        undo.offer(\"type B\");\n        undo.offer(\"bold\");\n        System.out.println(\"undo: \" + undo.pop());\n        System.out.println(\"undo: \" + undo.pop());\n    }\n}",
+    "bugLines": [
+      6,
+      7,
+      8
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Use poll() instead of pop(), since pop() reads from the tail",
+      "Replace ArrayDeque with a PriorityQueue to keep newest first",
+      "Call undo.reversed() before popping to flip the order",
+      "Use push() to add, so additions and pop() both work on the head"
+    ],
+    "answer": 3,
+    "explanation": "A Deque has two ends. offer/add/addLast put elements at the tail (queue style), while push/addFirst put them at the head (stack style). pop() and poll() both remove from the head. Mixing offer with pop therefore gives FIFO behaviour: the oldest edit comes out first. Use push with pop (LIFO stack) or offer with poll (FIFO queue), never a mix.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Deque<String> undo = new ArrayDeque<>();\n        undo.push(\"type A\");\n        undo.push(\"type B\");\n        undo.push(\"bold\");\n        System.out.println(\"undo: \" + undo.pop());\n        System.out.println(\"undo: \" + undo.pop());\n    }\n}",
+    "fixNote": "Replaced offer() with push() so new edits go on the head where pop() takes them.",
+    "debugTip": "Watch undo after each offer on lines 6-8; the debugger's element order shows the newest edit at the tail, away from where pop() reads.",
+    "buggyOutput": "undo: type A\nundo: type B",
+    "fixedOutput": "undo: bold\nundo: type B"
+  },
+  {
+    "id": "int-d-09",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Shipping band for a 7 kg parcel",
+    "kind": "bug",
+    "scenario": "Bands start at 0, 5 and 10 kg; a parcel uses the band whose start is at or below its weight. A 7 kg parcel is charged the 10 kg rate.",
+    "symptom": "Prints:\n7kg -> $15",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        TreeMap<Integer, Integer> fee = new TreeMap<>();\n        fee.put(0, 4);\n        fee.put(5, 9);\n        fee.put(10, 15);\n        int kg = 7;\n        int band = fee.ceilingKey(kg);\n        System.out.println(kg + \"kg -> $\" + fee.get(band));\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "ceilingKey returns the smallest key >= 7; floorKey gives the largest <= 7",
+      "ceilingKey rounds 7 up to the nearest multiple of five",
+      "TreeMap keeps keys in insertion order, so 10 is found first",
+      "get(band) falls back to the last entry when the key is missing"
+    ],
+    "answer": 0,
+    "explanation": "TreeMap's navigation methods find neighbouring keys: floorKey(k) is the greatest key <= k, ceilingKey(k) the least key >= k, and lowerKey/higherKey are the strict < and > versions. A band lookup 'start at or below the weight' is a floor query, which gives 5. ceilingKey(7) returns 10, the next band up. All four return null when no such key exists, so unboxing into an int can also throw NPE for out-of-range inputs.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        TreeMap<Integer, Integer> fee = new TreeMap<>();\n        fee.put(0, 4);\n        fee.put(5, 9);\n        fee.put(10, 15);\n        int kg = 7;\n        int band = fee.floorKey(kg);\n        System.out.println(kg + \"kg -> $\" + fee.get(band));\n    }\n}",
+    "fixNote": "Used floorKey(kg) instead of ceilingKey(kg).",
+    "debugTip": "At a breakpoint on line 10, evaluate fee.floorKey(kg) and fee.ceilingKey(kg) side by side to see which neighbour each picks.",
+    "buggyOutput": "7kg -> $15",
+    "fixedOutput": "7kg -> $9"
+  },
+  {
+    "id": "int-d-10",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "How many scores are 80 or below?",
+    "kind": "bug",
+    "scenario": "The report should count students scoring 80 or less. The student who scored exactly 80 is left out.",
+    "symptom": "Prints:\n2 {55=Al, 71=Di}",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        TreeMap<Integer, String> s = new TreeMap<>();\n        s.put(55, \"Al\");\n        s.put(80, \"Bo\");\n        s.put(92, \"Cy\");\n        s.put(71, \"Di\");\n        var low = s.headMap(80);\n        System.out.println(low.size() + \" \" + low);\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Call tailMap(80) because headMap returns keys above the bound",
+      "Call headMap(80, true); one-argument headMap excludes the key 80",
+      "Call headMap(81); headMap(80) skips keys equal to 79 and 80",
+      "Call subMap(0, 80) because headMap only covers the first key"
+    ],
+    "answer": 1,
+    "explanation": "SortedMap.headMap(toKey) returns the keys strictly less than toKey: the upper bound is exclusive, matching the half-open convention of subMap(from, to) and String.substring. NavigableMap adds headMap(toKey, inclusive) so you can include the bound explicitly. tailMap(fromKey) is the opposite: inclusive of fromKey by default. The returned map is a live view, so later puts into s show up in it too.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        TreeMap<Integer, String> s = new TreeMap<>();\n        s.put(55, \"Al\");\n        s.put(80, \"Bo\");\n        s.put(92, \"Cy\");\n        s.put(71, \"Di\");\n        var low = s.headMap(80, true);\n        System.out.println(low.size() + \" \" + low);\n    }\n}",
+    "fixNote": "Used headMap(80, true) to make the upper bound inclusive.",
+    "debugTip": "At a breakpoint on line 11, evaluate s.headMap(80) and s.headMap(80, true) and compare the keys they contain.",
+    "buggyOutput": "2 {55=Al, 71=Di}",
+    "fixedOutput": "3 {55=Al, 71=Di, 80=Bo}"
+  },
+  {
+    "id": "int-d-11",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "The cache evicts the page just viewed",
+    "kind": "bug",
+    "scenario": "A 2-entry LRU cache should evict the least recently USED page. After reading 'home' again and adding 'cart', 'home' is evicted anyway.",
+    "symptom": "Prints:\n[shop, cart]",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> lru =\n            new LinkedHashMap<>(16, 0.75f, false) {\n                protected boolean removeEldestEntry(\n                        Map.Entry<String, Integer> e) {\n                    return size() > 2;\n                }\n            };\n        lru.put(\"home\", 1);\n        lru.put(\"shop\", 2);\n        lru.get(\"home\");\n        lru.put(\"cart\", 3);\n        System.out.println(lru.keySet());\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "removeEldestEntry runs before the put, so it removes the wrong entry",
+      "LinkedHashMap ignores get() calls made on anonymous subclasses",
+      "accessOrder is false, so get() doesn't move 'home'; order stays insertion",
+      "The load factor 0.75 forces a rehash that reorders entries randomly"
+    ],
+    "answer": 2,
+    "explanation": "LinkedHashMap keeps a linked list of entries in insertion order by default. The third constructor argument, accessOrder, switches it to access order: every get or put of an existing key moves that entry to the end. removeEldestEntry is consulted after each put and removes the head of that list. With accessOrder false, 'home' remains the eldest despite being read, so it is evicted; with true, 'shop' becomes eldest.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, Integer> lru =\n            new LinkedHashMap<>(16, 0.75f, true) {\n                protected boolean removeEldestEntry(\n                        Map.Entry<String, Integer> e) {\n                    return size() > 2;\n                }\n            };\n        lru.put(\"home\", 1);\n        lru.put(\"shop\", 2);\n        lru.get(\"home\");\n        lru.put(\"cart\", 3);\n        System.out.println(lru.keySet());\n    }\n}",
+    "fixNote": "Passed true as the accessOrder argument of the LinkedHashMap constructor.",
+    "debugTip": "Watch lru.keySet() after the get on line 14; if 'home' doesn't move to the end, the map is not in access order.",
+    "buggyOutput": "[shop, cart]",
+    "fixedOutput": "[home, cart]"
+  },
+  {
+    "id": "int-d-12",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Pairing up names from a list",
+    "kind": "trace",
+    "scenario": "The loop should print each name next to its length. It prints some garbled pairs and then crashes.",
+    "symptom": "Exception in thread \"main\" java.util.NoSuchElementException\n\tat java.base/java.util.ImmutableCollections$ListItr.next(ImmutableCollections.java:382)\n\tat Main.main(Main.java:9)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> ns = List.of(\"Ann\", \"Bobby\", \"Cy\");\n        Iterator<String> it = ns.iterator();\n        while (it.hasNext()) {\n            System.out.println(it.next() + \" \"\n                + it.next().length());\n        }\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "List.of iterators are single-use and throw on the second hasNext",
+      "length() is evaluated before next(), so it reads a null element",
+      "hasNext() advances the iterator, so the loop skips one element",
+      "next() is called twice per iteration, skipping ahead past the end"
+    ],
+    "answer": 3,
+    "explanation": "Every call to Iterator.next() returns the next element AND advances the cursor. Calling it twice in one loop body consumes two elements per check of hasNext(), pairing Ann with Bobby's length. With an odd number of elements, the second next() runs when nothing is left and throws NoSuchElementException. Call next() once, store the result in a variable, and use the variable.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> ns = List.of(\"Ann\", \"Bobby\", \"Cy\");\n        Iterator<String> it = ns.iterator();\n        while (it.hasNext()) {\n            String n = it.next();\n            System.out.println(n + \" \" + n.length());\n        }\n    }\n}",
+    "fixNote": "Stored it.next() in a local variable and used it twice.",
+    "debugTip": "Set a breakpoint on line 8 and step into each next() call; watching the iterator's cursor shows it advancing twice per pass.",
+    "buggyOutput": "Ann 5",
+    "throws": "java.util.NoSuchElementException",
+    "fixedOutput": "Ann 3\nBobby 5\nCy 2"
+  },
+  {
+    "id": "int-d-13",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Duplicate ticket detector flags everyone",
+    "kind": "bug",
+    "scenario": "The scanner should flag a ticket only when it has already been seen. It flags every ticket except the repeated one.",
+    "symptom": "Prints:\ndup 101\ndup 205\ndup 330",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] tickets = {101, 205, 101, 330};\n        Set<Integer> seen = new HashSet<>();\n        for (int t : tickets) {\n            if (seen.add(t)) {\n                System.out.println(\"dup \" + t);\n            }\n        }\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "add() returns true when the element was NEW; the condition is inverted",
+      "add() returns the set's new size, which is always truthy here",
+      "Autoboxed Integers above 127 never compare equal in a HashSet",
+      "HashSet.add throws on duplicates, and the exception is swallowed"
+    ],
+    "answer": 0,
+    "explanation": "Set.add(e) returns true if the set changed, meaning e was not already present, and false if it was a duplicate. That makes add a one-step 'check and insert', but the duplicate case is the false branch. Here the condition fires on every first sighting and stays silent for the real duplicate. Boxed Integer keys are compared with equals and hashCode in a HashSet, so the 127 cache is irrelevant.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] tickets = {101, 205, 101, 330};\n        Set<Integer> seen = new HashSet<>();\n        for (int t : tickets) {\n            if (!seen.add(t)) {\n                System.out.println(\"dup \" + t);\n            }\n        }\n    }\n}",
+    "fixNote": "Negated the condition: if (!seen.add(t)) reports duplicates.",
+    "debugTip": "Set a breakpoint on line 8 and evaluate seen.add(t) mentally per ticket; note it is false exactly once, for the second 101.",
+    "buggyOutput": "dup 101\ndup 205\ndup 330",
+    "fixedOutput": "dup 101"
+  },
+  {
+    "id": "int-d-14",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "The longest word is 'pear'?",
+    "kind": "bug",
+    "scenario": "The app should show the longest word in the list and how often it appears. It reports 'pear' instead of 'banana'.",
+    "symptom": "Prints:\npear x1",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> ws = List.of(\n            \"kiwi\", \"banana\", \"pear\", \"banana\");\n        String top = Collections.max(ws);\n        int n = Collections.frequency(ws, top);\n        System.out.println(top + \" x\" + n);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Use Collections.min, since max returns the shortest string",
+      "Pass Comparator.comparingInt(String::length) to Collections.max",
+      "Sort the list first; max only works on sorted collections",
+      "Replace frequency with a loop, because frequency changes the order"
+    ],
+    "answer": 1,
+    "explanation": "Collections.max(coll) uses the elements' natural ordering, which for String is lexicographic (dictionary) order, so 'pear' beats 'kiwi' and 'banana'. To compare by another property, use the overload Collections.max(coll, comparator). Collections.frequency(coll, o) counts elements equal to o using equals, and works on any collection without sorting. Neither method modifies the list.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> ws = List.of(\n            \"kiwi\", \"banana\", \"pear\", \"banana\");\n        String top = Collections.max(ws,\n            Comparator.comparingInt(String::length));\n        int n = Collections.frequency(ws, top);\n        System.out.println(top + \" x\" + n);\n    }\n}",
+    "fixNote": "Passed a length comparator to Collections.max.",
+    "debugTip": "Evaluate \"pear\".compareTo(\"banana\") at a breakpoint on line 7; a positive result shows max is using alphabetical order.",
+    "buggyOutput": "pear x1",
+    "fixedOutput": "banana x2"
+  },
+  {
+    "id": "int-d-15",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "A config map that never loads",
+    "kind": "trace",
+    "scenario": "A small settings map is built with Map.of. The program dies on startup before printing anything.",
+    "symptom": "Exception in thread \"main\" java.lang.IllegalArgumentException: duplicate key: host\n\tat java.base/java.util.ImmutableCollections$MapN.<init>(ImmutableCollections.java:1196)\n\tat java.base/java.util.Map.of(Map.java:1407)\n\tat Main.main(Main.java:5)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, String> cfg = Map.of(\n            \"host\", \"db1\",\n            \"port\", \"5432\",\n            \"host\", \"db2\");\n        System.out.println(cfg.get(\"host\"));\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Map.of allows at most two entries; the third one overflows",
+      "Map.of values must differ, and \"db1\" equals \"db2\" by hash",
+      "Map.of rejects duplicate keys instead of keeping the last value",
+      "Map.of requires the keys to be passed in sorted order"
+    ],
+    "answer": 2,
+    "explanation": "The Map.of and Map.ofEntries factories build immutable maps and throw IllegalArgumentException if any key appears twice, unlike HashMap.put which silently overwrites. They also reject null keys and values with NullPointerException. Set.of likewise rejects duplicate elements. This fail-fast design catches copy-paste mistakes in literal maps at construction time.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Map<String, String> cfg = Map.of(\n            \"host\", \"db2\",\n            \"port\", \"5432\");\n        System.out.println(cfg.get(\"host\"));\n    }\n}",
+    "fixNote": "Removed the duplicate \"host\" key, keeping the intended value.",
+    "debugTip": "Add an exception breakpoint on IllegalArgumentException; the message names the duplicate key so you can search the literal for it.",
+    "buggyOutput": "",
+    "throws": "java.lang.IllegalArgumentException",
+    "fixedOutput": "db2"
+  },
+  {
+    "id": "int-d-16",
+    "level": "intermediate",
+    "topic": "Collections",
+    "title": "Checking a list for a missing value",
+    "kind": "trace",
+    "scenario": "A validator checks whether a list of allowed roles contains the user's role, which may be null. It crashes for anonymous users.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException\n\tat java.base/java.util.Objects.requireNonNull(Objects.java:233)\n\tat java.base/java.util.ImmutableCollections$List12.indexOf(ImmutableCollections.java:597)\n\tat java.base/java.util.ImmutableCollections$AbstractImmutableList.contains(ImmutableCollections.java:331)\n\tat Main.main(Main.java:7)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> roles = List.of(\"admin\", \"editor\");\n        String role = null;\n        boolean ok = roles.contains(role);\n        System.out.println(\"allowed=\" + ok);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "contains() unboxes the String and fails on the null reference",
+      "An immutable list throws on every query, not just on writes",
+      "contains() calls role.equals(...), which ArrayList would avoid",
+      "List.of lists are null-hostile: even contains(null) throws NPE"
+    ],
+    "answer": 3,
+    "explanation": "The immutable collections from List.of, Set.of and Map.of do not allow null elements, and their query methods are null-hostile too: contains(null) and indexOf(null) throw NullPointerException rather than returning false. An ArrayList would simply return false. Guard the lookup with a null check, or copy into a null-tolerant collection if nulls are legitimately expected.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> roles = List.of(\"admin\", \"editor\");\n        String role = null;\n        boolean ok = role != null && roles.contains(role);\n        System.out.println(\"allowed=\" + ok);\n    }\n}",
+    "fixNote": "Added a role != null check before calling contains.",
+    "debugTip": "Add an exception breakpoint on NullPointerException; the top frames are inside ImmutableCollections, showing the list itself rejected null.",
+    "buggyOutput": "",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "allowed=false"
+  },
+  {
+    "id": "int-d-17",
+    "level": "intermediate",
+    "topic": "Lambdas",
+    "title": "Three tasks capture a counter",
+    "kind": "output",
+    "scenario": "To get around the effectively-final rule, the code captures a one-element array as a counter. Each task is meant to print the number it was created with.",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Runnable> tasks = new ArrayList<>();\n        int[] n = {0};\n        for (int i = 0; i < 3; i++) {\n            n[0] = i;\n            tasks.add(() -> System.out.print(n[0]));\n        }\n        tasks.forEach(Runnable::run);\n        System.out.println();\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What does this print?",
+    "options": [
+      "222",
+      "012",
+      "000",
+      "333"
+    ],
+    "answer": 0,
+    "explanation": "A lambda can only capture local variables that are effectively final, and it captures their VALUE at creation. Here the captured variable is the array reference n, which never changes, so it compiles, but all three lambdas share the same array and read n[0] only when they run. By then the loop has left n[0] at 2. Declaring a fresh effectively final local inside the loop (int k = i) gives each lambda its own snapshot.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Runnable> tasks = new ArrayList<>();\n        for (int i = 0; i < 3; i++) {\n            int k = i;\n            tasks.add(() -> System.out.print(k));\n        }\n        tasks.forEach(Runnable::run);\n        System.out.println();\n    }\n}",
+    "fixNote": "Captured a per-iteration local int k = i instead of a shared array slot.",
+    "debugTip": "Set a breakpoint inside the lambda on line 9 and inspect n when it runs; all three tasks see the same array object.",
+    "buggyOutput": "222",
+    "fixedOutput": "012"
+  },
+  {
+    "id": "int-d-18",
+    "level": "intermediate",
+    "topic": "Lambdas",
+    "title": "Lowercase names sorted after Zoe",
+    "kind": "bug",
+    "scenario": "The contact list should be alphabetical ignoring case. 'adam' and 'bea' appear after 'Zoe'.",
+    "symptom": "Prints:\n[Carl, Zoe, adam, bea]",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> cs = new ArrayList<>(List.of(\n            \"bea\", \"Zoe\", \"adam\", \"Carl\"));\n        cs.sort(String::compareTo);\n        System.out.println(cs);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The method reference binds to the first element, not each pair",
+      "compareTo compares UTF-16 codes, where all uppercase precede lowercase",
+      "List.sort ignores the comparator for String and uses hash order",
+      "compareTo compares lengths first, then letters"
+    ],
+    "answer": 1,
+    "explanation": "String::compareTo is an unbound instance method reference, so it acts as a Comparator<String> where (a, b) -> a.compareTo(b). compareTo compares char values, and 'A'..'Z' (65-90) all come before 'a'..'z' (97-122), so every capitalised name sorts first. String::compareToIgnoreCase, or the ready-made String.CASE_INSENSITIVE_ORDER, folds case before comparing. For human-language sorting with accents, use a java.text.Collator.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> cs = new ArrayList<>(List.of(\n            \"bea\", \"Zoe\", \"adam\", \"Carl\"));\n        cs.sort(String::compareToIgnoreCase);\n        System.out.println(cs);\n    }\n}",
+    "fixNote": "Sorted with String::compareToIgnoreCase.",
+    "debugTip": "Evaluate \"Zoe\".compareTo(\"adam\") at a breakpoint on line 7; it is negative, proving uppercase wins.",
+    "buggyOutput": "[Carl, Zoe, adam, bea]",
+    "fixedOutput": "[adam, bea, Carl, Zoe]"
+  },
+  {
+    "id": "int-d-19",
+    "level": "intermediate",
+    "topic": "Lambdas",
+    "title": "Add tax, then a fee, or the other way?",
+    "kind": "output",
+    "scenario": "A price pipeline composes two functions: add a $10 fee and double the price. The author expected 'fee first' from compose.",
+    "code": "import java.util.function.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Function<Integer, Integer> fee = p -> p + 10;\n        Function<Integer, Integer> dbl = p -> p * 2;\n        System.out.println(fee.compose(dbl).apply(5));\n        System.out.println(fee.andThen(dbl).apply(5));\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What does this print?",
+    "options": [
+      "30\n30",
+      "30\n20",
+      "20\n30",
+      "20\n20"
+    ],
+    "answer": 2,
+    "explanation": "f.andThen(g) returns x -> g(f(x)): f runs first, then g. f.compose(g) returns x -> f(g(x)): the ARGUMENT g runs first. So fee.compose(dbl) doubles 5 to 10 and then adds the fee for 20, while fee.andThen(dbl) adds the fee to get 15 and doubles to 30. Read andThen left to right; read compose like mathematical composition, right to left.",
+    "fix": "import java.util.function.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Function<Integer, Integer> fee = p -> p + 10;\n        Function<Integer, Integer> dbl = p -> p * 2;\n        System.out.println(dbl.compose(fee).apply(5));\n        System.out.println(fee.andThen(dbl).apply(5));\n    }\n}",
+    "fixNote": "Used dbl.compose(fee) so both lines apply the fee first and print 30.",
+    "debugTip": "Put breakpoints inside both lambdas on lines 5 and 6 and run line 7; the order in which they hit shows which function runs first.",
+    "buggyOutput": "20\n30",
+    "fixedOutput": "30\n30"
+  },
+  {
+    "id": "int-d-20",
+    "level": "intermediate",
+    "topic": "Streams",
+    "title": "Counting words across sentences",
+    "kind": "bug",
+    "scenario": "The stream should count every word across three sentences (7 words). It prints 3.",
+    "symptom": "Prints:\n3",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> lines = List.of(\n            \"the cat sat\", \"on a mat\", \"ok\");\n        long n = lines.stream()\n            .map(s -> s.split(\" \"))\n            .count();\n        System.out.println(n);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Use map(s -> s.split(\" \").length) and keep count()",
+      "Call distinct() before count() so arrays are expanded",
+      "Replace count() with collect(Collectors.counting())",
+      "Use flatMap(s -> Arrays.stream(s.split(\" \"))) to flatten words"
+    ],
+    "answer": 3,
+    "explanation": "map is one-to-one: each sentence becomes exactly one String[], so the stream still has three elements and count() returns 3. flatMap is one-to-many: the function returns a Stream for each element, and those streams are concatenated into one flat stream of words. Arrays.stream(array) or Stream.of(array) turns each split result into such a stream. Collectors.counting() would count the same three arrays.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> lines = List.of(\n            \"the cat sat\", \"on a mat\", \"ok\");\n        long n = lines.stream()\n            .flatMap(s -> Arrays.stream(s.split(\" \")))\n            .count();\n        System.out.println(n);\n    }\n}",
+    "fixNote": "Replaced map with flatMap(s -> Arrays.stream(s.split(\" \"))).",
+    "debugTip": "Insert .peek(System.out::println) after line 9; it prints three array references like [Ljava.lang.String;@..., not words.",
+    "buggyOutput": "3",
+    "fixedOutput": "7"
+  },
+  {
+    "id": "int-d-21",
+    "level": "intermediate",
+    "topic": "Streams",
+    "title": "The product of 1 to 5 is zero",
+    "kind": "bug",
+    "scenario": "The stream multiplies the numbers 1 to 5 and should print 120. It prints 0.",
+    "symptom": "Prints:\n0",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> xs = List.of(1, 2, 3, 4, 5);\n        int prod = xs.stream()\n            .reduce(0, (a, b) -> a * b);\n        System.out.println(prod);\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The identity must be 1 for multiplication; 0 * anything stays 0",
+      "reduce skips the first element when an identity is given",
+      "Integer overflow during boxing turns the product into zero",
+      "The lambda's parameters are swapped, so it divides instead"
+    ],
+    "answer": 0,
+    "explanation": "reduce(identity, op) starts the accumulation from identity and folds each element in with op. The identity must be a neutral element for op, meaning op(identity, x) == x: 0 for addition, 1 for multiplication, \"\" for concatenation. Starting from 0 makes every product 0. A wrong identity is also counted once per chunk in parallel streams, so it gives inconsistent results there too.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> xs = List.of(1, 2, 3, 4, 5);\n        int prod = xs.stream()\n            .reduce(1, (a, b) -> a * b);\n        System.out.println(prod);\n    }\n}",
+    "fixNote": "Changed the identity from 0 to 1.",
+    "debugTip": "Set a breakpoint inside the lambda on line 7 and watch a; it is 0 on the first call and never changes.",
+    "buggyOutput": "0",
+    "fixedOutput": "120"
+  },
+  {
+    "id": "int-d-22",
+    "level": "intermediate",
+    "topic": "Streams",
+    "title": "Adding a bonus item to the results",
+    "kind": "trace",
+    "scenario": "After filtering cheap items into a list, the code appends one bonus item. It crashes on the append.",
+    "symptom": "Exception in thread \"main\" java.lang.UnsupportedOperationException\n\tat java.base/java.util.ImmutableCollections.uoe(ImmutableCollections.java:142)\n\tat java.base/java.util.ImmutableCollections$AbstractImmutableCollection.add(ImmutableCollections.java:147)\n\tat Main.main(Main.java:9)",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> cheap = List.of(3, 12, 7, 20)\n            .stream()\n            .filter(p -> p < 10)\n            .toList();\n        cheap.add(1);\n        System.out.println(cheap);\n    }\n}",
+    "bugLines": [
+      8,
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "filter() made the stream read-only, so any later list is too",
+      "Stream.toList() returns an unmodifiable list, so add() is refused",
+      "The source List.of is immutable and toList() is a live view of it",
+      "toList() returns a fixed-size array-backed list like Arrays.asList"
+    ],
+    "answer": 1,
+    "explanation": "Stream.toList() (Java 16+) returns an unmodifiable List, so add, remove and set throw UnsupportedOperationException. Collectors.toList() currently returns an ArrayList, but its contract promises nothing about mutability, so you should not rely on that either. When you need to modify the result, ask for it explicitly with Collectors.toCollection(ArrayList::new) or copy with new ArrayList<>(...). The result is a new list, not a view of the source.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Integer> cheap = List.of(3, 12, 7, 20)\n            .stream()\n            .filter(p -> p < 10)\n            .collect(Collectors.toCollection(\n                ArrayList::new));\n        cheap.add(1);\n        System.out.println(cheap);\n    }\n}",
+    "fixNote": "Collected into an explicit ArrayList with Collectors.toCollection(ArrayList::new).",
+    "debugTip": "Evaluate cheap.getClass() at a breakpoint on line 9; it is an ImmutableCollections list, not ArrayList.",
+    "buggyOutput": "",
+    "throws": "java.lang.UnsupportedOperationException",
+    "fixedOutput": "[3, 7, 1]"
+  },
+  {
+    "id": "int-d-23",
+    "level": "intermediate",
+    "topic": "Streams",
+    "title": "Tag list with brackets in odd places",
+    "kind": "bug",
+    "scenario": "Tags should print as [java, sql, git]. Instead the brackets appear between tags and the commas are on the outside.",
+    "symptom": "Prints:\n, java[sql[git]",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> tags = List.of(\"java\", \"sql\", \"git\");\n        String s = tags.stream()\n            .collect(Collectors.joining(\n                \"[\", \", \", \"]\"));\n        System.out.println(s);\n    }\n}",
+    "bugLines": [
+      8,
+      9
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Use joining(\", \") and add brackets with String.format inside map",
+      "Use reduce(\"[\", String::concat) followed by + \"]\"",
+      "Pass arguments as (delimiter, prefix, suffix): joining(\", \", \"[\", \"]\")",
+      "Swap the stream for String.join, which accepts a prefix first"
+    ],
+    "answer": 2,
+    "explanation": "Collectors.joining(delimiter, prefix, suffix) takes the delimiter FIRST, then the prefix and suffix that wrap the whole result. Passing \"[\" first makes it the separator between elements while \", \" wraps the outside. The prefix and suffix are added even for an empty stream, giving \"[]\". String.join(delim, items) only supports a delimiter.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> tags = List.of(\"java\", \"sql\", \"git\");\n        String s = tags.stream()\n            .collect(Collectors.joining(\n                \", \", \"[\", \"]\"));\n        System.out.println(s);\n    }\n}",
+    "fixNote": "Reordered the arguments to joining(\", \", \"[\", \"]\").",
+    "debugTip": "Use evaluate expression on the joining call at line 8 and hover the parameter names in the IDE; the first is 'delimiter'.",
+    "buggyOutput": ", java[sql[git]",
+    "fixedOutput": "[java, sql, git]"
+  },
+  {
+    "id": "int-d-24",
+    "level": "intermediate",
+    "topic": "Streams",
+    "title": "Page 2 of the results is empty",
+    "kind": "bug",
+    "scenario": "With 3 items per page, page 2 should show items 4 to 6. It prints an empty list.",
+    "symptom": "Prints:\n[]",
+    "code": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int page = 2, size = 3;\n        List<Integer> rows = IntStream.rangeClosed(1, 8)\n            .boxed()\n            .limit(size)\n            .skip((long) (page - 1) * size)\n            .toList();\n        System.out.println(rows);\n    }\n}",
+    "bugLines": [
+      9,
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "skip counts from 1, so skip(3) jumps past the end of the range",
+      "rangeClosed(1, 8) yields 8 empty pages until boxed() runs",
+      "boxed() turns the stream unordered, so skip drops random items",
+      "limit runs first, keeping only 3 items, then skip(3) discards all"
+    ],
+    "answer": 3,
+    "explanation": "Stream operations apply in the order they are written, each to the output of the previous one. limit(3) keeps 1, 2, 3, and skip(3) then discards those three, leaving nothing. For pagination, skip the earlier pages first and then limit to the page size. On ordered streams both operations respect encounter order.",
+    "fix": "import java.util.*;\nimport java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int page = 2, size = 3;\n        List<Integer> rows = IntStream.rangeClosed(1, 8)\n            .boxed()\n            .skip((long) (page - 1) * size)\n            .limit(size)\n            .toList();\n        System.out.println(rows);\n    }\n}",
+    "fixNote": "Moved skip(...) before limit(size).",
+    "debugTip": "Insert .peek(x -> System.out.println(\"after limit \" + x)) between lines 9 and 10 to see what reaches skip.",
+    "buggyOutput": "[]",
+    "fixedOutput": "[4, 5, 6]"
+  },
+  {
+    "id": "int-d-25",
+    "level": "intermediate",
+    "topic": "Streams",
+    "title": "Summing 1 to 10 gives 45",
+    "kind": "bug",
+    "scenario": "The stream should add the numbers from 1 to 10 inclusive (55). It prints 45.",
+    "symptom": "Prints:\n45",
+    "code": "import java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int total = IntStream.range(1, 10).sum();\n        System.out.println(total);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "range(a, b) excludes b; rangeClosed(a, b) includes it",
+      "range starts from 0 regardless of the first argument",
+      "sum() drops the largest element to avoid overflow",
+      "range(1, 10) steps by 2 when the bounds are both even"
+    ],
+    "answer": 0,
+    "explanation": "IntStream.range(start, end) is half-open: it yields start up to end - 1, like a for loop with i < end. IntStream.rangeClosed(start, end) includes end. So range(1, 10) is 1..9, summing to 45. The same half-open convention appears in List.subList, String.substring and TreeMap.headMap.",
+    "fix": "import java.util.stream.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        int total = IntStream.rangeClosed(1, 10).sum();\n        System.out.println(total);\n    }\n}",
+    "fixNote": "Used IntStream.rangeClosed(1, 10).",
+    "debugTip": "Evaluate IntStream.range(1, 10).max() at a breakpoint on line 5; it reports 9, not 10.",
+    "buggyOutput": "45",
+    "fixedOutput": "55"
+  }
+]

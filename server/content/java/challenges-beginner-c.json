@@ -1,0 +1,673 @@
+[
+  {
+    "id": "beg-c-01",
+    "level": "beginner",
+    "topic": "Primitive types",
+    "title": "Loyalty points after a big bonus",
+    "kind": "output",
+    "scenario": "A loyalty account stores its points in a short. The customer has 32,760 points and earns a 10-point bonus.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        short points = 32_760;\n        points += 10;\n        System.out.println(\"Points: \" + points);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What does this print?",
+    "options": [
+      "Points: -32766",
+      "Points: 32770",
+      "Points: 32767",
+      "Points: -32768"
+    ],
+    "answer": 0,
+    "explanation": "A short is a 16-bit signed two's-complement integer, so its range is -32,768 to 32,767. Integer arithmetic in Java never throws on overflow: 32,770 does not fit, so the bits wrap around and the value becomes 32,770 - 65,536 = -32,766. The compound `+=` silently casts the int result back to short, so the compiler does not complain either. Pick a type whose range covers your data (byte ±127, short ±32,767, int about ±2.1 billion, long about ±9.2 quintillion).",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int points = 32_760;\n        points += 10;\n        System.out.println(\"Points: \" + points);\n    }\n}",
+    "fixNote": "Declared `points` as an int instead of a short.",
+    "debugTip": "Set a breakpoint on line 4, step over it, and watch `points`; evaluate `Short.MAX_VALUE` to see the limit.",
+    "buggyOutput": "Points: -32766",
+    "fixedOutput": "Points: 32770"
+  },
+  {
+    "id": "beg-c-02",
+    "level": "beginner",
+    "topic": "Literals",
+    "title": "Discount table with tidy columns",
+    "kind": "bug",
+    "scenario": "A discount table lists percentages padded with zeros so the numbers line up. The shop expected 100%, 50% and 25% off.",
+    "symptom": "100% off\n40% off\n21% off",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int[] discounts = {100, 050, 025};\n        for (int d : discounts) {\n            System.out.println(d + \"% off\");\n        }\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Arrays of int cannot hold literals with leading zeros",
+      "The `+` with a String converts the number to hex",
+      "The enhanced for loop reads each value as a char",
+      "A leading 0 makes an integer literal octal (base 8)"
+    ],
+    "answer": 3,
+    "explanation": "In Java an integer literal that starts with 0 is an octal (base 8) literal, so 050 is 5×8 = 40 and 025 is 2×8+5 = 21. Other prefixes work the same way: 0x is hexadecimal and 0b is binary. A digit 8 or 9 after a leading zero (like 089) is a compile error, which is the only time the compiler warns you. If you want visual alignment, use underscores (`1_000`) or format the output, never leading zeros.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int[] discounts = {100, 50, 25};\n        for (int d : discounts) {\n            System.out.println(d + \"% off\");\n        }\n    }\n}",
+    "fixNote": "Removed the leading zeros so the literals are decimal.",
+    "debugTip": "Set a breakpoint on line 4 and inspect `discounts` in the variables view: it already holds 40 and 21, so the bug is in the literal, not the loop.",
+    "buggyOutput": "100% off\n40% off\n21% off",
+    "fixedOutput": "100% off\n50% off\n25% off"
+  },
+  {
+    "id": "beg-c-03",
+    "level": "beginner",
+    "topic": "Literals",
+    "title": "Pixel count of a huge canvas",
+    "kind": "bug",
+    "scenario": "A design tool reports the pixel count of a 50,000 × 50,000 canvas. It stores the result in a long, yet the number is negative.",
+    "symptom": "Pixels: -1794967296",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        long pixels = 50_000 * 50_000;\n        System.out.println(\"Pixels: \" + pixels);\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Underscores in literals change the value stored",
+      "A long can only hold numbers up to about two billion",
+      "Both literals are int, so the product overflows before widening",
+      "println truncates long values to 32 bits"
+    ],
+    "answer": 2,
+    "explanation": "An integer literal without a suffix is an int, so `50_000 * 50_000` is evaluated with 32-bit int arithmetic. The true answer, 2.5 billion, exceeds Integer.MAX_VALUE (2,147,483,647) and wraps to a negative number. Only then is the result widened to long, which is too late. Adding the L suffix to one operand (`50_000L`) makes the multiplication happen in long; underscores are purely cosmetic and never change the value.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        long pixels = 50_000L * 50_000;\n        System.out.println(\"Pixels: \" + pixels);\n    }\n}",
+    "fixNote": "Added the L suffix so the multiplication is done in long.",
+    "debugTip": "Evaluate `50_000 * 50_000` and `50_000L * 50_000` in the debugger's evaluate-expression window to compare the two results.",
+    "buggyOutput": "Pixels: -1794967296",
+    "fixedOutput": "Pixels: 2500000000"
+  },
+  {
+    "id": "beg-c-04",
+    "level": "beginner",
+    "topic": "Casting",
+    "title": "Battery icon always shows empty",
+    "kind": "bug",
+    "scenario": "The battery level is a double between 0 and 1. The status bar should show it as a whole percentage, but it always shows 0%.",
+    "symptom": "Battery: 0%",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        double charge = 0.87;\n        int percent = (int) charge * 100;\n        System.out.println(\"Battery: \" + percent + \"%\");\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Casting a double to int always rounds down to zero",
+      "The cast binds tighter than `*`, so 0.87 becomes 0 first",
+      "`charge * 100` overflows the range of a double",
+      "String concatenation drops the digits of an int"
+    ],
+    "answer": 1,
+    "explanation": "A cast is a unary operator with higher precedence than `*`, so `(int) charge * 100` means `((int) charge) * 100`. Narrowing 0.87 to int truncates toward zero, giving 0, and 0 × 100 is 0. Narrowing conversions (double → int, long → int) must be written explicitly because they can lose information, while widening (int → long → double) happens implicitly. Parenthesise the whole expression, and use Math.round if you want rounding rather than truncation.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        double charge = 0.87;\n        int percent = (int) Math.round(charge * 100);\n        System.out.println(\"Battery: \" + percent + \"%\");\n    }\n}",
+    "fixNote": "Computed `charge * 100` first and rounded it before converting to int.",
+    "debugTip": "Use evaluate expression on `(int) charge` and on `charge * 100` separately to see which part produces the 0.",
+    "buggyOutput": "Battery: 0%",
+    "fixedOutput": "Battery: 87%"
+  },
+  {
+    "id": "beg-c-05",
+    "level": "beginner",
+    "topic": "Operators",
+    "title": "Page visit counter stays at zero",
+    "kind": "bug",
+    "scenario": "A counter should go up once for each of five visits. After the loop it still reports zero.",
+    "symptom": "Visits: 0",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int visits = 0;\n        for (int i = 0; i < 5; i++) {\n            visits = visits++;\n        }\n        System.out.println(\"Visits: \" + visits);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`visits++` yields the old value, which is then assigned back",
+      "The loop body runs zero times because i starts at 0",
+      "Post-increment only takes effect after the loop ends",
+      "`visits` is re-declared and reset on every iteration"
+    ],
+    "answer": 0,
+    "explanation": "The postfix operator `x++` increments the variable but evaluates to the value it had before the increment. In `visits = visits++` Java first saves the old value (0), then increments visits to 1, and finally performs the assignment, writing the saved 0 back. So every iteration ends with visits equal to 0. Use `visits++` or `visits += 1` on its own; prefix `++x` evaluates to the new value, but assigning it back is still redundant.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int visits = 0;\n        for (int i = 0; i < 5; i++) {\n            visits++;\n        }\n        System.out.println(\"Visits: \" + visits);\n    }\n}",
+    "fixNote": "Replaced `visits = visits++` with a plain `visits++`.",
+    "debugTip": "Set a breakpoint on line 5 with a watch on `visits` and step over the statement: the value never changes.",
+    "buggyOutput": "Visits: 0",
+    "fixedOutput": "Visits: 5"
+  },
+  {
+    "id": "beg-c-06",
+    "level": "beginner",
+    "topic": "Operators",
+    "title": "Interest added three times",
+    "kind": "output",
+    "scenario": "A savings game stores whole coins in an int and grows the balance by 15% three times using a compound assignment.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int coins = 10;\n        for (int i = 0; i < 3; i++) {\n            coins *= 1.15;\n        }\n        System.out.println(coins);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What does this print?",
+    "options": [
+      "15",
+      "15.21",
+      "It does not compile",
+      "13"
+    ],
+    "answer": 3,
+    "explanation": "A compound assignment `a op= b` is defined as `a = (T)(a op b)`, where T is the type of a, so it contains a hidden narrowing cast. `coins = coins * 1.15` would not compile (double to int), but `coins *= 1.15` does, and truncates each time: 11.5 → 11, 12.65 → 12, 13.8 → 13. The fractional growth is lost every round. Use a double (or BigDecimal for money) if you need the fractions.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        double coins = 10;\n        for (int i = 0; i < 3; i++) {\n            coins *= 1.15;\n        }\n        System.out.printf(\"%.2f%n\", coins);\n    }\n}",
+    "fixNote": "Made `coins` a double and printed it with two decimals.",
+    "debugTip": "Add a watch on `coins` and step over line 5 three times; the value is always a whole number.",
+    "buggyOutput": "13",
+    "fixedOutput": "15.21"
+  },
+  {
+    "id": "beg-c-07",
+    "level": "beginner",
+    "topic": "Division",
+    "title": "Video length shown in hours",
+    "kind": "bug",
+    "scenario": "A 90-minute video should be listed as 1.5 hours. The page shows 1.0 instead.",
+    "symptom": "1.0 h",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int minutes = 90;\n        double hours = minutes / 60;\n        System.out.println(hours + \" h\");\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "A double cannot store the value 1.5 exactly",
+      "println rounds doubles to one decimal place",
+      "int / int is integer division; widening happens afterwards",
+      "Dividing by 60 needs Math.floorDiv for doubles"
+    ],
+    "answer": 2,
+    "explanation": "When both operands of `/` are int, Java performs integer division, which discards the remainder: 90 / 60 is 1. The result 1 is then widened to the double 1.0 for the assignment, but the fraction is already gone. Making either operand a floating-point value (60.0, or `(double) minutes`) switches the whole division to floating-point. The same rule applies to `%`: with ints it gives the integer remainder (90 % 60 is 30).",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int minutes = 90;\n        double hours = minutes / 60.0;\n        System.out.println(hours + \" h\");\n    }\n}",
+    "fixNote": "Divided by 60.0 so the division happens in double.",
+    "debugTip": "Evaluate `minutes / 60` and `minutes / 60.0` in the debugger to see that the type of the operands decides the result.",
+    "buggyOutput": "1.0 h",
+    "fixedOutput": "1.5 h"
+  },
+  {
+    "id": "beg-c-08",
+    "level": "beginner",
+    "topic": "Division",
+    "title": "Five hours before 2 a.m.",
+    "kind": "bug",
+    "scenario": "A world-clock widget subtracts a time-zone offset and wraps the hour into 0–23. For 2 a.m. minus 5 hours it should print 21.",
+    "symptom": "Local hour: -3",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int hour = 2;\n        int offset = 5;\n        int local = (hour - offset) % 24;\n        System.out.println(\"Local hour: \" + local);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "Which fix is correct?",
+    "options": [
+      "Use Math.abs((hour - offset) % 24)",
+      "Use Math.floorMod(hour - offset, 24)",
+      "Use (hour - offset) / 24 instead of %",
+      "Cast the expression to long before using %"
+    ],
+    "answer": 1,
+    "explanation": "Java's `%` is a remainder operator, not a mathematical modulo: the result takes the sign of the left operand, so -3 % 24 is -3. That follows from integer division truncating toward zero ((a / b) * b + a % b == a). Math.floorMod rounds toward negative infinity instead, so its result always has the sign of the divisor, giving 21. Math.abs would turn -3 into 3, which is the wrong hour.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int hour = 2;\n        int offset = 5;\n        int local = Math.floorMod(hour - offset, 24);\n        System.out.println(\"Local hour: \" + local);\n    }\n}",
+    "fixNote": "Replaced `%` with Math.floorMod.",
+    "debugTip": "Evaluate `-3 % 24` and `Math.floorMod(-3, 24)` side by side in the debugger's expression window.",
+    "buggyOutput": "Local hour: -3",
+    "fixedOutput": "Local hour: 21"
+  },
+  {
+    "id": "beg-c-09",
+    "level": "beginner",
+    "topic": "Bitwise operators",
+    "title": "Buffer sized two to the tenth",
+    "kind": "bug",
+    "scenario": "A buffer should hold 2 to the power of 10 (1024) slots. The log reports only 8.",
+    "symptom": "Slots: 8",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int slots = 2 ^ 10;\n        System.out.println(\"Slots: \" + slots);\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`^` is bitwise XOR, not exponentiation",
+      "`^` raises to a power but overflows a byte",
+      "The literal 10 is read as binary 10, which is 2",
+      "`^` is integer exponentiation rounded down"
+    ],
+    "answer": 0,
+    "explanation": "Java has no exponent operator; `^` is bitwise exclusive OR, which sets a bit where exactly one operand has it. 2 is 0010 and 10 is 1010, so 2 ^ 10 is 1000, which is 8. The other bitwise operators are `&` (AND), `|` (OR) and `~` (NOT). For powers of two use a left shift, `1 << n`; for general powers use Math.pow, which returns a double.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int slots = 1 << 10;\n        System.out.println(\"Slots: \" + slots);\n    }\n}",
+    "fixNote": "Used `1 << 10` to compute 2 to the 10th.",
+    "debugTip": "Evaluate `Integer.toBinaryString(2 ^ 10)` to see the bit pattern XOR produced.",
+    "buggyOutput": "Slots: 8",
+    "fixedOutput": "Slots: 1024"
+  },
+  {
+    "id": "beg-c-10",
+    "level": "beginner",
+    "topic": "Bitwise operators",
+    "title": "Shifting a negative number",
+    "kind": "output",
+    "scenario": "A developer compares the two right-shift operators on the same negative value.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int x = -16;\n        int a = x >> 2;\n        int b = x >>> 28;\n        System.out.println(a + \" \" + b);\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What does this print?",
+    "options": [
+      "-4 -1",
+      "4 15",
+      "-4 0",
+      "-4 15"
+    ],
+    "answer": 3,
+    "explanation": "`>>` is the arithmetic (signed) right shift: it copies the sign bit into the vacated positions, so -16 >> 2 is -4, the same as dividing by 4. `>>>` is the logical (unsigned) right shift: it always fills with zeros. -16 is 0xFFFFFFF0, and shifting it right by 28 with zeros leaves the top four 1-bits, 1111, which is 15. Use `>>` for signed arithmetic and `>>>` when you treat the int as raw bits.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int x = -16;\n        int a = x >> 2;\n        int b = x >> 28;\n        System.out.println(a + \" \" + b);\n    }\n}",
+    "fixNote": "Using `>>` instead keeps the sign, so the second value becomes -1.",
+    "debugTip": "Evaluate `Integer.toBinaryString(x >>> 28)` and `Integer.toBinaryString(x >> 28)` to compare the fill bits.",
+    "buggyOutput": "-4 15",
+    "fixedOutput": "-4 -1"
+  },
+  {
+    "id": "beg-c-11",
+    "level": "beginner",
+    "topic": "Operators",
+    "title": "Whole units or a weight",
+    "kind": "output",
+    "scenario": "A shop prints either a count of whole units or a weight in kilograms, chosen with a ternary operator.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        boolean countable = true;\n        int units = 3;\n        double kilos = 2.5;\n        System.out.println(countable ? units : kilos);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What does this print?",
+    "options": [
+      "3",
+      "2.5",
+      "3.0",
+      "It does not compile"
+    ],
+    "answer": 2,
+    "explanation": "A conditional expression `c ? a : b` has a single type, decided at compile time. When the two branches are numeric types, binary numeric promotion applies: int and double promote to double. So even though the int branch is chosen, its value is converted to 3.0 before println sees it. Use an if/else (or make both branches the same type) when the type matters.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        boolean countable = true;\n        int units = 3;\n        double kilos = 2.5;\n        if (countable) {\n            System.out.println(units);\n        } else {\n            System.out.println(kilos);\n        }\n    }\n}",
+    "fixNote": "Split into an if/else so each branch prints its own type.",
+    "debugTip": "Assign the ternary to `var r` and inspect `r` in the debugger: its type is double.",
+    "buggyOutput": "3.0",
+    "fixedOutput": "3"
+  },
+  {
+    "id": "beg-c-12",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Upload rejects a PDF file",
+    "kind": "bug",
+    "scenario": "An upload form accepts only PDF files by checking the file extension. A file named report.pdf is rejected.",
+    "symptom": "Unsupported: .pdf",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String file = \"report.pdf\";\n        int dot = file.indexOf('.');\n        String ext = file.substring(dot);\n        if (ext.equals(\"pdf\")) {\n            System.out.println(\"Accepted\");\n        } else {\n            System.out.println(\"Unsupported: \" + ext);\n        }\n    }\n}",
+    "bugLines": [
+      5
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "indexOf returns a 1-based position",
+      "substring(i) starts at index i, so the dot is included",
+      "substring(i) excludes the character at index i",
+      "equals ignores the dot but not the case"
+    ],
+    "answer": 1,
+    "explanation": "indexOf returns the 0-based index of the first match (or -1 if there is none), here 6. substring(begin) keeps characters from begin to the end, and substring(begin, end) keeps begin up to but not including end. So substring(6) is \".pdf\", dot included. Start one past the dot, and remember that a missing dot (-1) would make substring throw.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String file = \"report.pdf\";\n        int dot = file.indexOf('.');\n        String ext = file.substring(dot + 1);\n        if (ext.equals(\"pdf\")) {\n            System.out.println(\"Accepted\");\n        } else {\n            System.out.println(\"Unsupported: \" + ext);\n        }\n    }\n}",
+    "fixNote": "Called `substring(dot + 1)` to skip the dot.",
+    "debugTip": "Set a breakpoint on line 6 and add watches on `dot` and `ext`; evaluate `\"[\" + ext + \"]\"` to see the exact characters.",
+    "buggyOutput": "Unsupported: .pdf",
+    "fixedOutput": "Accepted"
+  },
+  {
+    "id": "beg-c-13",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Which fruit comes first?",
+    "kind": "bug",
+    "scenario": "A menu shows the alphabetically first fruit. Among cherry, apple and Banana it should show apple.",
+    "symptom": "First: Banana",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String[] fruits = {\"cherry\", \"apple\", \"Banana\"};\n        String first = fruits[0];\n        for (String f : fruits) {\n            if (f.compareTo(first) < 0) {\n                first = f;\n            }\n        }\n        System.out.println(\"First: \" + first);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "compareTo compares char codes, and 'B' (66) < 'a' (97)",
+      "compareTo returns true or false, not a number",
+      "The loop skips the first element of the array",
+      "compareTo sorts strings by their length first"
+    ],
+    "answer": 0,
+    "explanation": "String.compareTo compares strings lexicographically by UTF-16 code units: it returns the difference of the first differing chars (or of the lengths). All uppercase letters (65–90) come before all lowercase letters (97–122), so \"Banana\" is less than \"apple\". compareToIgnoreCase compares case-folded characters, and equalsIgnoreCase does the same for equality. For real user-facing sorting, a java.text.Collator respects the locale.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String[] fruits = {\"cherry\", \"apple\", \"Banana\"};\n        String first = fruits[0];\n        for (String f : fruits) {\n            if (f.compareToIgnoreCase(first) < 0) {\n                first = f;\n            }\n        }\n        System.out.println(\"First: \" + first);\n    }\n}",
+    "fixNote": "Used compareToIgnoreCase instead of compareTo.",
+    "debugTip": "Evaluate `\"Banana\".compareTo(\"apple\")` in the debugger: the result, -31, is 'B' - 'a'.",
+    "buggyOutput": "First: Banana",
+    "fixedOutput": "First: apple"
+  },
+  {
+    "id": "beg-c-14",
+    "level": "beginner",
+    "topic": "Strings",
+    "title": "Trimming a pasted answer",
+    "kind": "output",
+    "scenario": "A quiz answer was pasted from a word processor and starts with an em space (U+2003). The code compares trim and strip.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        String s = \"\\u2003yes \";\n        String t = s.trim();\n        String u = s.strip();\n        System.out.println(t.length() + \" \" + u.length()\n            + \" \" + u.equalsIgnoreCase(\"YES\"));\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What does this print?",
+    "options": [
+      "3 3 true",
+      "4 3 false",
+      "5 4 false",
+      "4 3 true"
+    ],
+    "answer": 3,
+    "explanation": "String.trim() is an old method that removes only characters with code ≤ U+0020 (space and ASCII control characters) from both ends. String.strip() (Java 11+) removes everything Character.isWhitespace treats as whitespace, which includes the em space. So trim leaves the em space plus \"yes\" (4 chars) while strip leaves \"yes\" (3 chars). equalsIgnoreCase then matches regardless of case; prefer strip for text from users.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        String s = \"\\u2003yes \";\n        String t = s.strip();\n        String u = s.strip();\n        System.out.println(t.length() + \" \" + u.length()\n            + \" \" + u.equalsIgnoreCase(\"YES\"));\n    }\n}",
+    "fixNote": "Using strip() for both gives \"3 3 true\".",
+    "debugTip": "Evaluate `(int) t.charAt(0)` in the debugger to reveal the hidden 8195 (U+2003) character.",
+    "buggyOutput": "4 3 true",
+    "fixedOutput": "3 3 true"
+  },
+  {
+    "id": "beg-c-15",
+    "level": "beginner",
+    "topic": "StringBuilder",
+    "title": "A word and its mirror",
+    "kind": "bug",
+    "scenario": "A puzzle app prints a word next to its reverse. For \"stressed\" it should print \"stressed <-> desserts\".",
+    "symptom": "desserts <-> desserts",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        StringBuilder word = new StringBuilder(\"stressed\");\n        StringBuilder mirror = word.reverse();\n        System.out.println(word + \" <-> \" + mirror);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "reverse() returns a copy but loses the original",
+      "StringBuilder cannot be concatenated with +",
+      "reverse() changes the builder in place and returns itself",
+      "println prints builders in reverse order"
+    ],
+    "answer": 2,
+    "explanation": "Unlike String, StringBuilder is mutable: reverse(), append(), insert() and deleteCharAt() modify the same object and return `this` so calls can be chained. After `word.reverse()`, both `word` and `mirror` point to the same builder, which now holds \"desserts\". To keep the original, copy it first with `new StringBuilder(word)` (or reverse a fresh builder made from a String).",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        StringBuilder word = new StringBuilder(\"stressed\");\n        StringBuilder mirror =\n            new StringBuilder(word).reverse();\n        System.out.println(word + \" <-> \" + mirror);\n    }\n}",
+    "fixNote": "Reversed a copy of the builder instead of the original.",
+    "debugTip": "Set a breakpoint on line 5 and compare the object ids of `word` and `mirror` in the variables view: they are the same instance.",
+    "buggyOutput": "desserts <-> desserts",
+    "fixedOutput": "stressed <-> desserts"
+  },
+  {
+    "id": "beg-c-16",
+    "level": "beginner",
+    "topic": "Formatting",
+    "title": "Receipt line crashes the till",
+    "kind": "trace",
+    "scenario": "A till formats the total for the receipt. It crashes as soon as it builds the line.",
+    "symptom": "Exception in thread \"main\" java.util.IllegalFormatConversionException: d != java.lang.Double\n\t...\n\tat Main.main(Main.java:4)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        double price = 19.99;\n        String line = String.format(\"Total: %d EUR\", price);\n        System.out.println(line);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "String.format needs a Locale as the first argument",
+      "`%d` only accepts integral types, not a Double",
+      "`%d` requires the price to be wrapped in quotes",
+      "The `EUR` text must be escaped with %%"
+    ],
+    "answer": 1,
+    "explanation": "Format specifiers are checked at run time against the argument type. `%d` is for integral values (int, long, BigInteger), `%f` for floating-point, `%s` for anything via toString, and `%n` for a line separator. Passing a double to `%d` throws IllegalFormatConversionException with the message \"d != java.lang.Double\". `%.2f` prints the value rounded to two decimals.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        double price = 19.99;\n        String line =\n            String.format(\"Total: %.2f EUR\", price);\n        System.out.println(line);\n    }\n}",
+    "fixNote": "Changed `%d` to `%.2f`.",
+    "debugTip": "Add an exception breakpoint on IllegalFormatConversionException; the Main.java:4 frame shows the format string and the argument.",
+    "buggyOutput": "",
+    "throws": "java.util.IllegalFormatConversionException",
+    "fixedOutput": "Total: 19.99 EUR"
+  },
+  {
+    "id": "beg-c-17",
+    "level": "beginner",
+    "topic": "Math",
+    "title": "Rounding a refund of -2.5",
+    "kind": "output",
+    "scenario": "An accounting script compares Math.round and Math.floor on positive and negative halves.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        long a = Math.round(-2.5);\n        long b = Math.round(2.5);\n        double c = Math.floor(-2.5);\n        System.out.println(a + \" \" + b + \" \" + c);\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What does this print?",
+    "options": [
+      "-2 3 -3.0",
+      "-3 3 -3.0",
+      "-3 3 -2.0",
+      "-2 2 -3"
+    ],
+    "answer": 0,
+    "explanation": "Math.round(x) behaves like floor(x + 0.5), so halves always round toward positive infinity: 2.5 → 3 but -2.5 → -2. Math.floor rounds toward negative infinity (-2.5 → -3.0) and Math.ceil toward positive infinity (-2.5 → -2.0). Math.round(double) returns a long, while floor and ceil return a double, which is why c prints with \".0\". If you need symmetric rounding, round the absolute value and reapply the sign, or use BigDecimal with RoundingMode.HALF_UP.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        long a = -Math.round(2.5);\n        long b = Math.round(2.5);\n        double c = Math.floor(-2.5);\n        System.out.println(a + \" \" + b + \" \" + c);\n    }\n}",
+    "fixNote": "Rounding the magnitude and negating gives the symmetric -3.",
+    "debugTip": "Evaluate `Math.floor(-2.5 + 0.5)` to see how round behaves on halves.",
+    "buggyOutput": "-2 3 -3.0",
+    "fixedOutput": "-3 3 -3.0"
+  },
+  {
+    "id": "beg-c-18",
+    "level": "beginner",
+    "topic": "Switch",
+    "title": "Weekend surcharge on Sundays",
+    "kind": "bug",
+    "scenario": "Parking costs 15 on weekends, 12 on Fridays and 10 otherwise. Sunday is charged 10.",
+    "symptom": "15 10 12",
+    "code": "public class Main {\n    static int fee(String day) {\n        return switch (day) {\n            case \"SAT\", \"Sun\" -> 15;\n            case \"FRI\" -> {\n                int base = 10;\n                yield base + 2;\n            }\n            default -> 10;\n        };\n    }\n\n    public static void main(String[] args) {\n        System.out.println(fee(\"SAT\") + \" \" + fee(\"SUN\")\n            + \" \" + fee(\"FRI\"));\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Arrow cases fall through into the default branch",
+      "`yield` exits the whole method, skipping later cases",
+      "Comma-separated labels only match the first label",
+      "Switch on String uses equals, so \"Sun\" never matches \"SUN\""
+    ],
+    "answer": 3,
+    "explanation": "A switch on a String compares labels with String.equals, which is case-sensitive, so \"SUN\" falls to default. In the arrow form (`case X ->`) there is no fall-through: exactly one branch runs, and comma-separated labels share it. In a switch expression, a single-expression branch produces the value directly, while a block branch must end with `yield value`. A switch expression must also be exhaustive, which is why `default` is required here.",
+    "fix": "public class Main {\n    static int fee(String day) {\n        return switch (day) {\n            case \"SAT\", \"SUN\" -> 15;\n            case \"FRI\" -> {\n                int base = 10;\n                yield base + 2;\n            }\n            default -> 10;\n        };\n    }\n\n    public static void main(String[] args) {\n        System.out.println(fee(\"SAT\") + \" \" + fee(\"SUN\")\n            + \" \" + fee(\"FRI\"));\n    }\n}",
+    "fixNote": "Corrected the label to \"SUN\".",
+    "debugTip": "Set a conditional breakpoint on line 3 with `day.equals(\"SUN\")` and step into the switch to see which branch runs.",
+    "buggyOutput": "15 10 12",
+    "fixedOutput": "15 15 12"
+  },
+  {
+    "id": "beg-c-19",
+    "level": "beginner",
+    "topic": "Arrays",
+    "title": "Doubling every price",
+    "kind": "bug",
+    "scenario": "A sale doubles every price in an array (it is a strange sale). The array prints unchanged.",
+    "symptom": "[10, 20, 30]",
+    "code": "import java.util.Arrays;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] prices = {10, 20, 30};\n        for (int p : prices) {\n            p = p * 2;\n        }\n        System.out.println(Arrays.toString(prices));\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Arrays.toString prints the array as it was declared",
+      "The enhanced for loop iterates over a cloned array",
+      "The loop variable is a copy, so assigning it leaves the array alone",
+      "`p * 2` overflows and is discarded"
+    ],
+    "answer": 2,
+    "explanation": "The enhanced for loop `for (int p : prices)` declares a fresh local variable p and copies each element into it. Assigning to p changes only that local copy, never the array slot. To modify elements, use an index loop and write `prices[i] = ...`. Arrays.toString is the right way to print the contents; printing the array directly would show something like [I@1b6d3586.",
+    "fix": "import java.util.Arrays;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[] prices = {10, 20, 30};\n        for (int i = 0; i < prices.length; i++) {\n            prices[i] = prices[i] * 2;\n        }\n        System.out.println(Arrays.toString(prices));\n    }\n}",
+    "fixNote": "Switched to an index-based loop that writes back to `prices[i]`.",
+    "debugTip": "Set a breakpoint on line 7 and watch both `p` and `prices`: p changes, the array does not.",
+    "buggyOutput": "[10, 20, 30]",
+    "fixedOutput": "[20, 40, 60]"
+  },
+  {
+    "id": "beg-c-20",
+    "level": "beginner",
+    "topic": "2D arrays",
+    "title": "Counting seats in a theatre grid",
+    "kind": "trace",
+    "scenario": "A theatre has 2 rows of 4 seats, each holding a seat number. Summing them should give 36, but the program crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.ArrayIndexOutOfBoundsException: Index 2 out of bounds for length 2\n\tat Main.main(Main.java:10)",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        int[][] seats = {\n            {1, 2, 3, 4},\n            {5, 6, 7, 8}\n        };\n        int total = 0;\n        for (int r = 0; r < seats[0].length; r++) {\n            for (int c = 0; c < seats.length; c++) {\n                total += seats[r][c];\n            }\n        }\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "bugLines": [
+      8,
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "2D array literals must list columns before rows",
+      "The row and column bounds are swapped",
+      "seats[0].length counts every seat in the grid",
+      "The inner loop should start at index 1"
+    ],
+    "answer": 1,
+    "explanation": "A Java 2D array is an array of arrays: `seats.length` is the number of rows and `seats[r].length` is the length of row r. Here the outer loop uses the column count (4) as the row limit, so r reaches 2 and `seats[2]` does not exist. Because rows can have different lengths (jagged arrays), the safest inner bound is `seats[r].length`, not `seats[0].length`.",
+    "fix": "public class Main {\n    public static void main(String[] args) {\n        int[][] seats = {\n            {1, 2, 3, 4},\n            {5, 6, 7, 8}\n        };\n        int total = 0;\n        for (int r = 0; r < seats.length; r++) {\n            for (int c = 0; c < seats[r].length; c++) {\n                total += seats[r][c];\n            }\n        }\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "fixNote": "Bounded rows by `seats.length` and columns by `seats[r].length`.",
+    "debugTip": "Set a breakpoint on line 10 and watch `r`, `c` and `seats.length`; the crash happens when r becomes 2.",
+    "buggyOutput": "",
+    "throws": "java.lang.ArrayIndexOutOfBoundsException",
+    "fixedOutput": "Total: 36"
+  },
+  {
+    "id": "beg-c-21",
+    "level": "beginner",
+    "topic": "Arrays",
+    "title": "One move appears on every row",
+    "kind": "bug",
+    "scenario": "A 3×3 board is created with Arrays.fill. Placing a 7 in the top-left corner should change one cell only.",
+    "symptom": "[[7, 0, 0], [7, 0, 0], [7, 0, 0]]",
+    "code": "import java.util.Arrays;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[][] board = new int[3][];\n        Arrays.fill(board, new int[3]);\n        board[0][0] = 7;\n        System.out.println(Arrays.deepToString(board));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "fill stores the same row reference in every slot",
+      "Arrays.fill copies the row three times, then links them",
+      "deepToString prints the first row three times",
+      "`new int[3][]` creates rows that share storage"
+    ],
+    "answer": 0,
+    "explanation": "Arrays.fill(array, value) assigns the same value to every slot. When that value is an object, such as an int[] row, every slot gets a reference to the one array that was created once, so all rows alias each other. `new int[3][3]` allocates three separate rows instead. Related helpers: Arrays.copyOf makes a shallow copy (trimmed or zero-padded to a new length), and Arrays.deepToString prints nested arrays, where Arrays.toString would print row identities.",
+    "fix": "import java.util.Arrays;\n\npublic class Main {\n    public static void main(String[] args) {\n        int[][] board = new int[3][3];\n        board[0][0] = 7;\n        System.out.println(Arrays.deepToString(board));\n    }\n}",
+    "fixNote": "Allocated a real 3×3 array with `new int[3][3]`.",
+    "debugTip": "Set a breakpoint on line 7 and compare the object ids of board[0] and board[1] in the variables view.",
+    "buggyOutput": "[[7, 0, 0], [7, 0, 0], [7, 0, 0]]",
+    "fixedOutput": "[[7, 0, 0], [0, 0, 0], [0, 0, 0]]"
+  },
+  {
+    "id": "beg-c-22",
+    "level": "beginner",
+    "topic": "Methods",
+    "title": "Which overload gets the 5?",
+    "kind": "output",
+    "scenario": "A logging helper has three overloads. The developer calls it with one int and then with two ints.",
+    "code": "public class Main {\n    static String show(long x) { return \"long\"; }\n    static String show(Integer x) { return \"Integer\"; }\n    static String show(int... xs) { return \"varargs\"; }\n\n    public static void main(String[] args) {\n        System.out.println(show(5) + \" \" + show(5, 6));\n    }\n}",
+    "bugLines": [
+      7
+    ],
+    "question": "What does this print?",
+    "options": [
+      "Integer varargs",
+      "varargs varargs",
+      "It does not compile",
+      "long varargs"
+    ],
+    "answer": 3,
+    "explanation": "Overload resolution runs in three phases. Phase 1 allows only primitive widening (int → long), phase 2 adds boxing (int → Integer), and phase 3 finally considers varargs. Since show(long) matches in phase 1, it wins over show(Integer) for a single int. With two arguments, only the varargs overload fits, so Java packs 5 and 6 into an int[].",
+    "fix": "public class Main {\n    static String show(long x) { return \"long\"; }\n    static String show(Integer x) { return \"Integer\"; }\n    static String show(int... xs) { return \"varargs\"; }\n\n    public static void main(String[] args) {\n        System.out.println(show(Integer.valueOf(5))\n            + \" \" + show(5, 6));\n    }\n}",
+    "fixNote": "Passing an Integer explicitly selects show(Integer).",
+    "debugTip": "Step into the call on line 7 to see which overload the compiler chose.",
+    "buggyOutput": "long varargs",
+    "fixedOutput": "Integer varargs"
+  },
+  {
+    "id": "beg-c-23",
+    "level": "beginner",
+    "topic": "Recursion",
+    "title": "Factorial of zero blows the stack",
+    "kind": "trace",
+    "scenario": "A factorial helper works for 1 but crashes when asked for 0!, which should be 1.",
+    "symptom": "Exception in thread \"main\" java.lang.StackOverflowError\n\tat Main.fact(Main.java:6)\n\tat Main.fact(Main.java:6)\n\tat Main.fact(Main.java:6)\n\t...",
+    "code": "public class Main {\n    static long fact(int n) {\n        if (n == 1) {\n            return 1;\n        }\n        return n * fact(n - 1);\n    }\n\n    public static void main(String[] args) {\n        System.out.println(\"1! = \" + fact(1));\n        System.out.println(\"0! = \" + fact(0));\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Recursion depth in Java is limited to 100 calls",
+      "`long` overflows, which triggers StackOverflowError",
+      "The base case never matches n = 0, so n keeps falling",
+      "fact(1) leaves stale frames on the stack"
+    ],
+    "answer": 2,
+    "explanation": "Every recursive method needs a base case that every input eventually reaches. Starting from 0, `n - 1` goes -1, -2, ... and never equals 1, so each call adds another stack frame until the thread's stack is exhausted and the JVM throws StackOverflowError. Using `n <= 1` covers 0 and also stops negative inputs. The repeated `Main.fact` line in the trace is the classic sign of runaway recursion.",
+    "fix": "public class Main {\n    static long fact(int n) {\n        if (n <= 1) {\n            return 1;\n        }\n        return n * fact(n - 1);\n    }\n\n    public static void main(String[] args) {\n        System.out.println(\"1! = \" + fact(1));\n        System.out.println(\"0! = \" + fact(0));\n    }\n}",
+    "fixNote": "Changed the base case to `n <= 1`.",
+    "debugTip": "Set a conditional breakpoint on line 3 with `n < 0`; when it hits, the call stack view shows the runaway recursion.",
+    "buggyOutput": "1! = 1",
+    "throws": "java.lang.StackOverflowError",
+    "fixedOutput": "1! = 1\n0! = 1"
+  },
+  {
+    "id": "beg-c-24",
+    "level": "beginner",
+    "topic": "Scope",
+    "title": "Cart total never grows",
+    "kind": "bug",
+    "scenario": "A cart adds two items worth 5 and 7 to a running total stored in a static field. The total stays 0.",
+    "symptom": "Total: 0",
+    "code": "public class Main {\n    static int total = 0;\n\n    static void add(int amount) {\n        int total = 0;\n        total += amount;\n    }\n\n    public static void main(String[] args) {\n        add(5);\n        add(7);\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "bugLines": [
+      2
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Static fields are reset each time a method is called",
+      "A local variable shadows the field, so the field is never updated",
+      "`+=` on an int does nothing without a cast",
+      "main reads a cached copy of the field"
+    ],
+    "answer": 1,
+    "explanation": "A local variable or parameter with the same name as a field shadows it: inside add, `total` refers to the local declared on line 5, which disappears when the method returns. The field keeps its value 0. A variable's scope runs from its declaration to the end of the enclosing block `{ }`; Java forbids a local shadowing another local in an enclosing block, but allows shadowing fields. Remove the declaration, or write `Main.total` (or `this.total` for instance fields) to be explicit.",
+    "fix": "public class Main {\n    static int total = 0;\n\n    static void add(int amount) {\n        total += amount;\n    }\n\n    public static void main(String[] args) {\n        add(5);\n        add(7);\n        System.out.println(\"Total: \" + total);\n    }\n}",
+    "fixNote": "Removed the local declaration so `total` refers to the field.",
+    "debugTip": "Set a breakpoint on line 6; the variables view shows a local `total` separate from the static field.",
+    "buggyOutput": "Total: 0",
+    "fixedOutput": "Total: 12"
+  },
+  {
+    "id": "beg-c-25",
+    "level": "beginner",
+    "topic": "final",
+    "title": "A final array that still changes",
+    "kind": "output",
+    "scenario": "Rate limits are stored in a final array so nobody can change them. A later line edits the first limit.",
+    "code": "public class Main {\n    public static void main(String[] args) {\n        final int[] limits = {10, 20, 30};\n        limits[0] = 99;\n        System.out.println(limits[0] + \" \" + limits.length);\n    }\n}",
+    "bugLines": [
+      4
+    ],
+    "question": "What does this print?",
+    "options": [
+      "99 3",
+      "10 3",
+      "It does not compile",
+      "99 1"
+    ],
+    "answer": 0,
+    "explanation": "`final` on a variable means the variable can be assigned only once; it says nothing about the object it refers to. So `limits = new int[3]` would be a compile error, but `limits[0] = 99` modifies the array's contents and is allowed. Arrays are always mutable in Java. For a truly unmodifiable collection, use List.of (or Collections.unmodifiableList) and expose that instead.",
+    "fix": "import java.util.List;\n\npublic class Main {\n    public static void main(String[] args) {\n        final List<Integer> limits = List.of(10, 20, 30);\n        System.out.println(limits.get(0) + \" \"\n            + limits.size());\n    }\n}",
+    "fixNote": "Used an unmodifiable List.of so the values cannot be changed.",
+    "debugTip": "Set a breakpoint on line 4 and inspect `limits`: the reference is the same but element 0 has changed.",
+    "buggyOutput": "99 3",
+    "fixedOutput": "10 3"
+  }
+]

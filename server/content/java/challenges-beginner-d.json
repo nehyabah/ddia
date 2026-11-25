@@ -1,0 +1,680 @@
+[
+  {
+    "id": "beg-d-01",
+    "level": "beginner",
+    "topic": "Constructors",
+    "title": "A hero who never levels up",
+    "kind": "bug",
+    "scenario": "Hero's constructor takes a name and a starting level. The name comes out right, but every hero reports level 0.",
+    "symptom": "Ayo is level 0",
+    "code": "class Hero {\n    String name;\n    int level;\n    Hero(String name, int start) {\n        this.name = name;\n        int level = start;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Hero h = new Hero(\"Ayo\", 5);\n        System.out.println(h.name + \" is level \" + h.level);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`int level` declares a new local that hides the field",
+      "Fields must be assigned before any other statement",
+      "The constructor needs to call super() to set fields",
+      "int fields can only be set from a field initializer"
+    ],
+    "answer": 0,
+    "explanation": "A declaration like `int level = start;` inside a constructor creates a brand-new local variable that lives only until the constructor returns. Because it has the same name as the field, it shadows the field for the rest of the block, so the field is never touched and keeps its default value of 0. Fields are default-initialized (0, false, null) before the constructor body runs, which is why there is no error, just a silent 0. Writing `this.level = start` (or `level = start` without the type) assigns the field instead.",
+    "fix": "class Hero {\n    String name;\n    int level;\n    Hero(String name, int start) {\n        this.name = name;\n        this.level = start;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Hero h = new Hero(\"Ayo\", 5);\n        System.out.println(h.name + \" is level \" + h.level);\n    }\n}",
+    "fixNote": "Assign the field with `this.level = start;` instead of declaring a local.",
+    "debugTip": "Set a breakpoint on line 7 (end of the constructor) and watch both `level` and `this.level`: the local is 5 while the field is still 0.",
+    "buggyOutput": "Ayo is level 0\n",
+    "fixedOutput": "Ayo is level 5\n"
+  },
+  {
+    "id": "beg-d-02",
+    "level": "beginner",
+    "topic": "Constructors",
+    "title": "The guest account with no owner",
+    "kind": "bug",
+    "scenario": "Account has a full constructor and a no-arg constructor that should create a guest account with zero balance. A new default account prints a null owner.",
+    "symptom": "Owner: null",
+    "code": "class Account {\n    String owner;\n    double balance;\n    Account(String owner, double balance) {\n        this.owner = owner;\n        this.balance = balance;\n    }\n    Account() {\n        new Account(\"guest\", 0.0);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Account a = new Account();\n        System.out.println(\"Owner: \" + a.owner);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "A no-arg constructor cannot set fields in Java",
+      "`new Account(...)` builds a separate object and discards it",
+      "The full constructor runs after the no-arg one",
+      "owner is null because String fields need a setter"
+    ],
+    "answer": 1,
+    "explanation": "`new Account(\"guest\", 0.0)` inside a constructor creates a second, unrelated Account object, initializes it, and then throws it away because nothing keeps the reference. The object under construction (`this`) is never touched, so its owner stays null. To delegate from one constructor to another of the same class you use constructor chaining: `this(\"guest\", 0.0);`, which must be the very first statement. Remember too that once you write any constructor yourself, Java no longer generates the free no-arg default constructor, so you must declare one like this if callers need it.",
+    "fix": "class Account {\n    String owner;\n    double balance;\n    Account(String owner, double balance) {\n        this.owner = owner;\n        this.balance = balance;\n    }\n    Account() {\n        this(\"guest\", 0.0);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Account a = new Account();\n        System.out.println(\"Owner: \" + a.owner);\n    }\n}",
+    "fixNote": "Chain to the other constructor with `this(\"guest\", 0.0);`.",
+    "debugTip": "Step into line 9 and watch `this` in the Variables view: the full constructor runs on a different object id than the one main receives.",
+    "buggyOutput": "Owner: null\n",
+    "fixedOutput": "Owner: guest\n"
+  },
+  {
+    "id": "beg-d-03",
+    "level": "beginner",
+    "topic": "Static vs instance",
+    "title": "Every ticket gets number 1",
+    "kind": "bug",
+    "scenario": "Each Ticket should get the next id in sequence: 1, 2, 3. Instead all three tickets print the same number.",
+    "symptom": "Ticket #1\nTicket #1\nTicket #1",
+    "code": "class Ticket {\n    int nextId = 1;\n    final int id;\n    Ticket() {\n        id = nextId++;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        for (int i = 0; i < 3; i++) {\n            Ticket t = new Ticket();\n            System.out.println(\"Ticket #\" + t.id);\n        }\n    }\n}",
+    "bugLines": [
+      2
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "nextId++ increments after the value is read",
+      "final fields cannot be assigned in a constructor",
+      "nextId is per-object, so each ticket starts from 1",
+      "The loop variable i should be used as the id"
+    ],
+    "answer": 2,
+    "explanation": "An instance field belongs to one object: every `new Ticket()` gets its own fresh copy of nextId set to 1, increments its own copy, and the next ticket never sees that change. A counter shared across all objects must be `static`, which means exactly one copy stored with the class itself. Instance state describes one object (its id); class state describes all of them (the next id to hand out). Note the reverse restriction too: a static method has no `this`, so it cannot read instance fields like id at all.",
+    "fix": "class Ticket {\n    static int nextId = 1;\n    final int id;\n    Ticket() {\n        id = nextId++;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        for (int i = 0; i < 3; i++) {\n            Ticket t = new Ticket();\n            System.out.println(\"Ticket #\" + t.id);\n        }\n    }\n}",
+    "fixNote": "Make the counter `static int nextId = 1;` so all tickets share it.",
+    "debugTip": "Put a breakpoint on line 5 and evaluate `nextId` on each of the three hits: it is 1 every time, which shows each object has its own copy.",
+    "buggyOutput": "Ticket #1\nTicket #1\nTicket #1\n",
+    "fixedOutput": "Ticket #1\nTicket #2\nTicket #3\n"
+  },
+  {
+    "id": "beg-d-04",
+    "level": "beginner",
+    "topic": "Static vs instance",
+    "title": "What kind of animal is this cat?",
+    "kind": "output",
+    "scenario": "Cat redefines both kind() and sound() from Animal. The program calls them through an Animal variable that holds a Cat.",
+    "code": "class Animal {\n    static String kind() { return \"animal\"; }\n    String sound() { return \"...\"; }\n}\n\nclass Cat extends Animal {\n    static String kind() { return \"cat\"; }\n    String sound() { return \"meow\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Animal a = new Cat();\n        System.out.println(a.kind() + \": \" + a.sound());\n    }\n}",
+    "bugLines": [
+      7,
+      14
+    ],
+    "question": "What does this print?",
+    "options": [
+      "cat: meow",
+      "animal: ...",
+      "cat: ...",
+      "animal: meow"
+    ],
+    "answer": 3,
+    "explanation": "Instance methods are chosen at runtime from the object's actual class, so a.sound() runs Cat.sound(). Static methods belong to the class, not to any object, so they cannot be overridden, only hidden. The compiler resolves a.kind() using the declared type of `a`, which is Animal, and the object it points at is ignored. Calling a static method through a variable compiles, but it is misleading; call it as Animal.kind(), or make it an instance method if it should vary by subclass.",
+    "fix": "class Animal {\n    String kind() { return \"animal\"; }\n    String sound() { return \"...\"; }\n}\n\nclass Cat extends Animal {\n    @Override String kind() { return \"cat\"; }\n    @Override String sound() { return \"meow\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Animal a = new Cat();\n        System.out.println(a.kind() + \": \" + a.sound());\n    }\n}",
+    "fixNote": "Make kind() an instance method and mark both overrides with @Override.",
+    "debugTip": "Step into a.kind() on line 14: the debugger lands in Animal.kind() even though the Variables view shows a is a Cat.",
+    "buggyOutput": "animal: meow\n",
+    "fixedOutput": "cat: meow\n"
+  },
+  {
+    "id": "beg-d-05",
+    "level": "intermediate",
+    "topic": "Inheritance",
+    "title": "Who speaks first when a Child is built?",
+    "kind": "output",
+    "scenario": "A developer adds logging to see the order in which a Child object is set up: the parent constructor, a field initializer, and the child constructor.",
+    "code": "class Base {\n    Base() { System.out.println(\"Base constructor\"); }\n}\n\nclass Child extends Base {\n    String tag = log(\"Child field\");\n    Child() {\n        System.out.println(\"Child constructor\");\n    }\n    static String log(String s) {\n        System.out.println(s);\n        return s;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        new Child();\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What does this print?",
+    "options": [
+      "Base constructor\nChild field\nChild constructor",
+      "Child field\nBase constructor\nChild constructor",
+      "Base constructor\nChild constructor\nChild field",
+      "Child field\nChild constructor\nBase constructor"
+    ],
+    "answer": 0,
+    "explanation": "Every constructor starts with a call to a superclass constructor; if you don't write `super(...)`, the compiler inserts `super()` for you. Only after the superclass constructor returns does Java run the subclass's field initializers and instance initializer blocks, in source order, and then the rest of the constructor body. So the parent is always fully built first, then the child's fields, then the child's constructor code. This is why a parent constructor that calls an overridden method sees the child's fields still at their default values.",
+    "fix": "class Base {\n    Base() { System.out.println(\"Base constructor\"); }\n}\n\nclass Child extends Base {\n    String tag;\n    Child() {\n        super();\n        tag = log(\"Child field\");\n        System.out.println(\"Child constructor\");\n    }\n    static String log(String s) {\n        System.out.println(s);\n        return s;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        new Child();\n    }\n}",
+    "fixNote": "Make the order explicit: call super() first, then assign tag in the constructor body.",
+    "debugTip": "Put breakpoints in Base(), on line 6 and on line 8, then run: the hit order and the call stack show super() completing before field initializers run.",
+    "buggyOutput": "Base constructor\nChild field\nChild constructor\n",
+    "fixedOutput": "Base constructor\nChild field\nChild constructor\n"
+  },
+  {
+    "id": "beg-d-06",
+    "level": "beginner",
+    "topic": "Overriding",
+    "title": "A square with no area",
+    "kind": "bug",
+    "scenario": "Square extends Shape and should report side * side for its area. A 3x3 square reports an area of 0.0.",
+    "symptom": "Area: 0.0",
+    "code": "class Shape {\n    double area() { return 0; }\n}\n\nclass Square extends Shape {\n    double side;\n    Square(double side) { this.side = side; }\n    double Area() { return side * side; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Shape s = new Square(3);\n        System.out.println(\"Area: \" + s.area());\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "Which change would have caught this at compile time?",
+    "options": [
+      "Declaring side as final",
+      "Annotating Square's method with @Override",
+      "Making Shape an interface instead of a class",
+      "Casting s to Square before calling area()"
+    ],
+    "answer": 1,
+    "explanation": "Java method names are case-sensitive, so `Area()` is a brand-new method on Square, not an override of `area()`. Calling s.area() therefore runs the inherited Shape.area() and returns 0. The @Override annotation tells the compiler you intend to override; if no matching method exists in a supertype it reports \"method does not override or implement a method from a supertype\". Put @Override on every overriding method so typos in the name or parameter types become compile errors instead of silent bugs.",
+    "fix": "class Shape {\n    double area() { return 0; }\n}\n\nclass Square extends Shape {\n    double side;\n    Square(double side) { this.side = side; }\n    @Override\n    double area() { return side * side; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Shape s = new Square(3);\n        System.out.println(\"Area: \" + s.area());\n    }\n}",
+    "fixNote": "Rename the method to area() and add @Override.",
+    "debugTip": "Step into s.area() on line 14: you land in Shape.area(), which tells you Square has no override with that exact signature.",
+    "buggyOutput": "Area: 0.0\n",
+    "fixedOutput": "Area: 9.0\n"
+  },
+  {
+    "id": "beg-d-07",
+    "level": "beginner",
+    "topic": "Polymorphism",
+    "title": "A truck that is also a vehicle",
+    "kind": "output",
+    "scenario": "Truck redeclares the type field and the describe() method from Vehicle. The program reads both through a Vehicle variable.",
+    "code": "class Vehicle {\n    String type = \"vehicle\";\n    String describe() { return type; }\n}\n\nclass Truck extends Vehicle {\n    String type = \"truck\";\n    String describe() { return type; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Vehicle v = new Truck();\n        System.out.println(v.type + \" / \" + v.describe());\n    }\n}",
+    "bugLines": [
+      7,
+      14
+    ],
+    "question": "What does this print?",
+    "options": [
+      "truck / truck",
+      "vehicle / vehicle",
+      "vehicle / truck",
+      "truck / vehicle"
+    ],
+    "answer": 2,
+    "explanation": "Methods are dynamically dispatched: v.describe() runs Truck.describe() because the object really is a Truck, and inside it `type` means Truck's field. Fields are not polymorphic: Truck's `type` is a second, separate field that hides Vehicle's, and `v.type` is resolved at compile time from the declared type Vehicle. So the one object carries two type fields with different values. Don't redeclare a parent's field in a subclass; set the inherited field instead, or expose state only through methods.",
+    "fix": "class Vehicle {\n    String type = \"vehicle\";\n    String describe() { return type; }\n}\n\nclass Truck extends Vehicle {\n    Truck() { type = \"truck\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Vehicle v = new Truck();\n        System.out.println(v.type + \" / \" + v.describe());\n    }\n}",
+    "fixNote": "Remove the hiding field and set the inherited `type` in Truck's constructor.",
+    "debugTip": "Break on line 14 and expand v in the Variables view: you will see two fields named type, one from Vehicle and one from Truck.",
+    "buggyOutput": "vehicle / truck\n",
+    "fixedOutput": "truck / truck\n"
+  },
+  {
+    "id": "beg-d-08",
+    "level": "intermediate",
+    "topic": "Abstract classes",
+    "title": "The manager's bonus that never returns",
+    "kind": "trace",
+    "scenario": "Employee is abstract and computes a 10% bonus from salary(). Manager should get that bonus plus 200, but asking for it crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.StackOverflowError\n\tat Manager.bonus(Main.java:9)\n\tat Manager.bonus(Main.java:9)\n\tat Manager.bonus(Main.java:9)\n\t...",
+    "code": "abstract class Employee {\n    abstract double salary();\n    double bonus() { return salary() * 0.10; }\n}\n\nclass Manager extends Employee {\n    double salary() { return 5000; }\n    @Override\n    double bonus() { return bonus() + 200; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Employee e = new Manager();\n        System.out.println(\"Bonus: \" + e.bonus());\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "Why does the stack trace repeat line 9?",
+    "options": [
+      "Abstract classes cannot have concrete methods",
+      "salary() is abstract, so it recurses into Employee",
+      "The upcast from Manager to Employee loops at runtime",
+      "bonus() inside Manager calls itself, not the parent's"
+    ],
+    "answer": 3,
+    "explanation": "Inside Manager, a plain call to `bonus()` means `this.bonus()`, and dynamic dispatch sends it straight back to Manager.bonus(). The method calls itself with no exit, each call adds a stack frame, and the thread eventually runs out of stack and throws StackOverflowError. To reuse the parent's version of an overridden method you must write `super.bonus()`, which is bound directly to Employee's implementation. Abstract classes may freely mix abstract methods like salary() with concrete ones like bonus(), and the concrete ones can call the abstract ones.",
+    "fix": "abstract class Employee {\n    abstract double salary();\n    double bonus() { return salary() * 0.10; }\n}\n\nclass Manager extends Employee {\n    double salary() { return 5000; }\n    @Override\n    double bonus() { return super.bonus() + 200; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Employee e = new Manager();\n        System.out.println(\"Bonus: \" + e.bonus());\n    }\n}",
+    "fixNote": "Call `super.bonus()` to reuse Employee's implementation.",
+    "debugTip": "Look at the top of the trace: the same frame (Manager.bonus, line 9) repeating means unbounded recursion; a breakpoint on line 9 hit twice without returning confirms it.",
+    "buggyOutput": "",
+    "throws": "java.lang.StackOverflowError",
+    "fixedOutput": "Bonus: 700.0\n"
+  },
+  {
+    "id": "beg-d-09",
+    "level": "intermediate",
+    "topic": "Interfaces",
+    "title": "A bot that ignores its interface",
+    "kind": "output",
+    "scenario": "Greeter has a default greet() method, and Bot implements Greeter while also extending Base, which has its own greet().",
+    "code": "interface Greeter {\n    default String greet() { return \"Hi from Greeter\"; }\n}\n\nclass Base {\n    public String greet() { return \"Hi from Base\"; }\n}\n\nclass Bot extends Base implements Greeter { }\n\npublic class Main {\n    public static void main(String[] args) {\n        Greeter g = new Bot();\n        System.out.println(g.greet());\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What does this print?",
+    "options": [
+      "Hi from Base",
+      "Hi from Greeter",
+      "Hi from Base\nHi from Greeter",
+      "Nothing: it fails with AbstractMethodError"
+    ],
+    "answer": 0,
+    "explanation": "Java resolves default-method conflicts with the rule \"classes win\": a method inherited from a superclass always takes priority over an interface default with the same signature. Bot inherits greet() from Base, so that concrete method implements Greeter.greet() and the default is never used, even when called through a Greeter variable. Default methods are only fallbacks for classes that don't otherwise have the method. To pick the interface's version explicitly, override the method and call `Greeter.super.greet()`.",
+    "fix": "interface Greeter {\n    default String greet() { return \"Hi from Greeter\"; }\n}\n\nclass Base {\n    public String greet() { return \"Hi from Base\"; }\n}\n\nclass Bot extends Base implements Greeter {\n    @Override\n    public String greet() { return Greeter.super.greet(); }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Greeter g = new Bot();\n        System.out.println(g.greet());\n    }\n}",
+    "fixNote": "Override greet() in Bot and delegate to `Greeter.super.greet()`.",
+    "debugTip": "Step into g.greet() on line 14: the debugger enters Base.greet(), showing the superclass method was chosen over the default.",
+    "buggyOutput": "Hi from Base\n",
+    "fixedOutput": "Hi from Greeter\n"
+  },
+  {
+    "id": "beg-d-10",
+    "level": "beginner",
+    "topic": "Encapsulation",
+    "title": "A team of three with four members",
+    "kind": "bug",
+    "scenario": "Team enforces a maximum of three members in add(). After adding three people, other code still manages to squeeze in a fourth.",
+    "symptom": "[Ada, Ben, Cy, Dan]",
+    "code": "import java.util.*;\n\nclass Team {\n    private final List<String> members =\n        new ArrayList<>();\n    void add(String name) {\n        if (members.size() < 3) members.add(name);\n    }\n    List<String> getMembers() { return members; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Team t = new Team();\n        t.add(\"Ada\");\n        t.add(\"Ben\");\n        t.add(\"Cy\");\n        t.getMembers().add(\"Dan\");\n        System.out.println(t.getMembers());\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "`private` doesn't apply to fields declared final",
+      "The getter hands out the private list itself",
+      "add() checks the size after adding",
+      "ArrayList ignores the size limit check"
+    ],
+    "answer": 1,
+    "explanation": "`private` only stops other classes from naming the field; it does nothing to protect the object the field points at. getMembers() returns the reference to the internal list, so any caller can call add(), remove() or clear() on it and bypass the rule in Team.add(). Real encapsulation means never leaking a mutable internal object: return a copy (new ArrayList<>(members)) or a read-only view (Collections.unmodifiableList or List.copyOf). Note that `final` on the field only stops it from being reassigned; the list itself is still mutable.",
+    "fix": "import java.util.*;\n\nclass Team {\n    private final List<String> members =\n        new ArrayList<>();\n    void add(String name) {\n        if (members.size() < 3) members.add(name);\n    }\n    List<String> getMembers() {\n        return new ArrayList<>(members);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Team t = new Team();\n        t.add(\"Ada\");\n        t.add(\"Ben\");\n        t.add(\"Cy\");\n        t.getMembers().add(\"Dan\");\n        System.out.println(t.getMembers());\n    }\n}",
+    "fixNote": "Return a copy of the list from getMembers().",
+    "debugTip": "Break in ArrayList.add with a condition on the list's size being 3 and look at the call stack: the fourth add comes from main, not Team.add.",
+    "buggyOutput": "[Ada, Ben, Cy, Dan]\n",
+    "fixedOutput": "[Ada, Ben, Cy]\n"
+  },
+  {
+    "id": "beg-d-11",
+    "level": "beginner",
+    "topic": "Immutability",
+    "title": "An order that empties itself",
+    "kind": "bug",
+    "scenario": "An Order is created from the shopping cart and should keep its items. After the cart is cleared for the next customer, the order reports zero items.",
+    "symptom": "Order items: 0",
+    "code": "import java.util.*;\n\nclass Order {\n    private final List<String> items;\n    Order(List<String> items) {\n        this.items = items;\n    }\n    int count() { return items.size(); }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> cart =\n            new ArrayList<>(List.of(\"pen\", \"ink\"));\n        Order order = new Order(cart);\n        cart.clear();\n        System.out.println(\"Order items: \" + order.count());\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "final fields are reset when the source changes",
+      "List.of creates a list that clears itself",
+      "Order keeps a reference to the caller's list",
+      "count() reads the cart instead of items"
+    ],
+    "answer": 2,
+    "explanation": "Assigning `this.items = items` copies only the reference, so Order and main share one list object. When main clears the cart it is clearing the order's items too. A class that wants to be immutable must make a defensive copy of every mutable argument in its constructor, for example List.copyOf(items), which also produces an unmodifiable list. `final` on the field doesn't help: it fixes which object the field points at, not the contents of that object.",
+    "fix": "import java.util.*;\n\nclass Order {\n    private final List<String> items;\n    Order(List<String> items) {\n        this.items = List.copyOf(items);\n    }\n    int count() { return items.size(); }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        List<String> cart =\n            new ArrayList<>(List.of(\"pen\", \"ink\"));\n        Order order = new Order(cart);\n        cart.clear();\n        System.out.println(\"Order items: \" + order.count());\n    }\n}",
+    "fixNote": "Store a defensive copy: `this.items = List.copyOf(items);`.",
+    "debugTip": "Break on line 16 and compare the object ids of `cart` and `order.items` in the Variables view: they are the same object.",
+    "buggyOutput": "Order items: 0\n",
+    "fixedOutput": "Order items: 2\n"
+  },
+  {
+    "id": "beg-d-12",
+    "level": "beginner",
+    "topic": "equals",
+    "title": "Exact payment marked as wrong",
+    "kind": "bug",
+    "scenario": "Money defines equals and hashCode. Paying exactly the price should print \"Paid in full\", but the check reports a mismatch.",
+    "symptom": "Amount mismatch",
+    "code": "class Money {\n    final int cents;\n    Money(int cents) { this.cents = cents; }\n    @Override\n    public boolean equals(Object o) {\n        return o instanceof Money m && m.cents == cents;\n    }\n    @Override\n    public int hashCode() { return cents; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Money price = new Money(500);\n        Money paid = new Money(500);\n        if (price == paid) {\n            System.out.println(\"Paid in full\");\n        } else {\n            System.out.println(\"Amount mismatch\");\n        }\n    }\n}",
+    "bugLines": [
+      16
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "equals is missing a null check",
+      "hashCode must be called before equals",
+      "final fields can't be compared with ==",
+      "== compares references, not the values inside"
+    ],
+    "answer": 3,
+    "explanation": "For objects, `==` asks whether two variables point to the very same object in memory. price and paid are two separate objects created by two `new` expressions, so == is false even though they hold the same amount. Value equality is whatever the class's equals(Object) method defines, and you must call it explicitly. Overriding equals (and hashCode, which must agree with it) has no effect on `==`, which always means identity for reference types.",
+    "fix": "class Money {\n    final int cents;\n    Money(int cents) { this.cents = cents; }\n    @Override\n    public boolean equals(Object o) {\n        return o instanceof Money m && m.cents == cents;\n    }\n    @Override\n    public int hashCode() { return cents; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Money price = new Money(500);\n        Money paid = new Money(500);\n        if (price.equals(paid)) {\n            System.out.println(\"Paid in full\");\n        } else {\n            System.out.println(\"Amount mismatch\");\n        }\n    }\n}",
+    "fixNote": "Compare with `price.equals(paid)` instead of `==`.",
+    "debugTip": "At line 16, evaluate `price == paid` and `price.equals(paid)` side by side; the debugger also shows different object ids for the two variables.",
+    "buggyOutput": "Amount mismatch\n",
+    "fixedOutput": "Paid in full\n"
+  },
+  {
+    "id": "beg-d-13",
+    "level": "beginner",
+    "topic": "Records",
+    "title": "Two identical points",
+    "kind": "output",
+    "scenario": "Point is declared as a record. The program prints one point, compares two points with equal coordinates, and reads a component.",
+    "code": "record Point(int x, int y) { }\n\npublic class Main {\n    public static void main(String[] args) {\n        Point a = new Point(1, 2);\n        Point b = new Point(1, 2);\n        System.out.println(a);\n        System.out.println(a.equals(b) + \" \" + (a == b));\n        System.out.println(a.x());\n    }\n}",
+    "bugLines": [
+      8
+    ],
+    "question": "What does this print?",
+    "options": [
+      "Point[x=1, y=2]\ntrue false\n1",
+      "Point[x=1, y=2]\ntrue true\n1",
+      "Point(1, 2)\ntrue false\n1",
+      "Point[x=1, y=2]\nfalse false\n1"
+    ],
+    "answer": 0,
+    "explanation": "A record automatically gets a canonical constructor, private final fields, accessor methods named after the components (x() and y(), not getX()), and value-based equals, hashCode and toString. Its toString uses the form Point[x=1, y=2], and equals compares every component, so a.equals(b) is true. But `==` is still reference identity: a and b are two distinct objects, so a == b is false. Records change what equals means, never what == means.",
+    "fix": "record Point(int x, int y) { }\n\npublic class Main {\n    public static void main(String[] args) {\n        Point a = new Point(1, 2);\n        Point b = new Point(1, 2);\n        System.out.println(a);\n        System.out.println(a.equals(b) + \" \" + a.equals(b));\n        System.out.println(a.x());\n    }\n}",
+    "fixNote": "Use equals for both comparisons if value equality is what you want.",
+    "debugTip": "At line 8, evaluate `a == b` and `a.equals(b)` side by side; the Variables view also shows two different object ids.",
+    "buggyOutput": "Point[x=1, y=2]\ntrue false\n1\n",
+    "fixedOutput": "Point[x=1, y=2]\ntrue true\n1\n"
+  },
+  {
+    "id": "beg-d-14",
+    "level": "beginner",
+    "topic": "Records",
+    "title": "A price filter that refuses to exist",
+    "kind": "trace",
+    "scenario": "Range validates in its compact constructor that low is not greater than high. Building a filter from min 10 and max 50 crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.IllegalArgumentException: low > high: 50 > 10\n\tat Range.<init>(Main.java:4)\n\tat Main.main(Main.java:14)",
+    "code": "record Range(int low, int high) {\n    Range {\n        if (low > high) {\n            throw new IllegalArgumentException(\n                \"low > high: \" + low + \" > \" + high);\n        }\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        int min = 10, max = 50;\n        System.out.println(\"Building filter\");\n        Range r = new Range(max, min);\n        System.out.println(r);\n    }\n}",
+    "bugLines": [
+      14
+    ],
+    "question": "What does the trace tell you?",
+    "options": [
+      "The compact constructor forgot to assign the fields",
+      "The caller passed the arguments in the wrong order",
+      "Records cannot throw from their constructors",
+      "low and high must be validated in the accessors"
+    ],
+    "answer": 1,
+    "explanation": "A compact constructor (`Range { ... }` with no parameter list) runs before the fields are assigned and is the standard place to validate record components. The fields are assigned automatically at its end, so you never write this.low = low yourself. The trace shows Range.<init> (the constructor) throwing, called from Main line 14, and the message says low is 50 and high is 10: the validation worked, and the bug is that the caller passed max first. Record components are positional, so swapped ints compile without complaint.",
+    "fix": "record Range(int low, int high) {\n    Range {\n        if (low > high) {\n            throw new IllegalArgumentException(\n                \"low > high: \" + low + \" > \" + high);\n        }\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        int min = 10, max = 50;\n        System.out.println(\"Building filter\");\n        Range r = new Range(min, max);\n        System.out.println(r);\n    }\n}",
+    "fixNote": "Pass the components in declaration order: `new Range(min, max)`.",
+    "debugTip": "Set an exception breakpoint on IllegalArgumentException; when it stops in Range.<init>, inspect low and high, then select the frame below to see the call on line 14.",
+    "buggyOutput": "Building filter\n",
+    "throws": "java.lang.IllegalArgumentException",
+    "fixedOutput": "Building filter\nRange[low=10, high=50]\n"
+  },
+  {
+    "id": "beg-d-15",
+    "level": "beginner",
+    "topic": "Enums",
+    "title": "Choosing a medium coffee",
+    "kind": "trace",
+    "scenario": "The size chosen in the UI arrives as the text \"medium\" and is converted to the Size enum. The order crashes before anything is printed.",
+    "symptom": "Exception in thread \"main\" java.lang.IllegalArgumentException: No enum constant Size.medium\n\tat java.base/java.lang.Enum.valueOf(Enum.java:293)\n\tat Size.valueOf(Main.java:1)\n\tat Main.main(Main.java:6)",
+    "code": "enum Size { SMALL, MEDIUM, LARGE }\n\npublic class Main {\n    public static void main(String[] args) {\n        String input = \"medium\";\n        Size s = Size.valueOf(input);\n        System.out.println(\"Selected \" + s);\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Enums can't be created from strings at runtime",
+      "Size needs a constructor taking a String",
+      "valueOf matches constant names exactly, case included",
+      "valueOf only works after values() is called"
+    ],
+    "answer": 2,
+    "explanation": "Every enum gets a static valueOf(String) method that returns the constant whose declared name matches the argument exactly, including case. \"medium\" is not the same name as MEDIUM, so it throws IllegalArgumentException with \"No enum constant Size.medium\". Normalize the input first (trim, toUpperCase), or look the value up in your own map if the display text differs from the constant names. Since bad input is common, real code usually catches the exception and reports a friendly error.",
+    "fix": "enum Size { SMALL, MEDIUM, LARGE }\n\npublic class Main {\n    public static void main(String[] args) {\n        String input = \"medium\";\n        Size s = Size.valueOf(input.toUpperCase());\n        System.out.println(\"Selected \" + s);\n    }\n}",
+    "fixNote": "Convert the input to upper case before calling valueOf.",
+    "debugTip": "Use an exception breakpoint for IllegalArgumentException and evaluate `Size.values()` next to `input` to compare the exact names.",
+    "buggyOutput": "",
+    "throws": "java.lang.IllegalArgumentException",
+    "fixedOutput": "Selected MEDIUM\n"
+  },
+  {
+    "id": "beg-d-16",
+    "level": "beginner",
+    "topic": "Enums",
+    "title": "Urgent tickets sorted into the middle",
+    "kind": "bug",
+    "scenario": "Support tickets have a Priority enum and are sorted from lowest to highest. HIGH ends up before MEDIUM in the sorted list.",
+    "symptom": "[LOW, HIGH, MEDIUM]",
+    "code": "import java.util.*;\n\nenum Priority { LOW, HIGH, MEDIUM }\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Priority> list = new ArrayList<>(List.of(\n            Priority.HIGH, Priority.LOW, Priority.MEDIUM));\n        Collections.sort(list);\n        System.out.println(list);\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Collections.sort sorts enums alphabetically by name",
+      "List.of keeps insertion order during sorting",
+      "Enums need a Comparator before they can be sorted",
+      "Enums sort by declaration order, and HIGH is declared second"
+    ],
+    "answer": 3,
+    "explanation": "Enums implement Comparable, and their natural order is the order in which the constants are declared, their ordinal: LOW=0, HIGH=1, MEDIUM=2. It is not alphabetical and has nothing to do with what the names mean. Because HIGH was declared before MEDIUM, it sorts before it, and the same order is used by values() and by EnumSet and EnumMap. Either declare constants in their meaningful order, or give the enum an explicit rank field and sort with a Comparator on it, which survives later reordering.",
+    "fix": "import java.util.*;\n\nenum Priority { LOW, MEDIUM, HIGH }\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Priority> list = new ArrayList<>(List.of(\n            Priority.HIGH, Priority.LOW, Priority.MEDIUM));\n        Collections.sort(list);\n        System.out.println(list);\n    }\n}",
+    "fixNote": "Declare the constants in order: LOW, MEDIUM, HIGH.",
+    "debugTip": "Evaluate `Priority.HIGH.ordinal()` and `Priority.MEDIUM.ordinal()` in the debugger; sorting follows those numbers.",
+    "buggyOutput": "[LOW, HIGH, MEDIUM]\n",
+    "fixedOutput": "[LOW, MEDIUM, HIGH]\n"
+  },
+  {
+    "id": "beg-d-17",
+    "level": "intermediate",
+    "topic": "Enums",
+    "title": "The second player starts half dead",
+    "kind": "bug",
+    "scenario": "Each game starts with the lives defined by its difficulty. Ada loses two lives, then Ben starts a fresh EASY game, but Ben already has only 1 life.",
+    "symptom": "Ada: 1\nBen: 1",
+    "code": "enum Mode {\n    EASY(3), HARD(1);\n    int lives;\n    Mode(int lives) { this.lives = lives; }\n}\n\nclass Game {\n    final String player;\n    final Mode mode;\n    Game(String p, Mode m) { player = p; mode = m; }\n    void loseLife() { mode.lives--; }\n    String status() { return player + \": \" + mode.lives; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Game a = new Game(\"Ada\", Mode.EASY);\n        a.loseLife();\n        a.loseLife();\n        Game b = new Game(\"Ben\", Mode.EASY);\n        System.out.println(a.status());\n        System.out.println(b.status());\n    }\n}",
+    "bugLines": [
+      3,
+      11
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "Every game shares the single EASY object and its field",
+      "Enum constructors run again for each new Game",
+      "mode is final, so lives-- changes every mode",
+      "HARD and EASY share one lives field"
+    ],
+    "answer": 0,
+    "explanation": "Each enum constant is a single object created once when the enum class loads, and every reference to Mode.EASY points at that same object. A mutable enum field is therefore global shared state: Ada's game decrements EASY.lives, and Ben sees the reduced value. Enum fields should be final configuration (the starting lives), and per-game state belongs in the Game object, copied from the enum when the game starts. Enum constructors can't be called with `new`; they run exactly once per constant.",
+    "fix": "enum Mode {\n    EASY(3), HARD(1);\n    final int lives;\n    Mode(int lives) { this.lives = lives; }\n}\n\nclass Game {\n    final String player;\n    int lives;\n    Game(String p, Mode m) { player = p; lives = m.lives; }\n    void loseLife() { lives--; }\n    String status() { return player + \": \" + lives; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Game a = new Game(\"Ada\", Mode.EASY);\n        a.loseLife();\n        a.loseLife();\n        Game b = new Game(\"Ben\", Mode.EASY);\n        System.out.println(a.status());\n        System.out.println(b.status());\n    }\n}",
+    "fixNote": "Make the enum field final and keep a per-game lives counter in Game.",
+    "debugTip": "Break on line 11 for each player and compare the object id of `mode`: both games hold the same Mode.EASY instance.",
+    "buggyOutput": "Ada: 1\nBen: 1\n",
+    "fixedOutput": "Ada: 1\nBen: 3\n"
+  },
+  {
+    "id": "beg-d-18",
+    "level": "intermediate",
+    "topic": "Nested classes",
+    "title": "A report that sees later changes",
+    "kind": "output",
+    "scenario": "Report is an inner (non-static) class of Counter. A report is created, the counter changes, then the report is shown, alongside a report from a second counter.",
+    "code": "class Counter {\n    int count = 0;\n    class Report {\n        String show() { return \"count=\" + count; }\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Counter c = new Counter();\n        Counter.Report r = c.new Report();\n        c.count = 5;\n        System.out.println(r.show());\n        Counter d = new Counter();\n        System.out.println(d.new Report().show());\n    }\n}",
+    "bugLines": [
+      3
+    ],
+    "question": "What does this print?",
+    "options": [
+      "count=0\ncount=0",
+      "count=5\ncount=0",
+      "count=5\ncount=5",
+      "count=0\ncount=5"
+    ],
+    "answer": 1,
+    "explanation": "An instance of a non-static inner class holds a hidden reference to the outer object it was created from; `c.new Report()` binds it to c. Reading `count` inside Report really means `Counter.this.count`, so it reads the live field when show() runs, which is 5. The report from d is tied to d, whose count is still 0. A static nested class has no outer instance and must be given any data it needs explicitly, which is how you take a snapshot instead of a live view (and avoid accidentally keeping the outer object alive).",
+    "fix": "class Counter {\n    int count = 0;\n    static class Report {\n        final int snapshot;\n        Report(Counter c) { snapshot = c.count; }\n        String show() { return \"count=\" + snapshot; }\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Counter c = new Counter();\n        Counter.Report r = new Counter.Report(c);\n        c.count = 5;\n        System.out.println(r.show());\n        Counter d = new Counter();\n        System.out.println(new Counter.Report(d).show());\n    }\n}",
+    "fixNote": "Use a static nested class that copies the count when it is created.",
+    "debugTip": "Break inside show() and expand `this`: the debugger shows a synthetic this$0 field pointing at the outer Counter.",
+    "buggyOutput": "count=5\ncount=0\n",
+    "fixedOutput": "count=0\ncount=0\n"
+  },
+  {
+    "id": "beg-d-19",
+    "level": "intermediate",
+    "topic": "Lambdas",
+    "title": "Every button claims to be number 3",
+    "kind": "bug",
+    "scenario": "Three button handlers are created in a loop and should print their own number. Because a lambda can't capture i directly, the code stores it in a one-element array.",
+    "symptom": "Button 3\nButton 3\nButton 3",
+    "code": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Runnable> buttons = new ArrayList<>();\n        int[] id = {0};\n        for (int i = 1; i <= 3; i++) {\n            id[0] = i;\n            buttons.add(() ->\n                System.out.println(\"Button \" + id[0]));\n        }\n        for (Runnable b : buttons) b.run();\n    }\n}",
+    "bugLines": [
+      6,
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "The lambda copies id[0] at the moment it is created",
+      "Runnable runs the lambdas in reverse order",
+      "All lambdas capture the same array and read it later",
+      "Captured arrays are reset after the loop ends"
+    ],
+    "answer": 2,
+    "explanation": "Lambdas and anonymous classes can only capture local variables that are effectively final, and what they capture is the variable's value. Here that value is a reference to one array, so all three lambdas share the same array. The lambdas don't run until after the loop, when id[0] holds 3, so they all print 3. Declaring a fresh effectively-final local inside the loop body (`int n = i;`) gives each lambda its own captured value.",
+    "fix": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        List<Runnable> buttons = new ArrayList<>();\n        for (int i = 1; i <= 3; i++) {\n            int n = i;\n            buttons.add(() ->\n                System.out.println(\"Button \" + n));\n        }\n        for (Runnable b : buttons) b.run();\n    }\n}",
+    "fixNote": "Capture a new local `int n = i;` per iteration instead of a shared array.",
+    "debugTip": "Break inside the lambda on its first run and evaluate `id[0]`: it is already 3, showing the value is read at run time, not creation time.",
+    "buggyOutput": "Button 3\nButton 3\nButton 3\n",
+    "fixedOutput": "Button 1\nButton 2\nButton 3\n"
+  },
+  {
+    "id": "beg-d-20",
+    "level": "beginner",
+    "topic": "References",
+    "title": "Moving the end point moves the start",
+    "kind": "bug",
+    "scenario": "A path starts at (0,0) and the end point should be the start shifted 5 to the right. Printing both shows the start has moved too.",
+    "symptom": "start (5,0)\nend   (5,0)",
+    "code": "class Point {\n    int x, y;\n    Point(int x, int y) { this.x = x; this.y = y; }\n    String show() { return \"(\" + x + \",\" + y + \")\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Point start = new Point(0, 0);\n        Point end = start;\n        end.x += 5;\n        System.out.println(\"start \" + start.show());\n        System.out.println(\"end   \" + end.show());\n    }\n}",
+    "bugLines": [
+      10
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "x is shared because it is declared together with y",
+      "+= on a field updates every Point object",
+      "show() always reads the first Point created",
+      "`end = start` copies the reference, not the object"
+    ],
+    "answer": 3,
+    "explanation": "Variables of class type hold references, not objects. `Point end = start;` copies the reference, so both names now point at the single Point created by `new`. Changing end.x changes that one object, and start sees it because it is the same object; this is called aliasing. Only `new` creates objects, so to get an independent copy you must construct one (directly, or via a copy constructor or copy method).",
+    "fix": "class Point {\n    int x, y;\n    Point(int x, int y) { this.x = x; this.y = y; }\n    String show() { return \"(\" + x + \",\" + y + \")\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Point start = new Point(0, 0);\n        Point end = new Point(start.x, start.y);\n        end.x += 5;\n        System.out.println(\"start \" + start.show());\n        System.out.println(\"end   \" + end.show());\n    }\n}",
+    "fixNote": "Create a separate object: `new Point(start.x, start.y)`.",
+    "debugTip": "Break on line 11 and compare the object ids shown next to start and end in the Variables view: they are identical.",
+    "buggyOutput": "start (5,0)\nend   (5,0)\n",
+    "fixedOutput": "start (0,0)\nend   (5,0)\n"
+  },
+  {
+    "id": "beg-d-21",
+    "level": "beginner",
+    "topic": "References",
+    "title": "Spending and resetting a wallet",
+    "kind": "output",
+    "scenario": "spend() takes 2 coins from a wallet and reset() is supposed to replace it with a full wallet of 100 coins. main calls both, then prints the coins.",
+    "code": "class Wallet {\n    int coins;\n    Wallet(int coins) { this.coins = coins; }\n}\n\npublic class Main {\n    static void spend(Wallet w) { w.coins -= 2; }\n    static void reset(Wallet w) {\n        w = new Wallet(100);\n    }\n    public static void main(String[] args) {\n        Wallet w = new Wallet(10);\n        spend(w);\n        reset(w);\n        System.out.println(w.coins);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "What does this print?",
+    "options": [
+      "8",
+      "100",
+      "10",
+      "98"
+    ],
+    "answer": 0,
+    "explanation": "Java is always pass-by-value; for objects, the value passed is a copy of the reference. spend() uses its copy to reach the same Wallet object and changes its field, so main sees 8. reset() only reassigns its own parameter variable to a new Wallet; main's variable still points at the original object, and the new Wallet is discarded when reset() returns. To replace an object, return the new one and assign it in the caller.",
+    "fix": "class Wallet {\n    int coins;\n    Wallet(int coins) { this.coins = coins; }\n}\n\npublic class Main {\n    static void spend(Wallet w) { w.coins -= 2; }\n    static Wallet reset() {\n        return new Wallet(100);\n    }\n    public static void main(String[] args) {\n        Wallet w = new Wallet(10);\n        spend(w);\n        w = reset();\n        System.out.println(w.coins);\n    }\n}",
+    "fixNote": "Return the new Wallet from reset() and assign it in main.",
+    "debugTip": "Step into reset() and watch the object id of w change on line 9, then step out and see main's w still has the old id.",
+    "buggyOutput": "8\n",
+    "fixedOutput": "100\n"
+  },
+  {
+    "id": "beg-d-22",
+    "level": "beginner",
+    "topic": "Arrays",
+    "title": "A team of three nobodies",
+    "kind": "trace",
+    "scenario": "A team array is filled with three new players using a for-each loop. Printing the first player's name crashes.",
+    "symptom": "Exception in thread \"main\" java.lang.NullPointerException: Cannot read field \"name\" because \"<local1>[0]\" is null\n\tat Main.main(Main.java:12)",
+    "code": "class Player {\n    String name = \"unnamed\";\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Player[] team = new Player[3];\n        for (Player p : team) {\n            p = new Player();\n        }\n        System.out.println(\"Team size \" + team.length);\n        System.out.println(team[0].name);\n    }\n}",
+    "bugLines": [
+      9
+    ],
+    "question": "Why is team[0] still null?",
+    "options": [
+      "new Player[3] already holds three Players",
+      "The for-each variable is a copy, not the array slot",
+      "length counts only the non-null elements",
+      "Player needs a constructor to be stored"
+    ],
+    "answer": 1,
+    "explanation": "`new Player[3]` creates an array of three references, all initially null; no Player objects exist yet. In a for-each loop, `p` is a local variable that receives a copy of each element, so `p = new Player()` changes only that local and the array slot stays null. The array length is still 3, because length counts slots, not objects. To fill an array you must assign through an index: `team[i] = new Player()`.",
+    "fix": "class Player {\n    String name = \"unnamed\";\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Player[] team = new Player[3];\n        for (int i = 0; i < team.length; i++) {\n            team[i] = new Player();\n        }\n        System.out.println(\"Team size \" + team.length);\n        System.out.println(team[0].name);\n    }\n}",
+    "fixNote": "Use an indexed loop and assign `team[i] = new Player();`.",
+    "debugTip": "Break on line 11, after the loop, and expand `team`: all three elements are still null.",
+    "buggyOutput": "Team size 3\n",
+    "throws": "java.lang.NullPointerException",
+    "fixedOutput": "Team size 3\nunnamed\n"
+  },
+  {
+    "id": "beg-d-23",
+    "level": "beginner",
+    "topic": "instanceof",
+    "title": "The dog that's only an animal",
+    "kind": "bug",
+    "scenario": "describe() should print a specific label for dogs and a general one for other animals. A Dog is labelled as just \"some animal\".",
+    "symptom": "some animal\nnot an animal",
+    "code": "class Animal { }\nclass Dog extends Animal { }\n\npublic class Main {\n    static String describe(Object o) {\n        if (o instanceof Animal) {\n            return \"some animal\";\n        } else if (o instanceof Dog d) {\n            return \"a dog\";\n        }\n        return \"not an animal\";\n    }\n    public static void main(String[] args) {\n        System.out.println(describe(new Dog()));\n        System.out.println(describe(\"cat\"));\n    }\n}",
+    "bugLines": [
+      6
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "instanceof with a pattern variable never matches",
+      "instanceof checks only the exact class, not subclasses",
+      "A Dog is an Animal, so the broader test matches first",
+      "Strings are treated as Animals by instanceof"
+    ],
+    "answer": 2,
+    "explanation": "`x instanceof T` is true when x's runtime class is T or any subclass of T. A Dog is an Animal, so the first check succeeds and the more specific branch is never reached. When testing a type hierarchy with if/else, check the most specific types first and the general ones last. A pattern switch would report this ordering as a compile error, because a case for Animal dominates a later case for Dog.",
+    "fix": "class Animal { }\nclass Dog extends Animal { }\n\npublic class Main {\n    static String describe(Object o) {\n        if (o instanceof Dog d) {\n            return \"a dog\";\n        } else if (o instanceof Animal) {\n            return \"some animal\";\n        }\n        return \"not an animal\";\n    }\n    public static void main(String[] args) {\n        System.out.println(describe(new Dog()));\n        System.out.println(describe(\"cat\"));\n    }\n}",
+    "fixNote": "Test for Dog before testing for Animal.",
+    "debugTip": "Set a breakpoint on line 6 and evaluate `o instanceof Dog` and `o instanceof Animal`: both are true.",
+    "buggyOutput": "some animal\nnot an animal\n",
+    "fixedOutput": "a dog\nnot an animal\n"
+  },
+  {
+    "id": "beg-d-24",
+    "level": "intermediate",
+    "topic": "Polymorphism",
+    "title": "Printing a list of shapes",
+    "kind": "bug",
+    "scenario": "Printer has a print method for Shape and a more specific one for Circle. Looping over a list holding a Circle and a Shape prints \"shape\" twice.",
+    "symptom": "shape\nshape",
+    "code": "import java.util.*;\n\nclass Shape { }\nclass Circle extends Shape { }\n\nclass Printer {\n    String print(Shape s) { return \"shape\"; }\n    String print(Circle c) { return \"circle\"; }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Printer p = new Printer();\n        List<Shape> shapes =\n            List.of(new Circle(), new Shape());\n        for (Shape s : shapes) {\n            System.out.println(p.print(s));\n        }\n    }\n}",
+    "bugLines": [
+      8,
+      17
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "List.of converts every Circle into a plain Shape",
+      "print(Circle) is hidden because it is declared second",
+      "The for-each loop casts elements to their superclass",
+      "Overloads are chosen at compile time from the declared type"
+    ],
+    "answer": 3,
+    "explanation": "Java picks between overloaded methods at compile time, using the declared (static) types of the arguments. Inside the loop `s` is declared as Shape, so p.print(s) is bound to print(Shape) for every element, whatever the runtime object is. Only overriding is dynamic: the method that runs depends on the receiver object's actual class. To get behaviour that varies by runtime type in a polymorphic collection, put an overridden method on the elements themselves (or use a pattern switch).",
+    "fix": "import java.util.*;\n\nclass Shape { String name() { return \"shape\"; } }\nclass Circle extends Shape {\n    @Override String name() { return \"circle\"; }\n}\n\nclass Printer {\n    String print(Shape s) { return s.name(); }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Printer p = new Printer();\n        List<Shape> shapes =\n            List.of(new Circle(), new Shape());\n        for (Shape s : shapes) {\n            System.out.println(p.print(s));\n        }\n    }\n}",
+    "fixNote": "Replace the overloads with an overridden name() method on Shape and Circle.",
+    "debugTip": "Step into p.print(s) on the first iteration: even though the Variables view shows s is a Circle, you land in print(Shape).",
+    "buggyOutput": "shape\nshape\n",
+    "fixedOutput": "circle\nshape\n"
+  },
+  {
+    "id": "beg-d-25",
+    "level": "intermediate",
+    "topic": "Composition",
+    "title": "Three names added, six counted",
+    "kind": "bug",
+    "scenario": "CountingSet extends HashSet to count how many elements were ever added. Adding three names with addAll reports 6.",
+    "symptom": "Added: 6",
+    "code": "import java.util.*;\n\nclass CountingSet extends HashSet<String> {\n    int added = 0;\n    @Override\n    public boolean add(String s) {\n        added++;\n        return super.add(s);\n    }\n    @Override\n    public boolean addAll(\n            Collection<? extends String> c) {\n        added += c.size();\n        return super.addAll(c);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        CountingSet s = new CountingSet();\n        s.addAll(List.of(\"ann\", \"bo\", \"cy\"));\n        System.out.println(\"Added: \" + s.added);\n    }\n}",
+    "bugLines": [
+      13,
+      14
+    ],
+    "question": "What's the root cause?",
+    "options": [
+      "HashSet's addAll calls the overridden add for each item",
+      "addAll is invoked twice because of List.of",
+      "c.size() counts each element twice",
+      "super.addAll adds the list as one extra element"
+    ],
+    "answer": 0,
+    "explanation": "The inherited addAll (from AbstractCollection) works by calling add() for each element, and dynamic dispatch sends those calls to CountingSet.add(), which counts them again. So every element is counted once in addAll and once in add. This is the classic fragile-base-class problem: subclassing a concrete class makes you depend on its undocumented self-calls. Removing the addAll override fixes it here, but the robust design is composition: keep a Set in a field and forward to it, so your counting never depends on how HashSet works inside.",
+    "fix": "import java.util.*;\n\nclass CountingSet extends HashSet<String> {\n    int added = 0;\n    @Override\n    public boolean add(String s) {\n        added++;\n        return super.add(s);\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        CountingSet s = new CountingSet();\n        s.addAll(List.of(\"ann\", \"bo\", \"cy\"));\n        System.out.println(\"Added: \" + s.added);\n    }\n}",
+    "fixNote": "Remove the addAll override; the inherited one already routes through add().",
+    "debugTip": "Put a breakpoint in CountingSet.add and look at the call stack on the first hit: it comes from AbstractCollection.addAll, called by your addAll.",
+    "buggyOutput": "Added: 6\n",
+    "fixedOutput": "Added: 3\n"
+  }
+]
