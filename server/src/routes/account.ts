@@ -89,7 +89,7 @@ account.post("/me/reset", (req, res) => {
 account.get("/me/export", (req, res) => {
   const out: Record<string, unknown> = { exportedAt: new Date().toISOString(), profile: profile(req.userId) };
   for (const t of PROGRESS_TABLES) out[t] = db.prepare(`SELECT * FROM ${t} WHERE user_id = ?`).all(req.userId);
-  res.setHeader("Content-Disposition", `attachment; filename="ddia-quest-export-${localDay()}.json"`);
+  res.setHeader("Content-Disposition", `attachment; filename="ddia-export-${localDay()}.json"`);
   res.json(out);
 });
 
@@ -103,7 +103,7 @@ account.post("/me/import-legacy", (req, res) => {
     try { data = JSON.parse(data); } catch { throw new HttpError(400, "That isn't valid JSON"); }
   }
   if (!data || typeof data !== "object" || typeof data.xp !== "number") {
-    throw new HttpError(400, "Expected the JSON saved by the original DDIA Quest page");
+    throw new HttpError(400, "Expected the JSON saved by the original DDIA page");
   }
   const legacy = data as {
     xp: number; streak?: number; lastDay?: string | null;

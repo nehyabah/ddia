@@ -56,7 +56,14 @@ export function Home() {
           <Ring value={c.mastery} size={38} stroke={4}>{c.mastery}%</Ring>
         </span>
         <span className="ttl">{c.title}</span>
-        <span className="health"><span className={`dot ${cls}`} />{label}{c.bossWon ? " · boss beaten" : ""}</span>
+        <span className="health"><span className={`dot ${cls}`} />{label}</span>
+        {(c.cardsSeen === c.cardCount || c.mastery >= 80 || c.bossWon) && (
+          <span className="donechips">
+            {c.cardsSeen === c.cardCount && <span><Icon name="check" size={11} />Read</span>}
+            {c.mastery >= 80 && <span><Icon name="check" size={11} />Mastered</span>}
+            {c.bossWon && <span><Icon name="check" size={11} />Boss</span>}
+          </span>
+        )}
       </button>
     );
   };

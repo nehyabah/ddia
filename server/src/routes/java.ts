@@ -56,6 +56,13 @@ java.get("/java", (req, res) => {
     FROM java_challenges c LEFT JOIN java_srs s ON s.challenge_id = c.id AND s.user_id = ?
     GROUP BY c.level, c.topic ORDER BY MIN(c.position)
   `).all(t, u) as { level: string; topic: string; n: number; pts: number; tried: number; due: number }[];
+  // "Solved" = answered correctly at least once (a later miss sends it back for review but keeps the tick).
+  const solvedRows = db.prepare(`
+    SELECT c.level, c.topic, COUNT(DISTINCT a.challenge_id) AS solved
+    FROM java_challenges c JOIN java_attempts a ON a.challenge_id = c.id AND a.user_id = ? AND a.correct = 1
+    GROUP BY c.level, c.topic
+  `).all(u) as { level: string; topic: string; solved: number }[];
+  const solvedOf = (lv: string, tp: string) => solvedRows.find((x) => x.level === lv && x.topic === tp)?.solved ?? 0;
   const lessonRows = db.prepare(`
     SELECT l.level, COUNT(*) AS n, COUNT(r.lesson_id) AS done
     FROM java_lessons l LEFT JOIN java_lesson_reads r ON r.lesson_id = l.id AND r.user_id = ?
@@ -69,10 +76,11 @@ java.get("/java", (req, res) => {
     return {
       id: lv, label: LEVEL_LABEL[lv], count: n,
       tried: rs.reduce((a, r) => a + (r.tried ?? 0), 0),
+      solved: rs.reduce((a, r) => a + solvedOf(lv, r.topic), 0),
       due: rs.reduce((a, r) => a + (r.due ?? 0), 0),
       mastery: n ? Math.round((pts / (n * 3)) * 100) : 0,
       lessons: les?.n ?? 0, lessonsRead: les?.done ?? 0,
-      topics: rs.map((r) => ({ topic: r.topic, count: r.n, mastery: Math.round(((r.pts ?? 0) / (r.n * 3)) * 100) })),
+      topics: rs.map((r) => ({ topic: r.topic, count: r.n, solved: solvedOf(lv, r.topic), mastery: Math.round(((r.pts ?? 0) / (r.n * 3)) * 100) })),
     };
   });
   const totals = db.prepare(`
@@ -88,9 +96,10 @@ java.get("/java/challenges", (req, res) => {
   const q = level
     ? db.prepare("SELECT c.data, s.box, s.reps, s.lapses FROM java_challenges c LEFT JOIN java_srs s ON s.challenge_id = c.id AND s.user_id = ? WHERE c.level = ? ORDER BY c.position").all(u, level)
     : db.prepare("SELECT c.data, s.box, s.reps, s.lapses FROM java_challenges c LEFT JOIN java_srs s ON s.challenge_id = c.id AND s.user_id = ? ORDER BY c.position").all(u);
+  const solved = new Set((db.prepare("SELECT DISTINCT challenge_id AS id FROM java_attempts WHERE user_id = ? AND correct = 1").all(u) as { id: string }[]).map((r) => r.id));
   res.json((q as { data: string; box: number | null; reps: number | null; lapses: number | null }[]).map((r) => {
     const c = JSON.parse(r.data) as Challenge;
-    return { id: c.id, level: c.level, topic: c.topic, title: c.title, kind: c.kind, box: r.box, reps: r.reps ?? 0, lapses: r.lapses ?? 0 };
+    return { id: c.id, level: c.level, topic: c.topic, title: c.title, kind: c.kind, box: r.box, reps: r.reps ?? 0, lapses: r.lapses ?? 0, solved: solved.has(c.id) };
   }));
 });
 

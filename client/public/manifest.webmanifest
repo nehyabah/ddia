@@ -1,0 +1,21 @@
+{
+  "name": "DDIA",
+  "short_name": "DDIA",
+  "description": "Study Designing Data-Intensive Applications, MongoDB and Java debugging with spaced repetition.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F5F3",
+  "theme_color": "#F6F5F3",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Review due", "url": "/review", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Java bugs", "url": "/java/play", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -1,4 +1,4 @@
-# DDIA Quest
+# DDIA
 
 A full-stack study app for *Designing Data-Intensive Applications*. It started as the single file `ddia-quest.html` and is now a Node/Express + SQLite API with a React frontend.
 

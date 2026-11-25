@@ -88,8 +88,8 @@ export type JavaLevel = "beginner" | "intermediate" | "advanced" | "expert";
 
 export type JavaOverview = {
   levels: {
-    id: JavaLevel; label: string; count: number; tried: number; due: number; mastery: number;
-    lessons: number; lessonsRead: number; topics: { topic: string; count: number; mastery: number }[];
+    id: JavaLevel; label: string; count: number; tried: number; solved: number; due: number; mastery: number;
+    lessons: number; lessonsRead: number; topics: { topic: string; count: number; solved: number; mastery: number }[];
   }[];
   due: number;
   totals: { answered: number; correct: number; exact: number };
@@ -108,5 +108,5 @@ export type JavaResult = {
   xp: number; box: number; newBadges: Badge[];
 };
 
-export type JavaListItem = { id: string; level: JavaLevel; topic: string; title: string; kind: string; box: number | null; reps: number; lapses: number };
+export type JavaListItem = { id: string; level: JavaLevel; topic: string; title: string; kind: string; box: number | null; reps: number; lapses: number; solved: boolean };
 export type JavaLesson = { id: string; level: JavaLevel; title: string; body: string[]; example?: string; read: boolean };

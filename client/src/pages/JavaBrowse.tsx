@@ -14,11 +14,12 @@ export function JavaBrowse() {
   const { data, error } = useLoad(() => api.get<JavaListItem[]>("/java/challenges"), []);
   const [level, setLevel] = useState<(typeof LEVELS)[number]>("all");
   const [q, setQ] = useState("");
+  const [hideSolved, setHideSolved] = useState(false);
   if (error) return <p className="err">{error}</p>;
   if (!data) return <div className="center">Loading…</div>;
 
   const needle = q.trim().toLowerCase();
-  const shown = data.filter((c) => (level === "all" || c.level === level)
+  const shown = data.filter((c) => (level === "all" || c.level === level) && (!hideSolved || !c.solved)
     && (!needle || c.title.toLowerCase().includes(needle) || c.topic.toLowerCase().includes(needle)));
 
   return (
@@ -32,6 +33,7 @@ export function JavaBrowse() {
             {l[0].toUpperCase() + l.slice(1)} ({l === "all" ? data.length : data.filter((c) => c.level === l).length})
           </button>
         ))}
+        <button className={`iconbtn ${hideSolved ? "on" : ""}`} onClick={() => setHideSolved((h) => !h)}>Hide solved ({data.filter((c) => c.solved).length})</button>
       </div>
       <input className="field" placeholder="Filter by title or topic…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 14 }} />
       <div className="list browse">
@@ -41,6 +43,7 @@ export function JavaBrowse() {
             <Link key={c.id} to={`/java/c/${c.id}`}>
               <span className={`statusdot ${s.cls}`} title={s.label} />
               <span className="t">{c.title}<small>{c.topic} · {c.kind === "bug" ? "find the bug" : c.kind === "output" ? "predict output" : "stack trace"}</small></span>
+              {c.solved && <span className="donemark" title="Solved"><Icon name="check" size={14} /></span>}
               <span className={`chip lv-${c.level}`}>{c.level.slice(0, 3)}</span>
             </Link>
           );

@@ -34,7 +34,7 @@ export function JavaHome() {
       </p>
       {data.totals.answered > 0 && (
         <p className="small muted" style={{ marginTop: -10 }}>
-          {data.totals.correct}/{data.totals.answered} solved · {data.totals.exact} bug lines pinpointed exactly
+          {data.totals.correct} correct of {data.totals.answered} answers · {data.totals.exact} bug lines pinpointed exactly
         </p>
       )}
       <div className="row" style={{ marginBottom: 18 }}>
@@ -49,14 +49,15 @@ export function JavaHome() {
             <div className="lvhead">
               <Ring value={l.mastery} size={52} stroke={6} color={l.id === "expert" ? "var(--accent)" : "var(--orange)"}>{l.mastery}%</Ring>
               <div className="t">
-                <h3>{l.label} <span className={`chip lv-${l.id}`} style={{ verticalAlign: "middle" }}>{l.tried}/{l.count} tried</span></h3>
+                <h3>{l.label} <span className={`chip lv-${l.id}`} style={{ verticalAlign: "middle" }}>{l.solved}/{l.count} solved</span></h3>
                 <p className="small muted" style={{ margin: "2px 0 0" }}>{BLURB[l.id]}</p>
               </div>
             </div>
             <div className="chips">
               {l.topics.map((t) => (
-                <button key={t.topic} className="topicbtn" onClick={() => play({ level: l.id, topic: t.topic })}>
-                  {t.topic}<small>{t.count}</small>
+                <button key={t.topic} className={`topicbtn ${t.solved === t.count ? "done" : ""}`} onClick={() => play({ level: l.id, topic: t.topic })}
+                  title={t.solved === t.count ? `${t.topic}: all ${t.count} solved` : `${t.topic}: ${t.solved} of ${t.count} solved`}>
+                  {t.solved === t.count && <Icon name="check" size={13} />}{t.topic}<small>{t.solved}/{t.count}</small>
                 </button>
               ))}
             </div>

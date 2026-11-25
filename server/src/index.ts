@@ -52,5 +52,5 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? (process.env.RAILWAY_ENVIRONMENT ? "0.0.0.0" : "127.0.0.1");
 app.listen(port, host, () => {
-  console.log(`DDIA Quest API listening on http://${host}:${port}`);
+  console.log(`DDIA API listening on http://${host}:${port}`);
 });

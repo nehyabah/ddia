@@ -41,7 +41,7 @@ function Shell() {
     <>
       <header className="topbar">
         <div className="in">
-          <Link to="/" className="brand"><span className="logo"><Icon name="logo" /></span><span className="word">DDIA Quest</span></Link>
+          <Link to="/" className="brand"><span className="logo"><Icon name="logo" /></span><span className="word">DDIA</span></Link>
           <nav className="tabs" aria-label="Main">
             {items.filter((i) => !i.mobileOnly).map((i) => (
               <NavLink key={i.to} to={i.to} end={i.end} className={() => (isActive(i, false) ? "active" : "")} title={i.label}>

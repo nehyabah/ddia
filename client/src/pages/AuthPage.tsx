@@ -28,7 +28,7 @@ export function AuthPage() {
   return (
     <div className="auth">
       <span className="logo"><Icon name="logo" /></span>
-      <h2>DDIA Quest</h2>
+      <h2>DDIA</h2>
       <p className="lede">Study <em>Designing Data‑Intensive Applications</em> with flashcards, spaced‑repetition quizzes, term matching and interview drills. Your progress is saved to your account.</p>
       <form className="panel" onSubmit={submit}>
         <h3>{mode === "login" ? "Sign in" : "Create an account"}</h3>
