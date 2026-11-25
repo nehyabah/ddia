@@ -5,7 +5,14 @@ import { DatabaseSync } from "node:sqlite";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(here, "../..");
-const DB_PATH = process.env.DB_PATH ?? path.join(ROOT, "data", "ddia.sqlite");
+// On Railway, RAILWAY_VOLUME_MOUNT_PATH is set when a volume is attached, so the DB survives redeploys.
+const DB_PATH = process.env.DB_PATH
+  ?? (process.env.RAILWAY_VOLUME_MOUNT_PATH
+    ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, "ddia.sqlite")
+    : path.join(ROOT, "data", "ddia.sqlite"));
+if (process.env.RAILWAY_ENVIRONMENT && !process.env.DB_PATH && !process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+  console.warn("WARNING: no Railway volume attached; the database will be wiped on every deploy.");
+}
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 export const db = new DatabaseSync(DB_PATH);

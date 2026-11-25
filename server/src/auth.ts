@@ -36,7 +36,7 @@ export function startSession(res: Response, userId: number) {
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.COOKIE_SECURE === "true",
+    secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === "true" : !!process.env.RAILWAY_ENVIRONMENT,
     maxAge: SESSION_DAYS * 86_400_000,
     path: "/",
   });

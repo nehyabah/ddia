@@ -25,7 +25,17 @@ Your data lives in `data/ddia.sqlite`. Back up that file, or use **Settings → 
 | `PORT` | `3001` | API/server port |
 | `HOST` | `127.0.0.1` | Set to `0.0.0.0` to reach it from your phone on the same network |
 | `DB_PATH` | `data/ddia.sqlite` | SQLite file location |
-| `COOKIE_SECURE` | unset | Set to `true` when served over HTTPS |
+| `COOKIE_SECURE` | unset (`true` on Railway) | Set to `true` when served over HTTPS |
+
+## Deploy to Railway
+
+`railway.json` already holds the build, start and healthcheck settings.
+
+1. In Railway, create a new project with **Deploy from GitHub repo** and pick this repo. Every push to `main` redeploys.
+2. **Add a volume** to the service, mounted at `/data`. This is required: without it, the SQLite database (all accounts and progress) is wiped on every deploy. The app finds the volume automatically through `RAILWAY_VOLUME_MOUNT_PATH`.
+3. Under **Settings → Networking**, click **Generate Domain**.
+
+On Railway the server binds to `0.0.0.0` and sets Secure cookies by default. Run a single replica, because SQLite can't be shared between instances.
 
 ## What's in it
 
