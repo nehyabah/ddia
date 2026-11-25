@@ -1,0 +1,35 @@
+{
+  "name": "ddia-quest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Full-stack study app for Designing Data-Intensive Applications",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch --clear-screen=false server/src/index.ts",
+    "dev:client": "vite",
+    "build": "tsc -p client/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit && vite build",
+    "start": "cross-env NODE_ENV=production tsx server/src/index.ts",
+    "extract": "node scripts/extract-content.mjs ddia-quest.html server/content/chapters.json",
+    "typecheck": "tsc -p client/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit"
+  },
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "express": "^5.1.0",
+    "tsx": "^4.19.4",
+    "cross-env": "^7.0.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.3",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.6",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
