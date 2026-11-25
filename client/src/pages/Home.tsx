@@ -42,6 +42,7 @@ export function Home() {
         : { label: "Hunt Java bugs", to: "/java/play", sub: "Every chapter is healthy. Time to sharpen your debugging." };
 
   const goalLeft = Math.max(0, profile.dailyGoal - profile.xpToday);
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 
   const node = (c: ChapterSummary) => {
     const cls = c.mastery >= 80 ? "up" : c.mastery > 0 ? "warn" : "";
@@ -63,19 +64,20 @@ export function Home() {
   return (
     <>
       <section className="hero">
-        <div className="top">
-          <div>
-            <div className="hi">{greeting()}, {profile.user.username}</div>
-            <h2>{goalPct >= 100 ? "Daily goal smashed." : profile.xpToday === 0 ? "Ready for today’s session?" : `${goalLeft} XP to today’s goal`}</h2>
-            <p className="sub">{cta.sub}</p>
+        <div className="hero-main">
+          <div className="eyebrow">{today}<span className="greet"> · {greeting()}, {profile.user.username}</span></div>
+          <h2>{goalPct >= 100 ? "Daily goal reached." : profile.xpToday === 0 ? "Pick up where you left off." : `${goalLeft} XP to today’s goal.`}</h2>
+          <p className="sub">{cta.sub}</p>
+          <div className="cta">
+            <button className="primary" onClick={() => nav(cta.to)}>{cta.label}<Icon name="arrow" /></button>
+            <button className="ghost" onClick={() => nav("/java/play")}><Icon name="bug" />Debug Java</button>
           </div>
-          <Ring value={goalPct} size={92} stroke={9} color="#fff">
-            {profile.xpToday}<small>/ {profile.dailyGoal} XP</small>
-          </Ring>
         </div>
-        <div className="cta">
-          <button className="primary" onClick={() => nav(cta.to)}>{cta.label}<Icon name="arrow" /></button>
-          <button className="ghost" onClick={() => nav("/java/play")}><Icon name="bug" />Debug Java</button>
+        <div className="hero-goal" aria-label={`Today ${profile.xpToday} of ${profile.dailyGoal} XP`}>
+          <Ring value={goalPct} size={104} stroke={7}>
+            <span className="gv">{goalPct}<small>%</small></span>
+          </Ring>
+          <div className="gcap"><b>{profile.xpToday}</b> / {profile.dailyGoal} XP today</div>
         </div>
       </section>
 

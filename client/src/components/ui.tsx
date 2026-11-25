@@ -43,7 +43,7 @@ export function Icon({ name, size, className }: { name: IconName; size?: number;
 }
 
 /* ---------- progress ring ---------- */
-export function Ring({ value, size = 48, stroke = 5, color = "url(#ringGrad)", children, title }: {
+export function Ring({ value, size = 48, stroke = 5, color = "var(--accent)", children, title }: {
   value: number; size?: number; stroke?: number; color?: string; children?: ReactNode; title?: string;
 }) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
@@ -52,7 +52,7 @@ export function Ring({ value, size = 48, stroke = 5, color = "url(#ringGrad)", c
     <span className="ringwrap" style={{ width: size, height: size }} title={title}>
       <svg className="ringsvg" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle className="trk" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} />
-        <circle className="val" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} stroke={color}
+        <circle className="val" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} style={{ stroke: color }}
           strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - v / 100)} />
       </svg>
       {children != null && <span className="lab">{children}</span>}
@@ -77,7 +77,7 @@ export function SvgDefs() {
 }
 
 /* ---------- confetti ---------- */
-const COLORS = ["#6A4CFF", "#3D6BFF", "#22A6F2", "#FFB547", "#FF7A59", "#2DD4A0", "#FF6B9A"];
+const COLORS = ["#6A4CFF", "#F2762E", "#0FA97A", "#E5484D", "#2E7BFF", "#E89A0C"];
 
 export function confetti(count = 80) {
   if (typeof window === "undefined") return;

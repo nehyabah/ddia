@@ -47,7 +47,7 @@ export function JavaHome() {
         {data.levels.map((l) => (
           <div key={l.id} className="level">
             <div className="lvhead">
-              <Ring value={l.mastery} size={52} stroke={6} color={l.id === "expert" ? "url(#ringGrad)" : "url(#ringWarm)"}>{l.mastery}%</Ring>
+              <Ring value={l.mastery} size={52} stroke={6} color={l.id === "expert" ? "var(--accent)" : "var(--orange)"}>{l.mastery}%</Ring>
               <div className="t">
                 <h3>{l.label} <span className={`chip lv-${l.id}`} style={{ verticalAlign: "middle" }}>{l.tried}/{l.count} tried</span></h3>
                 <p className="small muted" style={{ margin: "2px 0 0" }}>{BLURB[l.id]}</p>
