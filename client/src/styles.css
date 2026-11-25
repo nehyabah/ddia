@@ -494,3 +494,6 @@ nav.tabs a.active,.bottomnav a.active{color:var(--accent)}
 .opt .ot{flex:1;min-width:0;overflow-wrap:anywhere}
 .opt code.ic,.explain code.ic,.box-tip code.ic,.glist code.ic,p code.ic,li code.ic{white-space:normal;overflow-wrap:anywhere}
 .qcard,.opts{min-width:0;max-width:100%}
+.themebtn{padding:6px 8px;cursor:pointer}
+.themebtn svg{width:17px;height:17px;color:var(--muted)}
+.themebtn:hover svg{color:var(--accent)}

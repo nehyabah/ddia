@@ -1,5 +1,7 @@
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useProfile } from "./state";
+import { applyTheme, effectiveTheme } from "./theme";
 import { Icon, Ring, SvgDefs, type IconName } from "./components/ui";
 import { AuthPage } from "./pages/AuthPage";
 import { Home } from "./pages/Home";
@@ -18,6 +20,24 @@ import { JavaLessons } from "./pages/JavaLessons";
 import { JavaBrowse } from "./pages/JavaBrowse";
 
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
+
+/** One-tap light/dark switch, kept in sync with Settings and with the OS when on "system". */
+function ThemeToggle() {
+  const [mode, setMode] = useState(effectiveTheme());
+  useEffect(() => {
+    const sync = () => setMode(effectiveTheme());
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    window.addEventListener("ddia:theme", sync);
+    mq?.addEventListener?.("change", sync);
+    return () => { window.removeEventListener("ddia:theme", sync); mq?.removeEventListener?.("change", sync); };
+  }, []);
+  const next = mode === "dark" ? "light" : "dark";
+  return (
+    <button className="stat themebtn" onClick={() => applyTheme(next)} aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}>
+      <Icon name={mode === "dark" ? "sun" : "moon"} />
+    </button>
+  );
+}
 
 function Shell() {
   const { profile } = useProfile();
@@ -51,6 +71,7 @@ function Shell() {
             ))}
           </nav>
           <div className="hudchips">
+            <ThemeToggle />
             <span className={`stat flame ${profile.studiedToday ? "" : "cold"}`} title={`${profile.streak}-day streak (best ${profile.bestStreak})`}>
               <Icon name="flame" />{profile.streak}
             </span>

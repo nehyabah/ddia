@@ -5,10 +5,9 @@ import { ProfileProvider } from "./state";
 import { App } from "./App";
 import "./styles.css";
 
-try {
-  const theme = localStorage.getItem("ddia-theme");
-  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
-} catch { /* storage unavailable */ }
+import { applyTheme, getThemePref } from "./theme";
+
+applyTheme(getThemePref());
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { applyTheme as setThemePref, getThemePref, type ThemePref } from "../theme";
 import { api, type Profile } from "../api";
 import { useProfile } from "../state";
 import { Link } from "react-router-dom";
@@ -13,7 +14,7 @@ export function Settings() {
   const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pw, setPw] = useState({ current: "", next: "" });
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "system");
+  const [theme, setTheme] = useState<string>(() => getThemePref());
 
   if (!profile) return null;
 
@@ -47,11 +48,15 @@ export function Settings() {
     } catch (err) { setPwMsg({ ok: false, text: (err as Error).message }); }
   }
 
+  useEffect(() => {
+    const on = (e: Event) => setTheme((e as CustomEvent<string>).detail);
+    window.addEventListener("ddia:theme", on);
+    return () => window.removeEventListener("ddia:theme", on);
+  }, []);
+
   function applyTheme(t: string) {
     setTheme(t);
-    if (t === "system") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = t;
-    try { if (t === "system") localStorage.removeItem("ddia-theme"); else localStorage.setItem("ddia-theme", t); } catch { /* ignore */ }
+    setThemePref(t as ThemePref);
   }
 
   async function reset() {
