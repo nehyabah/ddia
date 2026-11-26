@@ -1,0 +1,633 @@
+[
+  {
+    "id": "stripe-int-01",
+    "title": "Export every customer with cursor pagination",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "Write `async function listAllCustomerIds(api)` that returns the ids of **all** customers, in API order, by walking `GET /v1/customers` page by page.\n\n- Request the largest page the API allows (`limit=100`) to minimise calls.\n- Follow `has_more` / `starting_after` until done.\n- Handle 429 and transient 5xx exactly as the docs describe.\n- If a request still fails after 5 attempts, **throw** an `Error`.",
+    "docs": "## Customers API (fake)\n\n### GET /v1/customers\n\nQuery parameters:\n\n| name | type | notes |\n|---|---|---|\n| `limit` | integer | 1–100, default 10. The server may cap it lower. |\n| `starting_after` | string | A customer id. Returns objects strictly after it. |\n\nResponse 200:\n\n```json\n{ \"object\": \"list\", \"data\": [{ \"id\": \"cus_001\", \"email\": \"user1@example.com\" }], \"has_more\": true }\n```\n\nTo get the next page, pass `starting_after` = the id of the **last** object in the current `data`. Stop when `has_more` is `false`. An unknown cursor returns 400.\n\n### Conventions (all endpoints)\n\n- `api.request(method, path, { query, body, headers })` resolves to `{ status, headers, body }`. Response header names are **lowercase**.\n- Errors have the body `{ error: { type, message, code? } }`.\n- **429 Too Many Requests**: the response has a `retry-after` header in **seconds** (string). Wait exactly that long (`await api.sleep(seconds * 1000)`) and retry the same request.\n- **500 / 503**: transient. Retry with exponential backoff: wait **200 ms** after the 1st failure, 400 ms after the 2nd, 800 ms, 1600 ms ... (`200 * 2^(attempt-1)`).\n- Make **at most 5 attempts** per request (429s and 5xx both count). If the 5th attempt still fails, give up (see the task for what to return/throw).\n- Other 4xx errors are permanent: never retry them.\n- `api.sleep(ms)` advances a virtual clock instantly; `api.now()` returns the virtual time in ms. Never use `setTimeout`.\n",
+    "fakeApi": "function createApi(opts) {\n  opts = opts || {};\n  let clock = opts.startMs || 0;\n  let n = 0;\n  const calls = [];\n  const sleeps = [];\n  const failOn = opts.failOn || [];\n  const failFrom = opts.failFrom || 0;\n  const failStatus = opts.failStatus || 503;\n  const rateLimitOn = opts.rateLimitOn || [];\n  const retryAfter = String(opts.retryAfter || 1);\n  function json(status, body, headers) {\n    return { status, headers: headers || {}, body };\n  }\n  function hdr(req, name) {\n    const want = name.toLowerCase();\n    for (const k of Object.keys(req.headers)) if (k.toLowerCase() === want) return req.headers[k];\n    return undefined;\n  }\n  function hash(str) {\n    let h = 0x811c9dc5;\n    str = String(str);\n    for (let i = 0; i < str.length; i++) {\n      h ^= str.charCodeAt(i);\n      h = Math.imul(h, 0x01000193) >>> 0;\n    }\n    return h.toString(16).padStart(8, \"0\");\n  }\n  function page(items, query, maxLimit) {\n    let limit = query.limit === undefined ? 10 : Number(query.limit);\n    if (!(limit >= 1)) return json(400, { error: { type: \"invalid_request_error\", message: \"limit must be >= 1\" } });\n    limit = Math.min(limit, maxLimit);\n    let start = 0;\n    if (query.starting_after !== undefined) {\n      const idx = items.findIndex((x) => x.id === query.starting_after);\n      if (idx === -1) return json(400, { error: { type: \"invalid_request_error\", message: \"No such object: \" + query.starting_after } });\n      start = idx + 1;\n    }\n    const data = items.slice(start, start + limit);\n    return json(200, { object: \"list\", data, has_more: start + limit < items.length });\n  }\n  const total = opts.total === undefined ? 5 : opts.total;\n  const maxLimit = opts.maxLimit || 100;\n  const state = { customers: [] };\n  for (let i = 1; i <= total; i++) {\n    const id = \"cus_\" + String(i).padStart(3, \"0\");\n    state.customers.push({ id, email: \"user\" + i + \"@example.com\" });\n  }\n  function route(req) {\n    if (req.method === \"GET\" && req.path === \"/v1/customers\") return page(state.customers, req.query, maxLimit);\n    return json(404, { error: { type: \"invalid_request_error\", message: \"Unknown route\" } });\n  }\n\n  const api = {\n    calls,\n    sleeps,\n    state,\n    hash,\n    now() {\n      return clock;\n    },\n    async sleep(ms) {\n      ms = Math.max(0, Number(ms) || 0);\n      sleeps.push(ms);\n      clock += ms;\n    },\n    async request(method, path, o) {\n      o = o || {};\n      n++;\n      const req = {\n        n,\n        method: String(method).toUpperCase(),\n        path,\n        query: Object.assign({}, o.query),\n        body: o.body === undefined ? null : JSON.parse(JSON.stringify(o.body)),\n        headers: Object.assign({}, o.headers),\n        at: clock,\n      };\n      calls.push(req);\n      let res;\n      if (failOn.indexOf(n) !== -1 || (failFrom && n >= failFrom)) res = json(failStatus, { error: { type: \"api_error\", message: \"Service unavailable\" } });\n      else if (rateLimitOn.indexOf(n) !== -1) res = json(429, { error: { type: \"rate_limit_error\", message: \"Too many requests\" } }, { \"retry-after\": retryAfter });\n      else res = route(req);\n      req.status = res.status;\n      return JSON.parse(JSON.stringify(res));\n    },\n  };\n  return api;\n}\n",
+    "fn": "listAllCustomerIds",
+    "starter": "async function listAllCustomerIds(api) {\n  // your code\n}\n",
+    "tests": [
+      {
+        "name": "single page",
+        "call": "(async () => { const api = createApi({ total: 3 }); const r = await listAllCustomerIds(api); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": [
+            "cus_001",
+            "cus_002",
+            "cus_003"
+          ],
+          "calls": 1
+        }
+      },
+      {
+        "name": "follows has_more / starting_after",
+        "call": "(async () => { const api = createApi({ total: 7, maxLimit: 3 }); const r = await listAllCustomerIds(api); return { count: r.length, last: r[6], calls: api.calls.length, cursors: api.calls.map((c) => c.query.starting_after || null) }; })()",
+        "expected": {
+          "count": 7,
+          "last": "cus_007",
+          "calls": 3,
+          "cursors": [
+            null,
+            "cus_003",
+            "cus_006"
+          ]
+        }
+      },
+      {
+        "name": "empty list",
+        "call": "(async () => { const api = createApi({ total: 0 }); const r = await listAllCustomerIds(api); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": [],
+          "calls": 1
+        }
+      },
+      {
+        "name": "requests limit=100",
+        "call": "(async () => { const api = createApi({ total: 2 }); await listAllCustomerIds(api); return Number(api.calls[0].query.limit); })()",
+        "expected": 100
+      },
+      {
+        "name": "429 waits Retry-After seconds",
+        "call": "(async () => { const api = createApi({ total: 4, maxLimit: 2, rateLimitOn: [2], retryAfter: 3 }); const r = await listAllCustomerIds(api); return { count: r.length, sleeps: api.sleeps, calls: api.calls.length }; })()",
+        "expected": {
+          "count": 4,
+          "sleeps": [
+            3000
+          ],
+          "calls": 3
+        }
+      },
+      {
+        "name": "transient 503 retried with backoff",
+        "call": "(async () => { const api = createApi({ total: 3, failOn: [1, 2] }); const r = await listAllCustomerIds(api); return { count: r.length, sleeps: api.sleeps }; })()",
+        "expected": {
+          "count": 3,
+          "sleeps": [
+            200,
+            400
+          ]
+        }
+      },
+      {
+        "name": "gives up after 5 attempts",
+        "call": "(async () => { const api = createApi({ total: 3, failFrom: 1 }); try { await listAllCustomerIds(api); return { threw: false, calls: api.calls.length }; } catch (e) { return { threw: true, calls: api.calls.length }; } })()",
+        "expected": {
+          "threw": true,
+          "calls": 5
+        }
+      }
+    ],
+    "solution": "async function send(api, method, path, opts) {\n  let res;\n  for (let attempt = 1; attempt <= 5; attempt++) {\n    res = await api.request(method, path, opts);\n    if (res.status === 429) {\n      if (attempt < 5) await api.sleep(Number(res.headers[\"retry-after\"]) * 1000);\n      continue;\n    }\n    if (res.status >= 500) {\n      if (attempt < 5) await api.sleep(200 * 2 ** (attempt - 1));\n      continue;\n    }\n    return res;\n  }\n  return res; // still 429/5xx after 5 attempts\n}\n\nasync function listAllCustomerIds(api) {\n  const ids = [];\n  let cursor;\n  while (true) {\n    const query = { limit: 100 };\n    if (cursor !== undefined) query.starting_after = cursor;\n    const res = await send(api, \"GET\", \"/v1/customers\", { query });\n    if (res.status !== 200) throw new Error(\"GET /v1/customers failed with status \" + res.status);\n    const { data, has_more } = res.body;\n    for (const c of data) ids.push(c.id);\n    if (!has_more || data.length === 0) break;\n    cursor = data[data.length - 1].id;\n  }\n  return ids;\n}\n",
+    "hints": [
+      "Write one helper `send(api, method, path, opts)` that owns retries; keep pagination logic separate.",
+      "The cursor is the id of the last item of the page you just received, not a page number.",
+      "Read the header as `res.headers[\"retry-after\"]`; it is in seconds, sleep takes milliseconds."
+    ],
+    "keyPoints": [
+      "Loop terminates on has_more === false (and defensively on an empty page)",
+      "Cursor taken from the last element of data; limit maximised",
+      "Retry logic isolated in a reusable helper; 429 honours Retry-After, 5xx uses exponential backoff",
+      "Bounded attempts; failure surfaces as a thrown error instead of a partial silent result"
+    ]
+  },
+  {
+    "id": "stripe-int-02",
+    "title": "Create charges idempotently with safe retries",
+    "level": "hard",
+    "company": "stripe",
+    "brief": "Write `async function createCharges(api, orders)`. Each order is `{ orderId, amount, currency, source }`. Process orders **sequentially** and return one result per order, in order:\n\n- success: `{ orderId, chargeId }`\n- permanent API error (4xx other than 429): `{ orderId, error: <error.code> }` (do not retry)\n- still 429/5xx after 5 attempts: `{ orderId, error: \"max_retries\" }`\n\nEvery POST must carry the header `Idempotency-Key: charge-<orderId>`, and retries of the same order must reuse the same key, so a lost response never causes a double charge. One failed order must not stop the others.",
+    "docs": "## Charges API (fake)\n\n### POST /v1/charges\n\nHeaders: `Idempotency-Key` (**required**, string up to 255 chars).\n\nBody: `{ amount: integer (minor units), currency: string, source: string }`\n\nResponse 200: `{ id: \"ch_1\", amount, currency, status: \"succeeded\" }`\n\nErrors:\n\n| status | error.code | meaning |\n|---|---|---|\n| 400 | `missing_idempotency_key` | no key sent |\n| 400 | `idempotency_key_reused` | key already used with **different** parameters |\n| 402 | `card_declined` | `source` is `tok_declined` |\n\n**Idempotency:** the first request with a given key is executed and its response (success *or* error) is stored for 24 h. Any later request with the same key and same parameters returns the stored response (with header `idempotent-replayed: true`) and does not create another charge. Note that a 5xx may be returned **after** the charge was created (the response was lost in transit); retrying with the same key is the safe way to find out what happened.\n\n### Conventions (all endpoints)\n\n- `api.request(method, path, { query, body, headers })` resolves to `{ status, headers, body }`. Response header names are **lowercase**.\n- Errors have the body `{ error: { type, message, code? } }`.\n- **429 Too Many Requests**: the response has a `retry-after` header in **seconds** (string). Wait exactly that long (`await api.sleep(seconds * 1000)`) and retry the same request.\n- **500 / 503**: transient. Retry with exponential backoff: wait **200 ms** after the 1st failure, 400 ms after the 2nd, 800 ms, 1600 ms ... (`200 * 2^(attempt-1)`).\n- Make **at most 5 attempts** per request (429s and 5xx both count). If the 5th attempt still fails, give up (see the task for what to return/throw).\n- Other 4xx errors are permanent: never retry them.\n- `api.sleep(ms)` advances a virtual clock instantly; `api.now()` returns the virtual time in ms. Never use `setTimeout`.\n",
+    "fakeApi": "function createApi(opts) {\n  opts = opts || {};\n  let clock = opts.startMs || 0;\n  let n = 0;\n  const calls = [];\n  const sleeps = [];\n  const failOn = opts.failOn || [];\n  const failFrom = opts.failFrom || 0;\n  const failStatus = opts.failStatus || 503;\n  const rateLimitOn = opts.rateLimitOn || [];\n  const retryAfter = String(opts.retryAfter || 1);\n  function json(status, body, headers) {\n    return { status, headers: headers || {}, body };\n  }\n  function hdr(req, name) {\n    const want = name.toLowerCase();\n    for (const k of Object.keys(req.headers)) if (k.toLowerCase() === want) return req.headers[k];\n    return undefined;\n  }\n  function hash(str) {\n    let h = 0x811c9dc5;\n    str = String(str);\n    for (let i = 0; i < str.length; i++) {\n      h ^= str.charCodeAt(i);\n      h = Math.imul(h, 0x01000193) >>> 0;\n    }\n    return h.toString(16).padStart(8, \"0\");\n  }\n  function page(items, query, maxLimit) {\n    let limit = query.limit === undefined ? 10 : Number(query.limit);\n    if (!(limit >= 1)) return json(400, { error: { type: \"invalid_request_error\", message: \"limit must be >= 1\" } });\n    limit = Math.min(limit, maxLimit);\n    let start = 0;\n    if (query.starting_after !== undefined) {\n      const idx = items.findIndex((x) => x.id === query.starting_after);\n      if (idx === -1) return json(400, { error: { type: \"invalid_request_error\", message: \"No such object: \" + query.starting_after } });\n      start = idx + 1;\n    }\n    const data = items.slice(start, start + limit);\n    return json(200, { object: \"list\", data, has_more: start + limit < items.length });\n  }\n  const commitThenFailOn = opts.commitThenFailOn || [];\n  const state = { charges: [], keys: {} };\n  function route(req) {\n    if (!(req.method === \"POST\" && req.path === \"/v1/charges\")) return json(404, { error: { type: \"invalid_request_error\", message: \"Unknown route\" } });\n    const key = hdr(req, \"Idempotency-Key\");\n    if (!key) return json(400, { error: { type: \"invalid_request_error\", code: \"missing_idempotency_key\", message: \"Idempotency-Key header required\" } });\n    const b = req.body || {};\n    const fp = JSON.stringify([b.amount, b.currency, b.source]);\n    const seen = state.keys[key];\n    if (seen) {\n      if (seen.fp !== fp) return json(400, { error: { type: \"idempotency_error\", code: \"idempotency_key_reused\", message: \"Key reused with different parameters\" } });\n      return json(seen.res.status, seen.res.body, { \"idempotent-replayed\": \"true\" });\n    }\n    let res;\n    if (b.source === \"tok_declined\") {\n      res = json(402, { error: { type: \"card_error\", code: \"card_declined\", message: \"Your card was declined.\" } });\n    } else {\n      const charge = { id: \"ch_\" + (state.charges.length + 1), amount: b.amount, currency: b.currency, status: \"succeeded\" };\n      state.charges.push(charge);\n      res = json(200, charge);\n    }\n    state.keys[key] = { fp, res };\n    if (commitThenFailOn.indexOf(req.n) !== -1) return json(503, { error: { type: \"api_error\", message: \"Service unavailable\" } });\n    return res;\n  }\n\n  const api = {\n    calls,\n    sleeps,\n    state,\n    hash,\n    now() {\n      return clock;\n    },\n    async sleep(ms) {\n      ms = Math.max(0, Number(ms) || 0);\n      sleeps.push(ms);\n      clock += ms;\n    },\n    async request(method, path, o) {\n      o = o || {};\n      n++;\n      const req = {\n        n,\n        method: String(method).toUpperCase(),\n        path,\n        query: Object.assign({}, o.query),\n        body: o.body === undefined ? null : JSON.parse(JSON.stringify(o.body)),\n        headers: Object.assign({}, o.headers),\n        at: clock,\n      };\n      calls.push(req);\n      let res;\n      if (failOn.indexOf(n) !== -1 || (failFrom && n >= failFrom)) res = json(failStatus, { error: { type: \"api_error\", message: \"Service unavailable\" } });\n      else if (rateLimitOn.indexOf(n) !== -1) res = json(429, { error: { type: \"rate_limit_error\", message: \"Too many requests\" } }, { \"retry-after\": retryAfter });\n      else res = route(req);\n      req.status = res.status;\n      return JSON.parse(JSON.stringify(res));\n    },\n  };\n  return api;\n}\n",
+    "fn": "createCharges",
+    "starter": "async function createCharges(api, orders) {\n  // your code\n}\n",
+    "tests": [
+      {
+        "name": "happy path",
+        "call": "(async () => { const api = createApi(); const r = await createCharges(api, [{ orderId: \"A\", amount: 500, currency: \"usd\", source: \"tok_visa\" }, { orderId: \"B\", amount: 900, currency: \"usd\", source: \"tok_visa\" }]); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": [
+            {
+              "orderId": "A",
+              "chargeId": "ch_1"
+            },
+            {
+              "orderId": "B",
+              "chargeId": "ch_2"
+            }
+          ],
+          "calls": 2
+        }
+      },
+      {
+        "name": "sends the documented idempotency key",
+        "call": "(async () => { const api = createApi(); await createCharges(api, [{ orderId: \"A\", amount: 500, currency: \"usd\", source: \"tok_visa\" }]); const h = api.calls[0].headers; const k = Object.keys(h).find((x) => x.toLowerCase() === \"idempotency-key\"); return h[k]; })()",
+        "expected": "charge-A"
+      },
+      {
+        "name": "lost response: retry reuses key, one charge",
+        "call": "(async () => { const api = createApi({ commitThenFailOn: [1] }); const r = await createCharges(api, [{ orderId: \"A\", amount: 500, currency: \"usd\", source: \"tok_visa\" }]); const keys = api.calls.map((c) => c.headers[Object.keys(c.headers).find((x) => x.toLowerCase() === \"idempotency-key\")]); return { r, charges: api.state.charges.length, keys, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": [
+            {
+              "orderId": "A",
+              "chargeId": "ch_1"
+            }
+          ],
+          "charges": 1,
+          "keys": [
+            "charge-A",
+            "charge-A"
+          ],
+          "sleeps": [
+            200
+          ]
+        }
+      },
+      {
+        "name": "decline is reported, not retried, others continue",
+        "call": "(async () => { const api = createApi(); const r = await createCharges(api, [{ orderId: \"A\", amount: 500, currency: \"usd\", source: \"tok_declined\" }, { orderId: \"B\", amount: 700, currency: \"usd\", source: \"tok_visa\" }]); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": [
+            {
+              "orderId": "A",
+              "error": "card_declined"
+            },
+            {
+              "orderId": "B",
+              "chargeId": "ch_1"
+            }
+          ],
+          "calls": 2
+        }
+      },
+      {
+        "name": "429 honours Retry-After",
+        "call": "(async () => { const api = createApi({ rateLimitOn: [1], retryAfter: 2 }); const r = await createCharges(api, [{ orderId: \"A\", amount: 500, currency: \"usd\", source: \"tok_visa\" }]); return { r, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": [
+            {
+              "orderId": "A",
+              "chargeId": "ch_1"
+            }
+          ],
+          "sleeps": [
+            2000
+          ]
+        }
+      },
+      {
+        "name": "persistent outage gives max_retries after 5 attempts",
+        "call": "(async () => { const api = createApi({ failFrom: 1 }); const r = await createCharges(api, [{ orderId: \"A\", amount: 500, currency: \"usd\", source: \"tok_visa\" }]); return { r, calls: api.calls.length, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": [
+            {
+              "orderId": "A",
+              "error": "max_retries"
+            }
+          ],
+          "calls": 5,
+          "sleeps": [
+            200,
+            400,
+            800,
+            1600
+          ]
+        }
+      }
+    ],
+    "solution": "async function send(api, method, path, opts) {\n  let res;\n  for (let attempt = 1; attempt <= 5; attempt++) {\n    res = await api.request(method, path, opts);\n    if (res.status === 429) {\n      if (attempt < 5) await api.sleep(Number(res.headers[\"retry-after\"]) * 1000);\n      continue;\n    }\n    if (res.status >= 500) {\n      if (attempt < 5) await api.sleep(200 * 2 ** (attempt - 1));\n      continue;\n    }\n    return res;\n  }\n  return res; // still 429/5xx after 5 attempts\n}\n\nasync function createCharges(api, orders) {\n  const results = [];\n  for (const o of orders) {\n    const res = await send(api, \"POST\", \"/v1/charges\", {\n      headers: { \"Idempotency-Key\": \"charge-\" + o.orderId },\n      body: { amount: o.amount, currency: o.currency, source: o.source },\n    });\n    if (res.status === 200) results.push({ orderId: o.orderId, chargeId: res.body.id });\n    else if (res.status === 429 || res.status >= 500) results.push({ orderId: o.orderId, error: \"max_retries\" });\n    else results.push({ orderId: o.orderId, error: (res.body.error && res.body.error.code) || \"http_\" + res.status });\n  }\n  return results;\n}\n",
+    "hints": [
+      "Derive the key from the order (charge-<orderId>), compute it once per order, outside the retry loop.",
+      "A 503 does not mean the charge failed. The retry with the same key returns the stored result.",
+      "Classify each final response: 200, retryable exhausted, or permanent 4xx with error.code."
+    ],
+    "keyPoints": [
+      "Idempotency key is deterministic per logical operation and identical across retries",
+      "Only 429/5xx retried; 402/400 surfaced immediately with the API's error code",
+      "Bounded retries with exponential backoff; Retry-After respected",
+      "Per-order failure isolation: results array always has one entry per order",
+      "Understands that 5xx is ambiguous (operation may have committed)"
+    ]
+  },
+  {
+    "id": "stripe-int-03",
+    "title": "Bulk-update metadata under a rate limit",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "Write `async function bulkUpdateMetadata(api, ids, metadata)` that sets `metadata` on every customer in `ids` via `POST /v1/customers/:id`, sequentially, in the given order.\n\nReturn `{ updated: [ids...], notFound: [ids...], failed: [ids...] }` (each in input order): `notFound` for 404s, `failed` for anything that still fails after 5 attempts. The account has a tight rate limit; you must wait exactly the advertised `Retry-After` rather than hammering the API.",
+    "docs": "## Customers API (fake)\n\n### POST /v1/customers/:id\n\nBody: `{ metadata: { [key]: string } }`. Keys are **merged** into the existing metadata.\n\nResponse 200: the updated customer `{ id, metadata }`. 404 `resource_missing` if the customer does not exist (ids starting with `cus_missing` never exist).\n\n### Rate limiting\n\nRequests are limited by a token bucket: capacity `burst` tokens, refilled continuously at `ratePerSec` tokens per second (virtual clock). Each request costs one token. When the bucket is empty the API answers **429** with `retry-after` = the whole number of seconds until a token is available. Requests that get a 429 consume nothing.\n\n### Conventions (all endpoints)\n\n- `api.request(method, path, { query, body, headers })` resolves to `{ status, headers, body }`. Response header names are **lowercase**.\n- Errors have the body `{ error: { type, message, code? } }`.\n- **429 Too Many Requests**: the response has a `retry-after` header in **seconds** (string). Wait exactly that long (`await api.sleep(seconds * 1000)`) and retry the same request.\n- **500 / 503**: transient. Retry with exponential backoff: wait **200 ms** after the 1st failure, 400 ms after the 2nd, 800 ms, 1600 ms ... (`200 * 2^(attempt-1)`).\n- Make **at most 5 attempts** per request (429s and 5xx both count). If the 5th attempt still fails, give up (see the task for what to return/throw).\n- Other 4xx errors are permanent: never retry them.\n- `api.sleep(ms)` advances a virtual clock instantly; `api.now()` returns the virtual time in ms. Never use `setTimeout`.\n",
+    "fakeApi": "function createApi(opts) {\n  opts = opts || {};\n  let clock = opts.startMs || 0;\n  let n = 0;\n  const calls = [];\n  const sleeps = [];\n  const failOn = opts.failOn || [];\n  const failFrom = opts.failFrom || 0;\n  const failStatus = opts.failStatus || 503;\n  const rateLimitOn = opts.rateLimitOn || [];\n  const retryAfter = String(opts.retryAfter || 1);\n  function json(status, body, headers) {\n    return { status, headers: headers || {}, body };\n  }\n  function hdr(req, name) {\n    const want = name.toLowerCase();\n    for (const k of Object.keys(req.headers)) if (k.toLowerCase() === want) return req.headers[k];\n    return undefined;\n  }\n  function hash(str) {\n    let h = 0x811c9dc5;\n    str = String(str);\n    for (let i = 0; i < str.length; i++) {\n      h ^= str.charCodeAt(i);\n      h = Math.imul(h, 0x01000193) >>> 0;\n    }\n    return h.toString(16).padStart(8, \"0\");\n  }\n  function page(items, query, maxLimit) {\n    let limit = query.limit === undefined ? 10 : Number(query.limit);\n    if (!(limit >= 1)) return json(400, { error: { type: \"invalid_request_error\", message: \"limit must be >= 1\" } });\n    limit = Math.min(limit, maxLimit);\n    let start = 0;\n    if (query.starting_after !== undefined) {\n      const idx = items.findIndex((x) => x.id === query.starting_after);\n      if (idx === -1) return json(400, { error: { type: \"invalid_request_error\", message: \"No such object: \" + query.starting_after } });\n      start = idx + 1;\n    }\n    const data = items.slice(start, start + limit);\n    return json(200, { object: \"list\", data, has_more: start + limit < items.length });\n  }\n  const burst = opts.burst || 100;\n  const ratePerSec = opts.ratePerSec || 100;\n  let tokens = burst;\n  let lastRefill = clock;\n  const state = { customers: {}, rateLimited: 0 };\n  function route(req) {\n    tokens = Math.min(burst, tokens + ((clock - lastRefill) / 1000) * ratePerSec);\n    lastRefill = clock;\n    if (tokens < 1) {\n      state.rateLimited++;\n      const secs = Math.ceil((1 - tokens) / ratePerSec);\n      return json(429, { error: { type: \"rate_limit_error\", message: \"Too many requests\" } }, { \"retry-after\": String(secs) });\n    }\n    tokens -= 1;\n    const m = /^\\/v1\\/customers\\/([^/]+)$/.exec(req.path);\n    if (!(req.method === \"POST\" && m)) return json(404, { error: { type: \"invalid_request_error\", message: \"Unknown route\" } });\n    const id = m[1];\n    if (id.indexOf(\"cus_missing\") === 0) return json(404, { error: { type: \"invalid_request_error\", code: \"resource_missing\", message: \"No such customer: \" + id } });\n    const c = state.customers[id] || (state.customers[id] = { id, metadata: { existing: \"yes\" } });\n    Object.assign(c.metadata, (req.body && req.body.metadata) || {});\n    return json(200, c);\n  }\n\n  const api = {\n    calls,\n    sleeps,\n    state,\n    hash,\n    now() {\n      return clock;\n    },\n    async sleep(ms) {\n      ms = Math.max(0, Number(ms) || 0);\n      sleeps.push(ms);\n      clock += ms;\n    },\n    async request(method, path, o) {\n      o = o || {};\n      n++;\n      const req = {\n        n,\n        method: String(method).toUpperCase(),\n        path,\n        query: Object.assign({}, o.query),\n        body: o.body === undefined ? null : JSON.parse(JSON.stringify(o.body)),\n        headers: Object.assign({}, o.headers),\n        at: clock,\n      };\n      calls.push(req);\n      let res;\n      if (failOn.indexOf(n) !== -1 || (failFrom && n >= failFrom)) res = json(failStatus, { error: { type: \"api_error\", message: \"Service unavailable\" } });\n      else if (rateLimitOn.indexOf(n) !== -1) res = json(429, { error: { type: \"rate_limit_error\", message: \"Too many requests\" } }, { \"retry-after\": retryAfter });\n      else res = route(req);\n      req.status = res.status;\n      return JSON.parse(JSON.stringify(res));\n    },\n  };\n  return api;\n}\n",
+    "fn": "bulkUpdateMetadata",
+    "starter": "async function bulkUpdateMetadata(api, ids, metadata) {\n  // your code\n}\n",
+    "tests": [
+      {
+        "name": "updates and merges metadata",
+        "call": "(async () => { const api = createApi(); const r = await bulkUpdateMetadata(api, [\"cus_1\", \"cus_2\"], { tier: \"gold\" }); return { r, meta: api.state.customers.cus_1.metadata, calls: api.calls.length }; })()",
+        "expected": {
+          "r": {
+            "updated": [
+              "cus_1",
+              "cus_2"
+            ],
+            "notFound": [],
+            "failed": []
+          },
+          "meta": {
+            "existing": "yes",
+            "tier": "gold"
+          },
+          "calls": 2
+        }
+      },
+      {
+        "name": "404s reported, not retried",
+        "call": "(async () => { const api = createApi(); const r = await bulkUpdateMetadata(api, [\"cus_1\", \"cus_missing_9\", \"cus_2\"], { a: \"1\" }); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": {
+            "updated": [
+              "cus_1",
+              "cus_2"
+            ],
+            "notFound": [
+              "cus_missing_9"
+            ],
+            "failed": []
+          },
+          "calls": 3
+        }
+      },
+      {
+        "name": "respects token bucket via Retry-After",
+        "call": "(async () => { const api = createApi({ burst: 2, ratePerSec: 1 }); const r = await bulkUpdateMetadata(api, [\"c1\", \"c2\", \"c3\", \"c4\", \"c5\"], { a: \"1\" }); return { updated: r.updated.length, rateLimited: api.state.rateLimited, now: api.now() }; })()",
+        "expected": {
+          "updated": 5,
+          "rateLimited": 3,
+          "now": 3000
+        }
+      },
+      {
+        "name": "never two 429s in a row when waiting correctly",
+        "call": "(async () => { const api = createApi({ burst: 1, ratePerSec: 0.5 }); await bulkUpdateMetadata(api, [\"c1\", \"c2\", \"c3\"], { a: \"1\" }); const s = api.calls.map((c) => c.status); let streak = 0, max = 0; for (const x of s) { streak = x === 429 ? streak + 1 : 0; max = Math.max(max, streak); } return { max, sleeps: api.sleeps }; })()",
+        "expected": {
+          "max": 1,
+          "sleeps": [
+            2000,
+            2000
+          ]
+        }
+      },
+      {
+        "name": "transient 5xx retried",
+        "call": "(async () => { const api = createApi({ failOn: [2] }); const r = await bulkUpdateMetadata(api, [\"c1\", \"c2\"], { a: \"1\" }); return { r, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": {
+            "updated": [
+              "c1",
+              "c2"
+            ],
+            "notFound": [],
+            "failed": []
+          },
+          "sleeps": [
+            200
+          ]
+        }
+      },
+      {
+        "name": "persistent failure goes to failed, others continue",
+        "call": "(async () => { const api = createApi({ failOn: [2, 3, 4, 5, 6] }); const r = await bulkUpdateMetadata(api, [\"c1\", \"c2\", \"c3\"], { a: \"1\" }); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": {
+            "updated": [
+              "c1",
+              "c3"
+            ],
+            "notFound": [],
+            "failed": [
+              "c2"
+            ]
+          },
+          "calls": 7
+        }
+      }
+    ],
+    "solution": "async function send(api, method, path, opts) {\n  let res;\n  for (let attempt = 1; attempt <= 5; attempt++) {\n    res = await api.request(method, path, opts);\n    if (res.status === 429) {\n      if (attempt < 5) await api.sleep(Number(res.headers[\"retry-after\"]) * 1000);\n      continue;\n    }\n    if (res.status >= 500) {\n      if (attempt < 5) await api.sleep(200 * 2 ** (attempt - 1));\n      continue;\n    }\n    return res;\n  }\n  return res; // still 429/5xx after 5 attempts\n}\n\nasync function bulkUpdateMetadata(api, ids, metadata) {\n  const out = { updated: [], notFound: [], failed: [] };\n  for (const id of ids) {\n    const res = await send(api, \"POST\", \"/v1/customers/\" + encodeURIComponent(id), { body: { metadata } });\n    if (res.status === 200) out.updated.push(id);\n    else if (res.status === 404) out.notFound.push(id);\n    else out.failed.push(id);\n  }\n  return out;\n}\n",
+    "hints": [
+      "On 429, sleep Number(retry-after) * 1000 ms, then retry the same id.",
+      "404 is permanent; record it and move on.",
+      "Counting attempts per id (not globally) keeps one bad id from starving the rest."
+    ],
+    "keyPoints": [
+      "Uses Retry-After instead of a fixed or exponential guess for 429",
+      "Per-item outcome classification (updated / notFound / failed)",
+      "Bounded retries per item; a single failure does not abort the batch",
+      "Sequential processing (no unbounded parallelism against a rate-limited API)"
+    ]
+  },
+  {
+    "id": "stripe-int-04",
+    "title": "Verify webhook signatures and process events once",
+    "level": "hard",
+    "company": "stripe",
+    "brief": "Write `async function handleWebhooks(api, deliveries, secret)`. Each delivery is `{ payload, header }` where `payload` is the raw JSON string body and `header` is the `Signature` header value (possibly missing). Return an array with one status string per delivery, in order:\n\n1. `\"malformed\"`: header missing/unparseable, or no `t`, or no `v1`.\n2. `\"invalid_signature\"`: no `v1` matches the expected signature.\n3. `\"stale\"`: signature valid but timestamp more than 300 s away from `api.now()`.\n4. `\"duplicate\"`: an event with the same `id` was already processed in this call.\n5. `\"processed\"`: otherwise. For these (and only these), call `POST /v1/fulfillments` with `{ event_id, type }` (with the standard retry policy).\n\nCheck in that order. Verify the signature against the **raw** payload string, never a re-serialised object.",
+    "docs": "## Webhook signatures (fake)\n\nEach delivery has a header:\n\n```\nSignature: t=1700000000,v1=5f2b1c0a,v1=9a8b7c6d\n```\n\n- Comma-separated `key=value` pairs. `t` is the Unix timestamp in **seconds** at signing time. There may be **several** `v1` entries (during secret rotation); the delivery is authentic if **any** of them matches. Unknown keys must be ignored.\n- Expected signature: `api.hash(secret + \".\" + t + \".\" + payload)` where `t` is the exact string from the header and `payload` the raw body. `api.hash` returns 8 lowercase hex chars (FNV-1a 32-bit; a stand-in for HMAC-SHA256).\n- Tolerance: reject if `|api.now()/1000 - t| > 300`.\n- Payload is JSON: `{ id: \"evt_...\", type: \"...\", data: {...} }`.\n- Test helper (also available to you): `signHeader(api, secret, t, payload)` returns `\"t=<t>,v1=<sig>\"`.\n\n### POST /v1/fulfillments\n\nBody `{ event_id, type }` → 200 `{ ok: true }`.\n\n### Conventions (all endpoints)\n\n- `api.request(method, path, { query, body, headers })` resolves to `{ status, headers, body }`. Response header names are **lowercase**.\n- Errors have the body `{ error: { type, message, code? } }`.\n- **429 Too Many Requests**: the response has a `retry-after` header in **seconds** (string). Wait exactly that long (`await api.sleep(seconds * 1000)`) and retry the same request.\n- **500 / 503**: transient. Retry with exponential backoff: wait **200 ms** after the 1st failure, 400 ms after the 2nd, 800 ms, 1600 ms ... (`200 * 2^(attempt-1)`).\n- Make **at most 5 attempts** per request (429s and 5xx both count). If the 5th attempt still fails, give up (see the task for what to return/throw).\n- Other 4xx errors are permanent: never retry them.\n- `api.sleep(ms)` advances a virtual clock instantly; `api.now()` returns the virtual time in ms. Never use `setTimeout`.\n",
+    "fakeApi": "function createApi(opts) {\n  opts = opts || {};\n  let clock = opts.startMs || 0;\n  let n = 0;\n  const calls = [];\n  const sleeps = [];\n  const failOn = opts.failOn || [];\n  const failFrom = opts.failFrom || 0;\n  const failStatus = opts.failStatus || 503;\n  const rateLimitOn = opts.rateLimitOn || [];\n  const retryAfter = String(opts.retryAfter || 1);\n  function json(status, body, headers) {\n    return { status, headers: headers || {}, body };\n  }\n  function hdr(req, name) {\n    const want = name.toLowerCase();\n    for (const k of Object.keys(req.headers)) if (k.toLowerCase() === want) return req.headers[k];\n    return undefined;\n  }\n  function hash(str) {\n    let h = 0x811c9dc5;\n    str = String(str);\n    for (let i = 0; i < str.length; i++) {\n      h ^= str.charCodeAt(i);\n      h = Math.imul(h, 0x01000193) >>> 0;\n    }\n    return h.toString(16).padStart(8, \"0\");\n  }\n  function page(items, query, maxLimit) {\n    let limit = query.limit === undefined ? 10 : Number(query.limit);\n    if (!(limit >= 1)) return json(400, { error: { type: \"invalid_request_error\", message: \"limit must be >= 1\" } });\n    limit = Math.min(limit, maxLimit);\n    let start = 0;\n    if (query.starting_after !== undefined) {\n      const idx = items.findIndex((x) => x.id === query.starting_after);\n      if (idx === -1) return json(400, { error: { type: \"invalid_request_error\", message: \"No such object: \" + query.starting_after } });\n      start = idx + 1;\n    }\n    const data = items.slice(start, start + limit);\n    return json(200, { object: \"list\", data, has_more: start + limit < items.length });\n  }\n  const state = { fulfilled: [] };\n  function route(req) {\n    if (req.method === \"POST\" && req.path === \"/v1/fulfillments\") {\n      state.fulfilled.push(req.body && req.body.event_id);\n      return json(200, { ok: true });\n    }\n    return json(404, { error: { type: \"invalid_request_error\", message: \"Unknown route\" } });\n  }\n\n  const api = {\n    calls,\n    sleeps,\n    state,\n    hash,\n    now() {\n      return clock;\n    },\n    async sleep(ms) {\n      ms = Math.max(0, Number(ms) || 0);\n      sleeps.push(ms);\n      clock += ms;\n    },\n    async request(method, path, o) {\n      o = o || {};\n      n++;\n      const req = {\n        n,\n        method: String(method).toUpperCase(),\n        path,\n        query: Object.assign({}, o.query),\n        body: o.body === undefined ? null : JSON.parse(JSON.stringify(o.body)),\n        headers: Object.assign({}, o.headers),\n        at: clock,\n      };\n      calls.push(req);\n      let res;\n      if (failOn.indexOf(n) !== -1 || (failFrom && n >= failFrom)) res = json(failStatus, { error: { type: \"api_error\", message: \"Service unavailable\" } });\n      else if (rateLimitOn.indexOf(n) !== -1) res = json(429, { error: { type: \"rate_limit_error\", message: \"Too many requests\" } }, { \"retry-after\": retryAfter });\n      else res = route(req);\n      req.status = res.status;\n      return JSON.parse(JSON.stringify(res));\n    },\n  };\n  return api;\n}\n\nfunction signHeader(api, secret, t, payload) {\n  return \"t=\" + t + \",v1=\" + api.hash(secret + \".\" + t + \".\" + payload);\n}\n",
+    "fn": "handleWebhooks",
+    "starter": "async function handleWebhooks(api, deliveries, secret) {\n  // your code\n}\n",
+    "tests": [
+      {
+        "name": "valid delivery is processed",
+        "call": "(async () => { const api = createApi({ startMs: 1700000000000 }); const p = JSON.stringify({ id: \"evt_1\", type: \"charge.succeeded\" }); const r = await handleWebhooks(api, [{ payload: p, header: signHeader(api, \"whsec_a\", 1700000000, p) }], \"whsec_a\"); return { r, fulfilled: api.state.fulfilled }; })()",
+        "expected": {
+          "r": [
+            "processed"
+          ],
+          "fulfilled": [
+            "evt_1"
+          ]
+        }
+      },
+      {
+        "name": "tampered payload / wrong secret rejected",
+        "call": "(async () => { const api = createApi({ startMs: 1700000000000 }); const p = JSON.stringify({ id: \"evt_1\", type: \"charge.succeeded\" }); const h = signHeader(api, \"whsec_a\", 1700000000, p); const r = await handleWebhooks(api, [{ payload: p.replace(\"evt_1\", \"evt_2\"), header: h }, { payload: p, header: signHeader(api, \"whsec_other\", 1700000000, p) }], \"whsec_a\"); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": [
+            "invalid_signature",
+            "invalid_signature"
+          ],
+          "calls": 0
+        }
+      },
+      {
+        "name": "malformed headers",
+        "call": "(async () => { const api = createApi({ startMs: 1700000000000 }); const p = \"{}\"; return await handleWebhooks(api, [{ payload: p }, { payload: p, header: \"garbage\" }, { payload: p, header: \"t=1700000000\" }, { payload: p, header: \"v1=abcdef12\" }], \"s\"); })()",
+        "expected": [
+          "malformed",
+          "malformed",
+          "malformed",
+          "malformed"
+        ]
+      },
+      {
+        "name": "timestamp tolerance (300s)",
+        "call": "(async () => { const api = createApi({ startMs: 1700000000000 }); const mk = (id, t) => { const p = JSON.stringify({ id, type: \"x\" }); return { payload: p, header: signHeader(api, \"s\", t, p) }; }; return await handleWebhooks(api, [mk(\"e1\", 1700000000 - 300), mk(\"e2\", 1700000000 - 301), mk(\"e3\", 1700000000 + 200), mk(\"e4\", 1700000000 + 400)], \"s\"); })()",
+        "expected": [
+          "processed",
+          "stale",
+          "processed",
+          "stale"
+        ]
+      },
+      {
+        "name": "secret rotation: any v1 may match; unknown keys ignored",
+        "call": "(async () => { const api = createApi({ startMs: 1700000000000 }); const p = JSON.stringify({ id: \"evt_9\", type: \"invoice.paid\" }); const good = api.hash(\"s_new.\" + 1700000000 + \".\" + p); const h = \"t=1700000000,v0=zzz,v1=00000000,v1=\" + good; return await handleWebhooks(api, [{ payload: p, header: h }], \"s_new\"); })()",
+        "expected": [
+          "processed"
+        ]
+      },
+      {
+        "name": "duplicate events processed once",
+        "call": "(async () => { const api = createApi({ startMs: 1700000000000 }); const p = JSON.stringify({ id: \"evt_1\", type: \"charge.succeeded\" }); const d = { payload: p, header: signHeader(api, \"s\", 1700000000, p) }; const r = await handleWebhooks(api, [d, d], \"s\"); return { r, fulfilled: api.state.fulfilled }; })()",
+        "expected": {
+          "r": [
+            "processed",
+            "duplicate"
+          ],
+          "fulfilled": [
+            "evt_1"
+          ]
+        }
+      },
+      {
+        "name": "fulfillment call retried on 503",
+        "call": "(async () => { const api = createApi({ startMs: 1700000000000, failOn: [1] }); const p = JSON.stringify({ id: \"evt_1\", type: \"charge.succeeded\" }); const r = await handleWebhooks(api, [{ payload: p, header: signHeader(api, \"s\", 1700000000, p) }], \"s\"); return { r, fulfilled: api.state.fulfilled, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": [
+            "processed"
+          ],
+          "fulfilled": [
+            "evt_1"
+          ],
+          "sleeps": [
+            200
+          ]
+        }
+      }
+    ],
+    "solution": "async function send(api, method, path, opts) {\n  let res;\n  for (let attempt = 1; attempt <= 5; attempt++) {\n    res = await api.request(method, path, opts);\n    if (res.status === 429) {\n      if (attempt < 5) await api.sleep(Number(res.headers[\"retry-after\"]) * 1000);\n      continue;\n    }\n    if (res.status >= 500) {\n      if (attempt < 5) await api.sleep(200 * 2 ** (attempt - 1));\n      continue;\n    }\n    return res;\n  }\n  return res; // still 429/5xx after 5 attempts\n}\n\nfunction parseSignature(header) {\n  if (typeof header !== \"string\" || header.length === 0) return null;\n  let t = null;\n  const v1 = [];\n  for (const part of header.split(\",\")) {\n    const i = part.indexOf(\"=\");\n    if (i <= 0) return null;\n    const k = part.slice(0, i).trim();\n    const v = part.slice(i + 1).trim();\n    if (k === \"t\") t = v;\n    else if (k === \"v1\") v1.push(v);\n  }\n  if (t === null || !/^\\d+$/.test(t) || v1.length === 0) return null;\n  return { t, v1 };\n}\n\nfunction safeEqual(a, b) {\n  if (a.length !== b.length) return false;\n  let diff = 0;\n  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);\n  return diff === 0;\n}\n\nasync function handleWebhooks(api, deliveries, secret) {\n  const seen = new Set();\n  const out = [];\n  for (const d of deliveries) {\n    const sig = parseSignature(d.header);\n    if (!sig) { out.push(\"malformed\"); continue; }\n    const expected = api.hash(secret + \".\" + sig.t + \".\" + d.payload);\n    if (!sig.v1.some((s) => safeEqual(s, expected))) { out.push(\"invalid_signature\"); continue; }\n    if (Math.abs(api.now() / 1000 - Number(sig.t)) > 300) { out.push(\"stale\"); continue; }\n    let event;\n    try { event = JSON.parse(d.payload); } catch (e) { out.push(\"malformed\"); continue; }\n    if (seen.has(event.id)) { out.push(\"duplicate\"); continue; }\n    seen.add(event.id);\n    const res = await send(api, \"POST\", \"/v1/fulfillments\", { body: { event_id: event.id, type: event.type } });\n    if (res.status !== 200) throw new Error(\"fulfillment failed: \" + res.status);\n    out.push(\"processed\");\n  }\n  return out;\n}\n",
+    "hints": [
+      "Parse the header into { t, v1: [] } by splitting on commas and then on the first '='.",
+      "Compute the expected signature from the raw payload string and the header's t string; compare against every v1.",
+      "Check signature before freshness, and dedupe by event id only after the event is authentic."
+    ],
+    "keyPoints": [
+      "Signature computed over the raw body (no JSON round-trip)",
+      "Supports multiple v1 signatures; ignores unknown keys",
+      "Timestamp tolerance check prevents replay of old deliveries",
+      "Constant-time comparison mentioned or used",
+      "Idempotent processing: duplicate event ids have no side effects"
+    ]
+  },
+  {
+    "id": "stripe-int-05",
+    "title": "Reconcile payouts against balance transactions",
+    "level": "hard",
+    "company": "stripe",
+    "brief": "Finance wants to know which payouts don't add up. Write `async function reconcilePayouts(api)` that:\n\n1. Lists **all** payouts (paginated).\n2. For each payout with `status === \"paid\"` (skip all others; do not fetch their transactions), lists **all** of its balance transactions (paginated) and sums `amount - fee`.\n3. Returns the mismatches, in payout list order: `[{ payout, expected, actual, diff }]` where `expected` = payout.amount, `actual` = the sum, `diff = actual - expected`. Return `[]` if everything reconciles.\n\nUse `limit=100`, the standard retry policy, and throw if a request fails permanently.",
+    "docs": "## Payouts API (fake)\n\n### GET /v1/payouts\n\nQuery: `limit` (1–100, may be capped lower by the server), `starting_after`.\n\n`{ object: \"list\", data: [{ id: \"po_1\", amount: 9450, currency: \"usd\", status: \"paid\" | \"pending\" | \"failed\" }], has_more }`\n\n### GET /v1/balance_transactions\n\nQuery: `payout` (**required**, a payout id), `limit`, `starting_after`.\n\n`{ object: \"list\", data: [{ id: \"txn_1_1\", amount: 10000, fee: 320, type: \"charge\" | \"refund\" | \"adjustment\" }], has_more }`\n\nAmounts are integers in minor units. Refunds have negative `amount` (and usually `fee: 0`). A payout is correct when `payout.amount === Σ(amount - fee)` over its transactions.\n\n### Conventions (all endpoints)\n\n- `api.request(method, path, { query, body, headers })` resolves to `{ status, headers, body }`. Response header names are **lowercase**.\n- Errors have the body `{ error: { type, message, code? } }`.\n- **429 Too Many Requests**: the response has a `retry-after` header in **seconds** (string). Wait exactly that long (`await api.sleep(seconds * 1000)`) and retry the same request.\n- **500 / 503**: transient. Retry with exponential backoff: wait **200 ms** after the 1st failure, 400 ms after the 2nd, 800 ms, 1600 ms ... (`200 * 2^(attempt-1)`).\n- Make **at most 5 attempts** per request (429s and 5xx both count). If the 5th attempt still fails, give up (see the task for what to return/throw).\n- Other 4xx errors are permanent: never retry them.\n- `api.sleep(ms)` advances a virtual clock instantly; `api.now()` returns the virtual time in ms. Never use `setTimeout`.\n",
+    "fakeApi": "function createApi(opts) {\n  opts = opts || {};\n  let clock = opts.startMs || 0;\n  let n = 0;\n  const calls = [];\n  const sleeps = [];\n  const failOn = opts.failOn || [];\n  const failFrom = opts.failFrom || 0;\n  const failStatus = opts.failStatus || 503;\n  const rateLimitOn = opts.rateLimitOn || [];\n  const retryAfter = String(opts.retryAfter || 1);\n  function json(status, body, headers) {\n    return { status, headers: headers || {}, body };\n  }\n  function hdr(req, name) {\n    const want = name.toLowerCase();\n    for (const k of Object.keys(req.headers)) if (k.toLowerCase() === want) return req.headers[k];\n    return undefined;\n  }\n  function hash(str) {\n    let h = 0x811c9dc5;\n    str = String(str);\n    for (let i = 0; i < str.length; i++) {\n      h ^= str.charCodeAt(i);\n      h = Math.imul(h, 0x01000193) >>> 0;\n    }\n    return h.toString(16).padStart(8, \"0\");\n  }\n  function page(items, query, maxLimit) {\n    let limit = query.limit === undefined ? 10 : Number(query.limit);\n    if (!(limit >= 1)) return json(400, { error: { type: \"invalid_request_error\", message: \"limit must be >= 1\" } });\n    limit = Math.min(limit, maxLimit);\n    let start = 0;\n    if (query.starting_after !== undefined) {\n      const idx = items.findIndex((x) => x.id === query.starting_after);\n      if (idx === -1) return json(400, { error: { type: \"invalid_request_error\", message: \"No such object: \" + query.starting_after } });\n      start = idx + 1;\n    }\n    const data = items.slice(start, start + limit);\n    return json(200, { object: \"list\", data, has_more: start + limit < items.length });\n  }\n  const maxLimit = opts.maxLimit || 100;\n  const spec = opts.payouts || [\n    { amount: 9680, status: \"paid\", txns: [[5000, 160], [5000, 160]] },\n  ];\n  const state = { payouts: [], txns: {} };\n  spec.forEach((p, i) => {\n    const id = \"po_\" + (i + 1);\n    state.payouts.push({ id, amount: p.amount, currency: \"usd\", status: p.status });\n    state.txns[id] = p.txns.map((t, j) => ({ id: \"txn_\" + (i + 1) + \"_\" + (j + 1), amount: t[0], fee: t[1], type: t[0] < 0 ? \"refund\" : \"charge\" }));\n  });\n  function route(req) {\n    if (req.method === \"GET\" && req.path === \"/v1/payouts\") return page(state.payouts, req.query, maxLimit);\n    if (req.method === \"GET\" && req.path === \"/v1/balance_transactions\") {\n      const list = state.txns[req.query.payout];\n      if (!list) return json(400, { error: { type: \"invalid_request_error\", message: \"payout is required and must exist\" } });\n      return page(list, req.query, maxLimit);\n    }\n    return json(404, { error: { type: \"invalid_request_error\", message: \"Unknown route\" } });\n  }\n\n  const api = {\n    calls,\n    sleeps,\n    state,\n    hash,\n    now() {\n      return clock;\n    },\n    async sleep(ms) {\n      ms = Math.max(0, Number(ms) || 0);\n      sleeps.push(ms);\n      clock += ms;\n    },\n    async request(method, path, o) {\n      o = o || {};\n      n++;\n      const req = {\n        n,\n        method: String(method).toUpperCase(),\n        path,\n        query: Object.assign({}, o.query),\n        body: o.body === undefined ? null : JSON.parse(JSON.stringify(o.body)),\n        headers: Object.assign({}, o.headers),\n        at: clock,\n      };\n      calls.push(req);\n      let res;\n      if (failOn.indexOf(n) !== -1 || (failFrom && n >= failFrom)) res = json(failStatus, { error: { type: \"api_error\", message: \"Service unavailable\" } });\n      else if (rateLimitOn.indexOf(n) !== -1) res = json(429, { error: { type: \"rate_limit_error\", message: \"Too many requests\" } }, { \"retry-after\": retryAfter });\n      else res = route(req);\n      req.status = res.status;\n      return JSON.parse(JSON.stringify(res));\n    },\n  };\n  return api;\n}\n",
+    "fn": "reconcilePayouts",
+    "starter": "async function reconcilePayouts(api) {\n  // your code\n}\n",
+    "tests": [
+      {
+        "name": "everything reconciles",
+        "call": "(async () => { const api = createApi(); const r = await reconcilePayouts(api); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": [],
+          "calls": 2
+        }
+      },
+      {
+        "name": "reports a mismatch with diff",
+        "call": "(async () => { const api = createApi({ payouts: [{ amount: 9680, status: \"paid\", txns: [[5000, 160], [5000, 160]] }, { amount: 5000, status: \"paid\", txns: [[5000, 145]] }] }); return await reconcilePayouts(api); })()",
+        "expected": [
+          {
+            "payout": "po_2",
+            "expected": 5000,
+            "actual": 4855,
+            "diff": -145
+          }
+        ]
+      },
+      {
+        "name": "refunds are negative",
+        "call": "(async () => { const api = createApi({ payouts: [{ amount: 7000, status: \"paid\", txns: [[10000, 300], [-3000, 0]] }] }); return await reconcilePayouts(api); })()",
+        "expected": [
+          {
+            "payout": "po_1",
+            "expected": 7000,
+            "actual": 6700,
+            "diff": -300
+          }
+        ]
+      },
+      {
+        "name": "non-paid payouts skipped without fetching",
+        "call": "(async () => { const api = createApi({ payouts: [{ amount: 1, status: \"failed\", txns: [[5, 0]] }, { amount: 2, status: \"pending\", txns: [] }, { amount: 100, status: \"paid\", txns: [[100, 0]] }] }); const r = await reconcilePayouts(api); return { r, txnCalls: api.calls.filter((c) => c.path === \"/v1/balance_transactions\").map((c) => c.query.payout) }; })()",
+        "expected": {
+          "r": [],
+          "txnCalls": [
+            "po_3"
+          ]
+        }
+      },
+      {
+        "name": "paginates payouts and transactions",
+        "call": "(async () => { const api = createApi({ maxLimit: 2, payouts: [{ amount: 10, status: \"paid\", txns: [[1, 0], [2, 0], [3, 0], [4, 0], [5, 0]] }, { amount: 3, status: \"paid\", txns: [[3, 0]] }, { amount: 9, status: \"paid\", txns: [[4, 0], [4, 0]] }] }); const r = await reconcilePayouts(api); return { r, calls: api.calls.length }; })()",
+        "expected": {
+          "r": [
+            {
+              "payout": "po_1",
+              "expected": 10,
+              "actual": 15,
+              "diff": 5
+            },
+            {
+              "payout": "po_3",
+              "expected": 9,
+              "actual": 8,
+              "diff": -1
+            }
+          ],
+          "calls": 7
+        }
+      },
+      {
+        "name": "retries transient errors and 429",
+        "call": "(async () => { const api = createApi({ failOn: [1], rateLimitOn: [3], retryAfter: 1 }); const r = await reconcilePayouts(api); return { r, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": [],
+          "sleeps": [
+            200,
+            1000
+          ]
+        }
+      }
+    ],
+    "solution": "async function send(api, method, path, opts) {\n  let res;\n  for (let attempt = 1; attempt <= 5; attempt++) {\n    res = await api.request(method, path, opts);\n    if (res.status === 429) {\n      if (attempt < 5) await api.sleep(Number(res.headers[\"retry-after\"]) * 1000);\n      continue;\n    }\n    if (res.status >= 500) {\n      if (attempt < 5) await api.sleep(200 * 2 ** (attempt - 1));\n      continue;\n    }\n    return res;\n  }\n  return res; // still 429/5xx after 5 attempts\n}\n\nasync function listAll(api, path, baseQuery) {\n  const out = [];\n  let cursor;\n  while (true) {\n    const query = Object.assign({ limit: 100 }, baseQuery);\n    if (cursor !== undefined) query.starting_after = cursor;\n    const res = await send(api, \"GET\", path, { query });\n    if (res.status !== 200) throw new Error(\"GET \" + path + \" failed: \" + res.status);\n    out.push(...res.body.data);\n    if (!res.body.has_more || res.body.data.length === 0) return out;\n    cursor = res.body.data[res.body.data.length - 1].id;\n  }\n}\n\nasync function reconcilePayouts(api) {\n  const mismatches = [];\n  const payouts = await listAll(api, \"/v1/payouts\", {});\n  for (const p of payouts) {\n    if (p.status !== \"paid\") continue;\n    const txns = await listAll(api, \"/v1/balance_transactions\", { payout: p.id });\n    const actual = txns.reduce((sum, t) => sum + (t.amount - t.fee), 0);\n    if (actual !== p.amount) mismatches.push({ payout: p.id, expected: p.amount, actual, diff: actual - p.amount });\n  }\n  return mismatches;\n}\n",
+    "hints": [
+      "Write one generic listAll(api, path, query) paginator and reuse it for both endpoints.",
+      "Filter on status before fetching transactions: skipped payouts should cost zero requests.",
+      "net = amount - fee; refunds already carry a negative amount."
+    ],
+    "keyPoints": [
+      "Generic, reusable pagination helper; extra query params (payout) preserved on every page",
+      "Integer arithmetic on minor units; diff sign is consistent (actual - expected)",
+      "No wasted calls for non-paid payouts",
+      "Resilient to 429/5xx; permanent failures surface rather than producing a wrong report"
+    ]
+  },
+  {
+    "id": "stripe-int-06",
+    "title": "Poll an async report job with backoff and a deadline",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "Write `async function runReport(api, timeoutMs)`:\n\n1. `POST /v1/reports` with body `{ type: \"balance\" }` to start a job (start time = `api.now()` right before this call).\n2. Poll `GET /v1/reports/:id` **immediately**, then after waiting 500 ms, 1000 ms, 2000 ms, 4000 ms, 8000 ms, 8000 ms ... (double, capped at 8000).\n3. Return `{ status: \"succeeded\", url }` (url = `result_url`) or `{ status: \"failed\", error }` (error = `error_code`) as soon as the job is terminal.\n4. Deadline: after a non-terminal poll, if `api.now() - start >= timeoutMs` return `{ status: \"timeout\" }`. Otherwise never sleep past the deadline: sleep `min(delay, start + timeoutMs - api.now())`.\n\nAll requests use the standard retry policy (those sleeps happen too; they are not part of the poll schedule).",
+    "docs": "## Reports API (fake)\n\n### POST /v1/reports\n\nBody `{ type: \"balance\" }` → 200 `{ id: \"rpt_1\", status: \"pending\" }`.\n\n### GET /v1/reports/:id\n\n200:\n\n```json\n{ \"id\": \"rpt_1\", \"status\": \"pending\" | \"running\" | \"succeeded\" | \"failed\",\n  \"result_url\": \"https://files.example/rpt_1.csv\",   // only when succeeded\n  \"error_code\": \"insufficient_data\" }                 // only when failed\n```\n\n`succeeded` and `failed` are terminal. 404 for unknown ids. Jobs typically finish in seconds to minutes; please back off between polls.\n\n### Conventions (all endpoints)\n\n- `api.request(method, path, { query, body, headers })` resolves to `{ status, headers, body }`. Response header names are **lowercase**.\n- Errors have the body `{ error: { type, message, code? } }`.\n- **429 Too Many Requests**: the response has a `retry-after` header in **seconds** (string). Wait exactly that long (`await api.sleep(seconds * 1000)`) and retry the same request.\n- **500 / 503**: transient. Retry with exponential backoff: wait **200 ms** after the 1st failure, 400 ms after the 2nd, 800 ms, 1600 ms ... (`200 * 2^(attempt-1)`).\n- Make **at most 5 attempts** per request (429s and 5xx both count). If the 5th attempt still fails, give up (see the task for what to return/throw).\n- Other 4xx errors are permanent: never retry them.\n- `api.sleep(ms)` advances a virtual clock instantly; `api.now()` returns the virtual time in ms. Never use `setTimeout`.\n",
+    "fakeApi": "function createApi(opts) {\n  opts = opts || {};\n  let clock = opts.startMs || 0;\n  let n = 0;\n  const calls = [];\n  const sleeps = [];\n  const failOn = opts.failOn || [];\n  const failFrom = opts.failFrom || 0;\n  const failStatus = opts.failStatus || 503;\n  const rateLimitOn = opts.rateLimitOn || [];\n  const retryAfter = String(opts.retryAfter || 1);\n  function json(status, body, headers) {\n    return { status, headers: headers || {}, body };\n  }\n  function hdr(req, name) {\n    const want = name.toLowerCase();\n    for (const k of Object.keys(req.headers)) if (k.toLowerCase() === want) return req.headers[k];\n    return undefined;\n  }\n  function hash(str) {\n    let h = 0x811c9dc5;\n    str = String(str);\n    for (let i = 0; i < str.length; i++) {\n      h ^= str.charCodeAt(i);\n      h = Math.imul(h, 0x01000193) >>> 0;\n    }\n    return h.toString(16).padStart(8, \"0\");\n  }\n  function page(items, query, maxLimit) {\n    let limit = query.limit === undefined ? 10 : Number(query.limit);\n    if (!(limit >= 1)) return json(400, { error: { type: \"invalid_request_error\", message: \"limit must be >= 1\" } });\n    limit = Math.min(limit, maxLimit);\n    let start = 0;\n    if (query.starting_after !== undefined) {\n      const idx = items.findIndex((x) => x.id === query.starting_after);\n      if (idx === -1) return json(400, { error: { type: \"invalid_request_error\", message: \"No such object: \" + query.starting_after } });\n      start = idx + 1;\n    }\n    const data = items.slice(start, start + limit);\n    return json(200, { object: \"list\", data, has_more: start + limit < items.length });\n  }\n  const readyAfterMs = opts.readyAfterMs || 0;\n  const outcome = opts.outcome || \"succeeded\";\n  const state = { reports: {}, polls: 0 };\n  function route(req) {\n    if (req.method === \"POST\" && req.path === \"/v1/reports\") {\n      const id = \"rpt_\" + (Object.keys(state.reports).length + 1);\n      state.reports[id] = { id, createdAt: clock };\n      return json(200, { id, status: \"pending\" });\n    }\n    const m = /^\\/v1\\/reports\\/([^/]+)$/.exec(req.path);\n    if (req.method === \"GET\" && m) {\n      const r = state.reports[m[1]];\n      if (!r) return json(404, { error: { type: \"invalid_request_error\", code: \"resource_missing\", message: \"No such report\" } });\n      state.polls++;\n      const age = clock - r.createdAt;\n      if (age < readyAfterMs) return json(200, { id: r.id, status: age < readyAfterMs / 2 ? \"pending\" : \"running\" });\n      if (outcome === \"failed\") return json(200, { id: r.id, status: \"failed\", error_code: \"insufficient_data\" });\n      return json(200, { id: r.id, status: \"succeeded\", result_url: \"https://files.example/\" + r.id + \".csv\" });\n    }\n    return json(404, { error: { type: \"invalid_request_error\", message: \"Unknown route\" } });\n  }\n\n  const api = {\n    calls,\n    sleeps,\n    state,\n    hash,\n    now() {\n      return clock;\n    },\n    async sleep(ms) {\n      ms = Math.max(0, Number(ms) || 0);\n      sleeps.push(ms);\n      clock += ms;\n    },\n    async request(method, path, o) {\n      o = o || {};\n      n++;\n      const req = {\n        n,\n        method: String(method).toUpperCase(),\n        path,\n        query: Object.assign({}, o.query),\n        body: o.body === undefined ? null : JSON.parse(JSON.stringify(o.body)),\n        headers: Object.assign({}, o.headers),\n        at: clock,\n      };\n      calls.push(req);\n      let res;\n      if (failOn.indexOf(n) !== -1 || (failFrom && n >= failFrom)) res = json(failStatus, { error: { type: \"api_error\", message: \"Service unavailable\" } });\n      else if (rateLimitOn.indexOf(n) !== -1) res = json(429, { error: { type: \"rate_limit_error\", message: \"Too many requests\" } }, { \"retry-after\": retryAfter });\n      else res = route(req);\n      req.status = res.status;\n      return JSON.parse(JSON.stringify(res));\n    },\n  };\n  return api;\n}\n",
+    "fn": "runReport",
+    "starter": "async function runReport(api, timeoutMs) {\n  // your code\n}\n",
+    "tests": [
+      {
+        "name": "already done on first poll",
+        "call": "(async () => { const api = createApi(); const r = await runReport(api, 60000); return { r, polls: api.state.polls, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": {
+            "status": "succeeded",
+            "url": "https://files.example/rpt_1.csv"
+          },
+          "polls": 1,
+          "sleeps": []
+        }
+      },
+      {
+        "name": "exponential backoff schedule",
+        "call": "(async () => { const api = createApi({ readyAfterMs: 10000 }); const r = await runReport(api, 60000); return { r: r.status, polls: api.state.polls, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": "succeeded",
+          "polls": 6,
+          "sleeps": [
+            500,
+            1000,
+            2000,
+            4000,
+            8000
+          ]
+        }
+      },
+      {
+        "name": "delay is capped at 8000ms",
+        "call": "(async () => { const api = createApi({ readyAfterMs: 30000 }); await runReport(api, 120000); return api.sleeps; })()",
+        "expected": [
+          500,
+          1000,
+          2000,
+          4000,
+          8000,
+          8000,
+          8000
+        ]
+      },
+      {
+        "name": "failed job surfaces error_code",
+        "call": "(async () => { const api = createApi({ readyAfterMs: 1000, outcome: \"failed\" }); return await runReport(api, 60000); })()",
+        "expected": {
+          "status": "failed",
+          "error": "insufficient_data"
+        }
+      },
+      {
+        "name": "timeout without sleeping past the deadline",
+        "call": "(async () => { const api = createApi({ readyAfterMs: 600000 }); const r = await runReport(api, 5000); return { r, now: api.now(), sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": {
+            "status": "timeout"
+          },
+          "now": 5000,
+          "sleeps": [
+            500,
+            1000,
+            2000,
+            1500
+          ]
+        }
+      },
+      {
+        "name": "429 while polling honours Retry-After",
+        "call": "(async () => { const api = createApi({ readyAfterMs: 1000, rateLimitOn: [3], retryAfter: 2 }); const r = await runReport(api, 60000); return { r: r.status, sleeps: api.sleeps }; })()",
+        "expected": {
+          "r": "succeeded",
+          "sleeps": [
+            500,
+            2000
+          ]
+        }
+      }
+    ],
+    "solution": "async function send(api, method, path, opts) {\n  let res;\n  for (let attempt = 1; attempt <= 5; attempt++) {\n    res = await api.request(method, path, opts);\n    if (res.status === 429) {\n      if (attempt < 5) await api.sleep(Number(res.headers[\"retry-after\"]) * 1000);\n      continue;\n    }\n    if (res.status >= 500) {\n      if (attempt < 5) await api.sleep(200 * 2 ** (attempt - 1));\n      continue;\n    }\n    return res;\n  }\n  return res; // still 429/5xx after 5 attempts\n}\n\nasync function runReport(api, timeoutMs) {\n  const start = api.now();\n  const created = await send(api, \"POST\", \"/v1/reports\", { body: { type: \"balance\" } });\n  if (created.status !== 200) throw new Error(\"could not create report: \" + created.status);\n  const id = created.body.id;\n  let delay = 500;\n  while (true) {\n    const res = await send(api, \"GET\", \"/v1/reports/\" + id);\n    if (res.status !== 200) throw new Error(\"poll failed: \" + res.status);\n    const job = res.body;\n    if (job.status === \"succeeded\") return { status: \"succeeded\", url: job.result_url };\n    if (job.status === \"failed\") return { status: \"failed\", error: job.error_code };\n    const remaining = start + timeoutMs - api.now();\n    if (remaining <= 0) return { status: \"timeout\" };\n    await api.sleep(Math.min(delay, remaining));\n    delay = Math.min(delay * 2, 8000);\n  }\n}\n",
+    "hints": [
+      "Track `delay` separately from retry backoff; double it after each non-terminal poll and cap it.",
+      "Compute the remaining budget from a start timestamp taken from api.now(), not from a counter of sleeps.",
+      "Check terminal states first, then the deadline, then sleep min(delay, remaining)."
+    ],
+    "keyPoints": [
+      "Exponential polling backoff with a cap (not a tight loop)",
+      "Hard deadline based on the virtual clock; never oversleeps",
+      "Distinguishes job failure (business outcome) from transport failure (retry/throw)",
+      "Terminal-state check before timeout check so a just-finished job is not reported as timeout"
+    ]
+  }
+]

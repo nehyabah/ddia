@@ -25,6 +25,8 @@ import { MongoList, MongoPlay } from "./pages/Mongo";
 import { BehavioralPage } from "./pages/Behavioral";
 import { CompaniesPage, CompanyPage } from "./pages/Companies";
 import { MockPage, PrepHome } from "./pages/Prep";
+import { CommitmentPage } from "./pages/Commitment";
+import { PracticalList, PracticalPlay } from "./pages/Practical";
 
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
 
@@ -37,7 +39,7 @@ function Shell() {
   const items: NavItem[] = [
     { to: "/", label: "Home", icon: "home", end: true, match: ["/chapter"] },
     { to: "/review", label: "Review", icon: "review", badge: profile.dueCount },
-    { to: "/prep", label: "Prep", icon: "brief", match: ["/design", "/coding", "/mongo", "/behavioral", "/mock", "/companies"] },
+    { to: "/prep", label: "Prep", icon: "brief", match: ["/design", "/coding", "/mongo", "/behavioral", "/mock", "/companies", "/practical"] },
     { to: "/java", label: "Java", icon: "code", badge: profile.javaDue },
     { to: "/puzzles", label: "Puzzles", icon: "puzzle" },
     { to: "/stats", label: "Stats", icon: "chart", desktopOnly: true, match: ["/report", "/readiness"] },
@@ -108,6 +110,9 @@ export function App() {
           <Route path="/report" element={<ReportPage />} />
           <Route path="/readiness" element={<ReadinessPage />} />
           <Route path="/prep" element={<PrepHome />} />
+          <Route path="/commitment" element={<CommitmentPage />} />
+          <Route path="/practical" element={<PracticalList />} />
+          <Route path="/practical/:id" element={<PracticalPlay />} />
           <Route path="/design" element={<DesignList />} />
           <Route path="/design/:id" element={<DesignPlay />} />
           <Route path="/coding" element={<CodingList />} />

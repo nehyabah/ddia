@@ -5,6 +5,7 @@ import { Icon, Ring, type IconName } from "../components/ui";
 import { Pic } from "../components/Art";
 import { ReadinessCard } from "./Readiness";
 import { HomePlan } from "./Prep";
+import { CommitCard } from "./Commitment";
 
 const BADGE_ICON: Record<string, IconName> = {
   first: "check", combo5: "flame", combo10: "flame", perfect: "star", matcher: "puzzle", reader: "book",
@@ -57,10 +58,12 @@ export function Home() {
         {c.due > 0 && <span className="due pill" title="Questions due for review">{c.due}</span>}
         <span className="nh">
           <span className="nid"><span className="nicon"><Pic chapter={c.id} plain /></span><span className="num">{c.tag ?? c.id}</span></span>
-          {c.locked ? <span className="lockic"><Icon name="lock" size={16} /></span> : <Ring value={c.mastery} size={38} stroke={4}>{c.mastery}%</Ring>}
+          {c.locked && <span className="lockic"><Icon name="lock" size={16} /></span>}
         </span>
         <span className="ttl">{c.title}</span>
-        <span className="health">{c.locked ? <><Icon name="lock" size={12} />Reach {c.unlockAt}% on {c.unlockAfter}</> : <><span className={`dot ${cls}`} />{label}</>}</span>
+        {c.locked
+          ? <span className="health"><Icon name="lock" size={12} />Reach {c.unlockAt}% on {c.unlockAfter}</span>
+          : <span className={`nprog ${cls}`} title={label}><span className="nbar"><i style={{ width: `${c.mastery}%` }} /></span><span className="npct">{c.mastery}%</span></span>}
         {(c.cardsSeen === c.cardCount || c.mastery >= 80 || c.bossWon) && (
           <span className="donechips">
             {c.cardsSeen === c.cardCount && <span><Icon name="check" size={11} />Read</span>}
@@ -100,6 +103,7 @@ export function Home() {
         <Link to="/java" className="tile-stat"><span className="ic code"><Icon name="code" /></span><span><div className="v">{profile.javaDue}</div><div className="l">Java due</div></span></Link>
       </div>
 
+      <CommitCard />
       <HomePlan />
       <ReadinessCard />
 

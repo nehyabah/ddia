@@ -1,0 +1,809 @@
+[
+  {
+    "id": "api-01",
+    "type": "api",
+    "title": "Design a payments (charges) API",
+    "level": "core",
+    "company": "stripe",
+    "brief": "Design the public REST API that merchants use to charge their customers cards. Merchants create a payment, possibly requiring 3-D Secure, then capture it immediately or later. Developer experience and correctness under retries matter most.",
+    "constraints": [
+      "Merchants call from servers with secret keys; browsers use publishable keys only for tokenization",
+      "Amounts in minor units with ISO currency",
+      "Auth-then-capture and immediate capture",
+      "Async steps (3DS) must be representable",
+      "Network retries must never double charge"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "Model the resources and their states.",
+        "keyPoints": [
+          "PaymentIntent: id (pi_...), amount (integer minor units), currency, status, customer, payment_method, capture_method",
+          "Status machine: requires_payment_method -> requires_confirmation -> requires_action -> processing -> requires_capture -> succeeded | canceled",
+          "PaymentMethod (pm_...) tokenized card; raw PAN never hits merchant servers",
+          "Charge as the underlying attempt record linked to the PaymentIntent",
+          "metadata map for merchant key/values; created timestamp; livemode flag"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "List the endpoints and verbs.",
+        "keyPoints": [
+          "POST /v1/payment_intents (create)",
+          "GET /v1/payment_intents/{id}; POST /v1/payment_intents/{id} (update)",
+          "POST /v1/payment_intents/{id}/confirm, /capture, /cancel as action sub-resources",
+          "GET /v1/payment_intents?customer=cus_..&limit=..",
+          "Webhook events payment_intent.succeeded / payment_intent.payment_failed for async outcomes"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Show request/response bodies and error handling.",
+        "keyPoints": [
+          "Body: amount=2000&currency=usd&payment_method=pm_..&confirm=true",
+          "200 with the full object; 402 for card_declined with decline_code",
+          "Error object: {error:{type, code, message, param, decline_code, doc_url}}",
+          "400 invalid_request_error with param pointing at the bad field; 401 bad key; 409 idempotency conflict",
+          "status requires_action returns next_action {type: redirect_to_url | use_stripe_sdk}"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Pagination, filtering and idempotency.",
+        "keyPoints": [
+          "Idempotency-Key header on all POSTs; key stored with request hash and response for 24h",
+          "Same key with a different body -> idempotency_error; concurrent in-flight duplicate -> 409",
+          "Cursor pagination: limit (1-100), starting_after / ending_before, has_more",
+          "Filter by created[gte]/created[lte], customer",
+          "expand[]=customer&expand[]=latest_charge to inline related objects"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "How will this API evolve?",
+        "keyPoints": [
+          "Dated versions (e.g. 2024-06-20) pinned per account; override per request with a version header",
+          "Additive changes (new fields, enum values, endpoints) are non-breaking",
+          "Clients must tolerate unknown fields and enum values",
+          "Breaking changes ship behind a new version with server-side compatibility transforms",
+          "Webhooks rendered in the account or endpoint pinned version"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Auth, limits and safety.",
+        "keyPoints": [
+          "Secret key via HTTP Basic/Bearer over TLS only; restricted keys with scopes",
+          "Publishable key only for client-side tokenization (reduces PCI scope)",
+          "Rate limits with 429 and Retry-After; separate test vs live limits",
+          "Validate amount, currency minimums; fraud screening before authorization",
+          "Audit log of key usage; test mode isolation via livemode"
+        ]
+      }
+    ],
+    "modelSummary": "The API centres on a PaymentIntent resource with an explicit state machine, created via POST /v1/payment_intents and driven by action endpoints /confirm, /capture and /cancel. Amounts are integers in minor units with ISO currency, and raw card data is tokenized client-side into PaymentMethods. Every POST accepts an Idempotency-Key so retries replay the stored response instead of charging twice. Errors use a consistent object with type, code, param and decline_code, and async steps surface via next_action plus webhooks. Lists use cursor pagination with starting_after and has_more, and expand[] inlines related objects. Evolution uses dated, account-pinned versions with additive changes by default. Endpoints: POST /v1/payment_intents, GET /v1/payment_intents/{id}, POST /v1/payment_intents/{id}, POST /v1/payment_intents/{id}/confirm, POST /v1/payment_intents/{id}/capture, POST /v1/payment_intents/{id}/cancel, GET /v1/payment_intents."
+  },
+  {
+    "id": "api-02",
+    "type": "api",
+    "title": "Design a refunds API",
+    "level": "core",
+    "company": "stripe",
+    "brief": "Design the API that lets merchants refund all or part of a successful payment. Refunds can take days to settle and may fail. Ensure merchants cannot over-refund and can safely retry.",
+    "constraints": [
+      "Full and multiple partial refunds per payment",
+      "Total refunded must never exceed the captured amount",
+      "Refunds are async: pending -> succeeded | failed",
+      "Reasons: duplicate, fraudulent, requested_by_customer",
+      "Merchants reconcile via webhooks and list endpoints"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "Model refunds.",
+        "keyPoints": [
+          "Refund: id (re_...), payment_intent/charge, amount, currency, status, reason, failure_reason, metadata, created",
+          "Status: pending, requires_action, succeeded, failed, canceled",
+          "Charge exposes amount_refunded, refunded boolean and a refunds list",
+          "Balance transaction records the money movement for reconciliation",
+          "Currency always equals the original charge currency"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "Endpoints.",
+        "keyPoints": [
+          "POST /v1/refunds {payment_intent, amount?, reason?}",
+          "GET /v1/refunds/{id}; POST /v1/refunds/{id} (update metadata only)",
+          "POST /v1/refunds/{id}/cancel (only while pending and supported by the method)",
+          "GET /v1/refunds?payment_intent=pi_..",
+          "Events: refund.created, refund.updated, charge.refunded"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Request/response and errors.",
+        "keyPoints": [
+          "Omitted amount means refund the remaining refundable amount",
+          "200 returns the Refund with status pending or succeeded",
+          "400 amount_too_large when amount > captured - already refunded",
+          "400 charge_already_refunded; 400 charge_disputed when a dispute exists",
+          "Failed refunds surface failure_reason (e.g. expired_or_canceled_card) via refund.updated webhook"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Idempotency and listing.",
+        "keyPoints": [
+          "Idempotency-Key is essential: a retried partial refund must not refund twice",
+          "Server enforces refundable balance under a row lock on the charge (atomic check-and-insert)",
+          "Cursor pagination with starting_after, limit, has_more",
+          "Filter by payment_intent, charge, created range",
+          "expand[]=charge for reconciliation"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Evolution.",
+        "keyPoints": [
+          "New reason or status values are additive; clients must handle unknown enums",
+          "Moving from charge-centric to payment_intent-centric refunds via a new dated version",
+          "Deprecated fields stay populated on old versions",
+          "Webhook payloads serialized in the endpoint pinned version",
+          "State machine changes documented in the changelog"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Safety.",
+        "keyPoints": [
+          "Refunds require a secret key with write scope; restricted keys can exclude refunds",
+          "Rate limits and anomaly alerts on refund bursts (compromised key)",
+          "Audit trail of who issued each refund (dashboard user vs API key)",
+          "Funds only return to the original payment method",
+          "Webhook signatures so merchants can trust refund events"
+        ]
+      }
+    ],
+    "modelSummary": "Refunds are a first-class resource created with POST /v1/refunds referencing a payment_intent, with an optional amount for partial refunds and a reason enum. The server atomically checks refundable balance (captured minus already refunded) under a lock, returning 400 amount_too_large on overdraw, and Idempotency-Key ensures retries do not double refund. Refunds are asynchronous with statuses pending, succeeded, failed and canceled, reported through refund.updated and charge.refunded webhooks. Lists support cursor pagination and filtering by payment_intent. New statuses and reasons are additive under dated versions. Endpoints: POST /v1/refunds, GET /v1/refunds/{id}, POST /v1/refunds/{id}, POST /v1/refunds/{id}/cancel, GET /v1/refunds."
+  },
+  {
+    "id": "api-03",
+    "type": "api",
+    "title": "Design a subscriptions API",
+    "level": "advanced",
+    "company": "stripe",
+    "brief": "Design the API for recurring billing: merchants define products and prices, subscribe customers, change plans mid-cycle with proration, and handle failed renewals. The API must make the billing lifecycle explicit.",
+    "constraints": [
+      "Monthly/yearly prices, per-seat quantity",
+      "Trials, upgrades/downgrades with proration",
+      "Invoices generated per cycle and charged automatically",
+      "Failed payments retried (dunning) before cancel",
+      "Cancel immediately or at period end"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "Model the billing resources.",
+        "keyPoints": [
+          "Product and Price (unit_amount, currency, recurring {interval, interval_count}); prices immutable once used",
+          "Customer with a default payment method",
+          "Subscription: customer, items[] (price, quantity), status, current_period_start/end, trial_end, cancel_at_period_end",
+          "Status: incomplete, trialing, active, past_due, unpaid, canceled",
+          "Invoice and InvoiceLineItem per cycle, paid via a PaymentIntent"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "Endpoints.",
+        "keyPoints": [
+          "POST /v1/products, POST /v1/prices, POST /v1/customers",
+          "POST /v1/subscriptions {customer, items:[{price, quantity}], trial_period_days}",
+          "POST /v1/subscriptions/{id} to change items/quantity with proration_behavior",
+          "DELETE /v1/subscriptions/{id} (cancel now) vs POST with cancel_at_period_end=true",
+          "GET /v1/invoices/upcoming?subscription=.. to preview proration"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Request/response and errors.",
+        "keyPoints": [
+          "If the first payment needs SCA, status is incomplete with latest_invoice.payment_intent.next_action",
+          "proration_behavior: create_prorations | none | always_invoice",
+          "400 resource_missing for unknown price; 400 on currency mismatch with existing subscriptions",
+          "402 when an immediate invoice payment fails with a card error",
+          "Webhooks: invoice.paid, invoice.payment_failed, customer.subscription.updated / deleted"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Listing and idempotency.",
+        "keyPoints": [
+          "GET /v1/subscriptions?customer=&status=&price= with cursor pagination",
+          "Idempotency-Key on create and update to avoid duplicate subscriptions",
+          "expand[]=latest_invoice.payment_intent saves round trips",
+          "expand[]=data.items.data.price on lists avoids N+1 calls",
+          "Upcoming invoice is a side-effect-free GET preview"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Evolution.",
+        "keyPoints": [
+          "Prices are immutable: change pricing by creating a new Price and migrating subscriptions",
+          "New statuses (e.g. paused) are additive but must be documented as possible values",
+          "Plans -> Prices migration handled via a dated version with a compatibility layer",
+          "Default proration behavior only changes in a new version",
+          "Event payloads rendered in the endpoint pinned version"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Safety.",
+        "keyPoints": [
+          "Secret key auth; customer portal uses short-lived scoped session links",
+          "Rate limits per account; bulk migrations through async batch jobs",
+          "Billing anchored in UTC with billing_cycle_anchor",
+          "Configurable dunning schedule with a bounded number of retries",
+          "Test clocks to simulate time advancing in test mode"
+        ]
+      }
+    ],
+    "modelSummary": "The billing API models immutable Prices under Products, Customers with default payment methods, and Subscriptions made of items (price, quantity) with an explicit status machine (incomplete, trialing, active, past_due, unpaid, canceled). Each cycle produces an Invoice charged via a PaymentIntent, and failed payments follow a configurable dunning schedule announced by invoice.payment_failed webhooks. Plan changes go through POST /v1/subscriptions/{id} with proration_behavior, and GET /v1/invoices/upcoming previews the result. Cancellation is immediate via DELETE or deferred via cancel_at_period_end. Creates are idempotent and lists use cursors and expand. Endpoints: POST /v1/products, POST /v1/prices, POST /v1/customers, POST /v1/subscriptions, GET /v1/subscriptions/{id}, POST /v1/subscriptions/{id}, DELETE /v1/subscriptions/{id}, GET /v1/invoices/upcoming."
+  },
+  {
+    "id": "api-04",
+    "type": "api",
+    "title": "Design a webhooks endpoint management API",
+    "level": "advanced",
+    "company": "stripe",
+    "brief": "Merchants want to receive events (payment succeeded, refund failed) at their own HTTPS URLs. Design the API to register and manage webhook endpoints plus the delivery contract: payload shape, signing, retries and replay.",
+    "constraints": [
+      "Each account may have up to 16 endpoints",
+      "Endpoints subscribe to specific event types or *",
+      "At-least-once delivery with retries for up to 3 days",
+      "Payloads must be verifiable by the receiver",
+      "Merchants need to inspect and resend past events"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "Resources.",
+        "keyPoints": [
+          "WebhookEndpoint: id (we_...), url, enabled_events[], status (enabled/disabled), api_version, secret (returned once), description",
+          "Event: id (evt_...), type, created, data.object snapshot, data.previous_attributes, api_version",
+          "DeliveryAttempt: endpoint, event, http status, latency, next_retry_at",
+          "Events immutable and retained for 30 days",
+          "Secret rotation keeps multiple active secrets during an overlap window"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "Endpoints.",
+        "keyPoints": [
+          "POST /v1/webhook_endpoints {url, enabled_events}",
+          "GET / POST / DELETE /v1/webhook_endpoints/{id}",
+          "GET /v1/events?type=payment_intent.succeeded&created[gte]=..",
+          "GET /v1/events/{id}; POST /v1/webhook_endpoints/{id}/events/{evt_id}/resend",
+          "POST /v1/webhook_endpoints/{id}/rotate_secret"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Delivery payload and errors.",
+        "keyPoints": [
+          "Delivery: POST Event JSON with header Stripe-Signature: t=timestamp,v1=hex(HMAC_SHA256(secret, t + \".\" + raw_body))",
+          "Receiver returns 2xx quickly; non-2xx or timeout (~10s) counts as failure",
+          "Exponential backoff retries; endpoint disabled after sustained failure and owner emailed",
+          "400 url_invalid for non-HTTPS or private IP; 400 for unknown event type",
+          "Receivers dedupe on event.id because delivery is at-least-once and unordered"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Listing, ordering, idempotency.",
+        "keyPoints": [
+          "Events list uses cursor pagination (starting_after, has_more), newest first",
+          "No ordering guarantee; receivers re-fetch the object if order matters",
+          "Idempotency-Key on endpoint creation to avoid duplicate registrations",
+          "Filter events by type, created range, delivery_success=false",
+          "Thin events option: send ids only and let receivers fetch current state"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Evolution.",
+        "keyPoints": [
+          "Endpoint pinned to api_version; payloads rendered in that version",
+          "New event types are additive and delivered only if subscribed or *",
+          "Upgrading an endpoint version is explicit; run a second endpoint in parallel to migrate",
+          "Add a v2 signature alongside v1 rather than replacing silently",
+          "Deprecate event types with long notice"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Security.",
+        "keyPoints": [
+          "Verify HMAC with constant-time compare and reject timestamps older than 5 minutes (replay protection)",
+          "SSRF protection: HTTPS only, block private/link-local IPs, resolve DNS at send time",
+          "Secrets shown once at creation and rotatable with overlap",
+          "Per-endpoint concurrency caps so receivers are not overwhelmed",
+          "Publish source IP ranges for optional allowlisting"
+        ]
+      }
+    ],
+    "modelSummary": "WebhookEndpoint resources (url, enabled_events, api_version, secret) are managed via CRUD under /v1/webhook_endpoints, and Events are immutable records listable via GET /v1/events. Delivery POSTs the Event JSON with a Stripe-Signature header containing a timestamp and HMAC-SHA256 over timestamp.raw_body; receivers verify with constant-time comparison and a 5 minute tolerance. Delivery is at-least-once and unordered, retried with exponential backoff for up to 3 days before the endpoint is disabled, so receivers dedupe on event.id. Secrets rotate with an overlap window, URLs are validated against SSRF, and payloads render in the endpoint pinned version. Endpoints: POST /v1/webhook_endpoints, GET /v1/webhook_endpoints, GET /v1/webhook_endpoints/{id}, POST /v1/webhook_endpoints/{id}, DELETE /v1/webhook_endpoints/{id}, POST /v1/webhook_endpoints/{id}/rotate_secret, GET /v1/events, GET /v1/events/{id}."
+  },
+  {
+    "id": "api-05",
+    "type": "api",
+    "title": "Design pagination for a list endpoint",
+    "level": "core",
+    "brief": "Our GET /v1/transactions endpoint returns millions of rows for large merchants, and offset pagination is timing out and returning duplicates. Redesign pagination, filtering and sorting for this list endpoint.",
+    "constraints": [
+      "Up to hundreds of millions of rows per account",
+      "New rows inserted continuously while clients page",
+      "Filters: created range, status, customer",
+      "Default sort newest first",
+      "Some clients are scripts exporting everything"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "Model the list response.",
+        "keyPoints": [
+          "List envelope: {object:\"list\", data:[...], has_more, url}",
+          "Transactions have a stable unique id and created timestamp",
+          "Sort key (created DESC, id DESC) is unique and stable",
+          "total_count omitted by default (expensive); opt-in only",
+          "Cursor is the last object id or an opaque token encoding (created, id) plus filter hash"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "Endpoints.",
+        "keyPoints": [
+          "GET /v1/transactions?limit=50&starting_after=txn_..",
+          "GET /v1/transactions?ending_before=txn_.. for backward paging",
+          "GET /v1/transactions/search?query=.. for flexible search with eventually consistent semantics",
+          "POST /v1/reporting/exports for bulk async export instead of paging millions",
+          "SDK auto-pagination helpers iterate pages transparently"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Request and error details.",
+        "keyPoints": [
+          "limit default 10, max 100; 400 if out of range",
+          "400 if cursor object is not found or belongs to a different filter set",
+          "Invalid filter param returns 400 with param set",
+          "Empty page returns 200 with data:[] and has_more:false",
+          "Opaque keyset cursors stay valid even if the referenced row is deleted"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Explain why cursor beats offset and how filtering combines.",
+        "keyPoints": [
+          "Offset scans and discards skipped rows (O(offset)) and shifts on inserts, causing duplicates/skips",
+          "Keyset: WHERE (created, id) < (:c, :id) ORDER BY created DESC, id DESC LIMIT n+1; extra row sets has_more",
+          "Composite index (account_id, created DESC, id DESC) plus filter-specific indexes",
+          "created[gte]/created[lt] bound the scan; status filter via composite or partial index",
+          "GETs are safe and idempotent, so no Idempotency-Key is needed"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Evolution.",
+        "keyPoints": [
+          "Offset kept on the old version, cursor on the new dated version",
+          "Adding filters is additive; changing default sort order is breaking",
+          "Opaque cursor format lets internals change freely",
+          "Raising max limit is safe; lowering it is breaking",
+          "Document consistency semantics (live view, not snapshot)"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Limits and safety.",
+        "keyPoints": [
+          "Every query scoped by authenticated account (tenant id)",
+          "Rate limits per request; large exports pushed to async jobs",
+          "Signed/encrypted cursors prevent tampering and cross-account use",
+          "Optional cursor expiry",
+          "Avoid count(*) on huge tables; return has_more instead"
+        ]
+      }
+    ],
+    "modelSummary": "The endpoint moves from offset to keyset (cursor) pagination: results sort by a unique, stable (created DESC, id DESC) key and the cursor identifies the last row, so each page is an index range scan of limit+1 rows regardless of depth, and concurrent inserts do not cause duplicates or skips. Responses use a list envelope with data and has_more; requests accept limit (max 100), starting_after and ending_before plus filters like created[gte] and status. Cursors are opaque, signed, tied to the filter set and tenant-scoped. Totals are omitted by default, and bulk needs go to an async export. Endpoints: GET /v1/transactions, GET /v1/transactions/{id}, GET /v1/transactions/search, POST /v1/reporting/exports, GET /v1/reporting/exports/{id}."
+  },
+  {
+    "id": "api-06",
+    "type": "api",
+    "title": "Design an API versioning strategy",
+    "level": "advanced",
+    "company": "stripe",
+    "brief": "We have thousands of integrations that cannot all upgrade at once, yet we need to keep improving the API. Design a versioning strategy that lets us ship breaking changes without breaking anyone.",
+    "constraints": [
+      "Integrations live for years without code changes",
+      "We ship changes weekly",
+      "Webhooks and SDKs must respect versions",
+      "Supporting old versions must stay cheap",
+      "Clear developer upgrade path"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "What is versioned and how is it represented?",
+        "keyPoints": [
+          "Dated versions (e.g. 2024-06-20) rather than v1/v2 major paths",
+          "Account gets a pinned default version at its first request",
+          "Each version is a set of named change modules",
+          "Per-request override via Stripe-Version header",
+          "Webhook endpoints carry their own pinned api_version"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "Endpoints and surface.",
+        "keyPoints": [
+          "Path stays /v1/...; version travels in a header, not the URL",
+          "Account settings show the pinned version; dashboard upgrade action",
+          "Developers test an upgrade per request with the header before switching",
+          "Changelog per version with migration notes",
+          "A /v2 namespace reserved for wholesale redesigns only"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "How do requests flow through versions?",
+        "keyPoints": [
+          "Core code implements only the latest version",
+          "Responses pass through transforms walking backwards from latest to the requested version",
+          "Request params are transformed forward to latest",
+          "Unknown version header -> 400 listing valid versions",
+          "Response echoes the version used"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "How do lists and idempotency interact with versions?",
+        "keyPoints": [
+          "Idempotent replays return the response rendered in the original request version",
+          "Pagination cursors remain valid across versions",
+          "Expanded objects transformed the same way as top-level objects",
+          "Events stored version-neutral and rendered per endpoint version",
+          "Golden-response contract tests per version"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Define breaking vs non-breaking.",
+        "keyPoints": [
+          "Non-breaking: new endpoints, optional params, new response fields, new event types",
+          "Breaking: removing/renaming fields, changing types, new required params, changing defaults or error codes",
+          "New enum values documented as non-breaking; clients must handle unknowns",
+          "Deprecation via Deprecation and Sunset headers plus dashboard notices",
+          "Retire a transform only when usage telemetry reaches zero"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Operational safety.",
+        "keyPoints": [
+          "Track version usage per account to plan deprecations",
+          "Allow rollback to the previous version within a window after upgrade",
+          "SDKs pin the version matching their generated types",
+          "Auth and rate limits independent of version",
+          "Fuzz/contract tests ensure old versions never change"
+        ]
+      }
+    ],
+    "modelSummary": "Use dated API versions pinned per account at first use, overridable per request with a Stripe-Version header, while the URL stays /v1. Core logic implements only the latest version; a chain of small version change modules transforms requests forward and responses backward to the caller version, so each old version costs only a transform. Additive changes (new fields, endpoints, optional params) ship without a new version; removals, renames, type and default changes require one. Webhooks and idempotent replays render in the pinned version, and usage telemetry plus Deprecation/Sunset headers guide retirement. Endpoints: any /v1/* with optional Stripe-Version header, GET /v1/account (shows pinned version), POST /v1/account/api_version (upgrade, or via dashboard), and a public upgrades changelog."
+  },
+  {
+    "id": "api-07",
+    "type": "api",
+    "title": "Design idempotent POST requests",
+    "level": "advanced",
+    "brief": "Clients retry POST requests on timeouts and network errors, and we have seen double charges. Design an idempotency mechanism for all mutating endpoints of a payments API, including what is stored, for how long, and how concurrent duplicates behave.",
+    "constraints": [
+      "Any POST may be retried by clients or SDKs automatically",
+      "Requests may involve external calls (card networks)",
+      "Keys provided by clients, retained 24 hours",
+      "Distributed API servers behind a load balancer",
+      "Must be safe even if the server crashes mid-request"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "What is stored?",
+        "keyPoints": [
+          "IdempotencyRecord: unique (account_id, key), request_hash, status (in_progress/completed), response_code, response_body, recovery_point, locked_at, created_at",
+          "Keys scoped per account and per mode (test/live)",
+          "request_hash = method + path + normalized body",
+          "Records expire after 24h",
+          "Recovery points for multi-step operations (atomic phases)"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "Where does it apply?",
+        "keyPoints": [
+          "Idempotency-Key header accepted on all POST endpoints",
+          "GET and DELETE are idempotent by HTTP semantics and ignore the header",
+          "SDKs auto-generate a UUIDv4 per logical request and reuse it on retries",
+          "Response header Idempotent-Replayed: true on replay",
+          "Keys are opaque; no management endpoints"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Responses and errors for duplicates.",
+        "keyPoints": [
+          "First request: insert record in_progress atomically (unique constraint), then execute",
+          "Retry after completion: replay stored status and body verbatim, including 4xx",
+          "Retry while in progress: 409 Conflict; client retries later",
+          "Same key with different parameters: 400 idempotency_error",
+          "Server crash: lock expires and a retry resumes from recovery_point"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Interaction with external side effects.",
+        "keyPoints": [
+          "Pass an idempotency key downstream to the card processor so external calls dedupe too",
+          "Split work into atomic phases each committed with a recovery point",
+          "Transactional outbox emits events/webhooks exactly once from the DB",
+          "Do not persist transient 5xx results; allow the retry to execute",
+          "Clients use exponential backoff with jitter"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Evolution.",
+        "keyPoints": [
+          "Replays render in the original request API version",
+          "Changing body normalization must not reject legitimate retries",
+          "Lengthening retention is safe; shortening is breaking",
+          "Document which endpoints honour keys",
+          "Extend to batch endpoints with per-item keys"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Safety.",
+        "keyPoints": [
+          "Keys scoped per account so one tenant cannot read another tenant cached response",
+          "Limit key length (e.g. 255 chars)",
+          "Replays count against rate limits to prevent abuse",
+          "Stored responses may hold sensitive data: encrypt at rest, delete on TTL",
+          "Monitor 409/400 idempotency errors as a signal of client bugs"
+        ]
+      }
+    ],
+    "modelSummary": "Every POST accepts an Idempotency-Key header; the server atomically inserts an IdempotencyRecord keyed by (account, key) with a request hash and status in_progress before doing any work. Completed requests store the status code and body so retries replay the exact response with Idempotent-Replayed: true, mismatched parameters return an idempotency error, and concurrent duplicates get 409. Multi-step operations commit atomic phases with recovery points, pass keys downstream to processors and emit events through a transactional outbox, so crashes resume safely. Records are tenant-scoped, encrypted and expire after 24 hours; SDKs generate UUIDv4 keys and retry with backoff. Endpoints: POST /v1/payment_intents, POST /v1/refunds, POST /v1/customers (all honouring Idempotency-Key), with response headers Idempotent-Replayed and Request-Id."
+  },
+  {
+    "id": "api-08",
+    "type": "api",
+    "title": "Design a file upload API",
+    "level": "core",
+    "company": "stripe",
+    "brief": "Merchants need to upload documents (dispute evidence, identity documents) up to 50 MB, and some will upload over unreliable connections. Design the upload API, file references and how files attach to other resources.",
+    "constraints": [
+      "Files up to 50 MB; allowed types PDF, JPEG, PNG",
+      "Purpose determines allowed types and access",
+      "Resumable uploads for flaky clients",
+      "Files referenced by other objects (disputes, verifications)",
+      "Downloads via expiring links"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "Resources.",
+        "keyPoints": [
+          "File: id (file_...), purpose, filename, size (bytes), type, status, created, expires_at",
+          "FileLink: id, file, url, expires_at for temporary sharing",
+          "UploadSession for resumable uploads: id, size, received_bytes, parts",
+          "Purposes: dispute_evidence, identity_document, business_logo",
+          "Bytes in object storage; metadata in the database"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "Endpoints.",
+        "keyPoints": [
+          "POST /v1/files (multipart/form-data: file, purpose) on a dedicated upload host",
+          "GET /v1/files/{id}; GET /v1/files?purpose=..",
+          "GET /v1/files/{id}/contents or via a FileLink url",
+          "Resumable: POST /v1/upload_sessions -> PUT /v1/upload_sessions/{id} with Content-Range -> POST /v1/upload_sessions/{id}/complete",
+          "POST /v1/file_links {file, expires_at}; attach via POST /v1/disputes/{id} evidence[receipt]=file_..."
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Request/response and errors.",
+        "keyPoints": [
+          "200 returns File object with status uploaded or processing (scan pending)",
+          "413 Payload Too Large over the limit; 415 Unsupported Media Type for the purpose",
+          "400 invalid purpose; 404 unknown upload session",
+          "Resumable PUT reports received range; client resumes from the last byte",
+          "Checksum (SHA-256) verified; mismatch -> 400"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Listing and idempotency.",
+        "keyPoints": [
+          "Cursor pagination on GET /v1/files",
+          "Idempotency-Key on file creation so retried uploads do not duplicate",
+          "Parts idempotent by part number/offset",
+          "Filter by purpose and created range",
+          "File unusable until virus scan passes"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Evolution.",
+        "keyPoints": [
+          "New purposes and types are additive",
+          "Presigned direct-to-storage uploads offered as a new flow alongside the old",
+          "File fields additive; size always in bytes",
+          "Legacy endpoints deprecated with Sunset headers",
+          "Content URLs stable across API versions"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Security.",
+        "keyPoints": [
+          "Validate type by magic bytes, not extension; malware scan",
+          "Encrypt at rest; identity documents restricted to owner and never exposed via FileLinks",
+          "FileLinks unguessable and expiring; served from a separate domain to avoid XSS",
+          "Per-account upload rate and bandwidth limits",
+          "Strip EXIF metadata where appropriate"
+        ]
+      }
+    ],
+    "modelSummary": "Files are first-class resources uploaded via multipart POST to a dedicated upload host with a required purpose that governs allowed types, size limits and access. Large or flaky uploads use an UploadSession with ranged PUTs, checksums and a complete call, and file creation honours Idempotency-Key. File objects (id, purpose, size, type, status) are referenced by id from other resources like dispute evidence, and downloads go through expiring FileLinks served from a separate domain. Validation errors use 413, 415 and 400 with the standard error object, and content is type-sniffed, malware scanned and encrypted at rest. Endpoints: POST /v1/files, GET /v1/files, GET /v1/files/{id}, GET /v1/files/{id}/contents, POST /v1/upload_sessions, PUT /v1/upload_sessions/{id}, POST /v1/upload_sessions/{id}/complete, POST /v1/file_links."
+  },
+  {
+    "id": "api-09",
+    "type": "api",
+    "title": "Design an API error model",
+    "level": "core",
+    "brief": "Our API returns errors inconsistently: some are strings, some HTML, some 200s with error fields. Design a consistent error model covering HTTP status codes, a machine-readable error body, and how SDKs and developers should handle each class of error.",
+    "constraints": [
+      "Public REST API used from many languages",
+      "Errors must be machine-handleable and human-friendly",
+      "Must distinguish retryable from non-retryable",
+      "Must support field-level validation errors",
+      "Must not leak internal details"
+    ],
+    "sections": [
+      {
+        "key": "resources",
+        "title": "Resources & data model",
+        "prompt": "Define the error object.",
+        "keyPoints": [
+          "{\"error\":{\"type\",\"code\",\"message\",\"param\",\"doc_url\",\"request_id\"}}",
+          "type: api_error, card_error, idempotency_error, invalid_request_error, authentication_error, rate_limit_error",
+          "code: stable machine string (resource_missing, parameter_invalid_integer)",
+          "message: human readable and may change; never parse it",
+          "Optional details[] for multiple field violations (RFC 9457 problem+json as an alternative)"
+        ]
+      },
+      {
+        "key": "endpoints",
+        "title": "Endpoints & methods",
+        "prompt": "How do errors appear across endpoints?",
+        "keyPoints": [
+          "Every endpoint uses the same envelope with Content-Type application/json",
+          "Request-Id header on all responses for support",
+          "Webhook delivery failures surface as delivery attempt records",
+          "Batch endpoints return per-item errors only where documented",
+          "SDKs map error types to exception classes"
+        ]
+      },
+      {
+        "key": "requests",
+        "title": "Requests, responses & errors",
+        "prompt": "Map status codes.",
+        "keyPoints": [
+          "400 invalid request/validation; 401 missing or invalid key; 403 insufficient permission",
+          "404 resource_missing; 409 conflict (idempotency in progress, state conflict)",
+          "402 request failed, e.g. card declined with decline_code",
+          "429 rate limited with Retry-After",
+          "500/502/503/504 server-side: retryable with the same Idempotency-Key"
+        ]
+      },
+      {
+        "key": "pagination",
+        "title": "Pagination, filtering & idempotency",
+        "prompt": "Retries and idempotency in error handling.",
+        "keyPoints": [
+          "Retryable: 409 lock conflicts, 429, 5xx and network errors; non-retryable: 400/401/402/403/404",
+          "Retries must reuse the same Idempotency-Key",
+          "Completed idempotent requests replay their original error",
+          "Invalid cursor returns 400 with param=starting_after",
+          "Exponential backoff with jitter; honour Retry-After"
+        ]
+      },
+      {
+        "key": "versioning",
+        "title": "Versioning & evolution",
+        "prompt": "Evolution.",
+        "keyPoints": [
+          "Adding new codes is additive; clients default-handle unknown codes by type",
+          "Changing a code or status for an existing condition is breaking",
+          "Messages can be improved freely because clients must not parse them",
+          "doc_url points to stable per-code docs",
+          "Remove or rename types only via a new version"
+        ]
+      },
+      {
+        "key": "security",
+        "title": "Auth, limits & safety",
+        "prompt": "Safety.",
+        "keyPoints": [
+          "Never expose stack traces, SQL or internal hostnames",
+          "Return 404 (not 403) for resources in other accounts to avoid existence leaks",
+          "Uniform authentication errors to prevent key enumeration",
+          "Log full detail internally keyed by request_id",
+          "Rate limit headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset"
+        ]
+      }
+    ],
+    "modelSummary": "All errors use a single JSON envelope {error:{type, code, message, param, doc_url, request_id}} with the appropriate HTTP status: type is a small fixed set, code a stable machine identifier, param names the offending field, and message is for humans only. Status mapping is explicit: 400 validation, 401 auth, 402 request failed (declines), 403 permission, 404 missing, 409 conflict, 429 rate limited with Retry-After, and 5xx server errors. Clients retry only 409 lock conflicts, 429, 5xx and network errors, reusing the same Idempotency-Key with backoff. New codes are additive; changing an existing code or status is breaking. No internal details leak, cross-tenant resources return 404, and every response carries a Request-Id. Examples: POST /v1/payment_intents -> 402 {error:{type:\"card_error\", code:\"card_declined\", decline_code:\"insufficient_funds\"}}; GET /v1/customers/cus_x -> 404 resource_missing; POST /v1/refunds -> 400 {param:\"amount\", code:\"amount_too_large\"}."
+  }
+]

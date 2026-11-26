@@ -93,8 +93,61 @@ export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, h
           </ul>
           <div className="coach-tip"><b>Next time</b><span>{grade.tip}</span></div>
           <details className="coach-model"><summary>Show a model answer</summary><p>{grade.modelAnswer}</p></details>
+          <FollowUps kind={kind} id={String(id)} answer={answer} />
         </div>
       )}
+    </div>
+  );
+}
+
+type Turn = { q: string; why: string; a?: string; score?: number; feedback?: string; betterAnswer?: string };
+
+/** After a review: the interviewer pushes back with up to three follow-up questions. */
+function FollowUps({ kind, id, answer }: { kind: string; id: string; answer: string }) {
+  const { reward } = useProfile();
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const history = turns.filter((t) => t.a != null).map((t) => ({ q: t.q, a: t.a! }));
+  const open = turns.length > 0 && turns[turns.length - 1].a == null ? turns[turns.length - 1] : null;
+
+  async function ask() {
+    setBusy(true); setErr(null);
+    try { const f = await api.post<{ question: string; why: string }>("/ai/followup", { kind, id, answer, history }); setTurns([...turns, { q: f.question, why: f.why }]); setReply(""); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  async function send() {
+    if (!open) return;
+    setBusy(true); setErr(null);
+    try {
+      const g = await api.post<{ score: number; feedback: string; betterAnswer: string; xp: number; newBadges: Badge[] }>("/ai/followup/grade", { kind, id, answer, history, question: open.q, reply });
+      setTurns(turns.map((t) => (t === open ? { ...t, a: reply, score: g.score, feedback: g.feedback, betterAnswer: g.betterAnswer } : t)));
+      reward(g.xp, g.newBadges);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  const tone = (s: number) => (s >= 8 ? "var(--teal)" : s >= 5 ? "var(--amber)" : "var(--red)");
+  return (
+    <div className="followups">
+      {turns.map((t, i) => (
+        <div key={i} className="fu">
+          <div className="fu-q"><span className="fu-who">Interviewer</span>{t.q}</div>
+          {t.a != null && (<>
+            <div className="fu-a"><span className="fu-who">You</span>{t.a}</div>
+            <div className="fu-g"><b style={{ color: tone(t.score ?? 0) }}>{t.score}/10</b> {t.feedback} <span className="muted">Probing: {t.why}</span>
+              <details><summary>Stronger reply</summary><p>{t.betterAnswer}</p></details></div>
+          </>)}
+        </div>
+      ))}
+      {open ? (
+        <div className="fu-reply">
+          <textarea className="field" rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply as you would out loud…" disabled={busy} />
+          <button className="primary coach-go" onClick={send} disabled={busy || reply.trim().length < 10}>{busy ? <span className="spin" /> : null}Reply</button>
+        </div>
+      ) : turns.length < 3 ? (
+        <button className="ghost fu-ask" onClick={ask} disabled={busy}>{busy ? <span className="spin" /> : <Icon name="mic" />}{turns.length ? "Another follow-up" : "Interviewer follow-up"}</button>
+      ) : <p className="small muted">Three follow-ups done. That’s a realistic grilling.</p>}
+      {err && <p className="err">{err}</p>}
     </div>
   );
 }

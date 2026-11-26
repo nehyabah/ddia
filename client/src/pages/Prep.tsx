@@ -12,9 +12,10 @@ import { tone } from "./Readiness";
 export function PrepHome() {
   const { data: plan } = useLoad(() => api.get<Plan>("/plan"), []);
   const tiles: { to: string; title: string; sub: string; icon: string }[] = [
-    { to: "/design", title: "System design", sub: "Section-by-section, reviewed", icon: "chart" },
+    { to: "/design", title: "Design", sub: "System, object-oriented & API", icon: "chart" },
     { to: "/coding", title: "Coding", sub: "Run tests or get a code review", icon: "computer" },
     { to: "/behavioral", title: "Behavioural", sub: "STAR story bank", icon: "boy" },
+    { to: "/practical", title: "Practical rounds", sub: "Bug squash & integration", icon: "lock" },
     { to: "/mongo", title: "MongoDB lab", sub: "Queries & pipelines", icon: "folder" },
     { to: "/mock", title: "Mock interview", sub: "45 minutes, timed", icon: "target" },
     { to: "/companies", title: "Companies", sub: "MongoDB · Microsoft · Stripe", icon: "trophy" },

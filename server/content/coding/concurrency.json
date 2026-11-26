@@ -1,0 +1,312 @@
+[
+  {
+    "id": "conc-code-01",
+    "title": "Bounded Blocking Queue (Lock + Two Conditions)",
+    "level": "medium",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a thread-safe, fixed-capacity FIFO queue that blocks producers when full and consumers when empty.\n\n```java\nclass BoundedBlockingQueue<T> {\n  BoundedBlockingQueue(int capacity);\n  void put(T item) throws InterruptedException;                  // blocks while full\n  T take() throws InterruptedException;                          // blocks while empty\n  boolean offer(T item, long timeout, TimeUnit unit) throws InterruptedException; // false on timeout\n  T poll(long timeout, TimeUnit unit) throws InterruptedException;                // null on timeout\n  int size();\n}\n```\n\n**Requirements**\n- Any number of producer and consumer threads. No item may be lost or delivered twice; size never exceeds capacity.\n- Blocking calls must respond to interruption by throwing `InterruptedException`.\n- Timed calls must honor the *total* timeout even across spurious wakeups.\n- Null items are rejected with `NullPointerException`.\n\n**Allowed:** `ReentrantLock`, `Condition`, `TimeUnit`. **Not allowed:** any `java.util.concurrent` queue (`ArrayBlockingQueue`, `LinkedBlockingQueue`, ...), `Semaphore`.\n\n**Follow-ups:** Why two conditions instead of one? When would `signal()` be wrong and `signalAll()` required?",
+    "fn": "BoundedBlockingQueue",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.concurrent.TimeUnit;\nimport java.util.concurrent.locks.Condition;\nimport java.util.concurrent.locks.ReentrantLock;\n\nclass BoundedBlockingQueue<T> {\n  public BoundedBlockingQueue(int capacity) {\n    // TODO: ring buffer + one ReentrantLock + two Conditions (notFull, notEmpty)\n  }\n\n  /** Blocks while full. Throws InterruptedException if interrupted while waiting. */\n  public void put(T item) throws InterruptedException {\n    // TODO\n  }\n\n  /** Blocks while empty. */\n  public T take() throws InterruptedException {\n    // TODO\n    return null;\n  }\n\n  /** Waits up to timeout for space; returns false on timeout. */\n  public boolean offer(T item, long timeout, TimeUnit unit) throws InterruptedException {\n    // TODO\n    return false;\n  }\n\n  /** Waits up to timeout for an item; returns null on timeout. */\n  public T poll(long timeout, TimeUnit unit) throws InterruptedException {\n    // TODO\n    return null;\n  }\n\n  public int size() {\n    // TODO\n    return 0;\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.concurrent.TimeUnit;\nimport java.util.concurrent.locks.Condition;\nimport java.util.concurrent.locks.ReentrantLock;\n\nclass BoundedBlockingQueue<T> {\n  private final Object[] items;\n  private int head, tail, count;\n  private final ReentrantLock lock = new ReentrantLock();\n  private final Condition notFull = lock.newCondition();\n  private final Condition notEmpty = lock.newCondition();\n\n  public BoundedBlockingQueue(int capacity) {\n    if (capacity <= 0) throw new IllegalArgumentException(\"capacity must be > 0\");\n    items = new Object[capacity];\n  }\n\n  public void put(T item) throws InterruptedException {\n    if (item == null) throw new NullPointerException();\n    lock.lockInterruptibly();\n    try {\n      while (count == items.length) notFull.await();   // while, not if: spurious wakeups / stolen slots\n      enqueue(item);\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public T take() throws InterruptedException {\n    lock.lockInterruptibly();\n    try {\n      while (count == 0) notEmpty.await();\n      return dequeue();\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public boolean offer(T item, long timeout, TimeUnit unit) throws InterruptedException {\n    if (item == null) throw new NullPointerException();\n    long nanos = unit.toNanos(timeout);\n    lock.lockInterruptibly();\n    try {\n      while (count == items.length) {\n        if (nanos <= 0) return false;\n        nanos = notFull.awaitNanos(nanos);   // returns remaining time\n      }\n      enqueue(item);\n      return true;\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public T poll(long timeout, TimeUnit unit) throws InterruptedException {\n    long nanos = unit.toNanos(timeout);\n    lock.lockInterruptibly();\n    try {\n      while (count == 0) {\n        if (nanos <= 0) return null;\n        nanos = notEmpty.awaitNanos(nanos);\n      }\n      return dequeue();\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public int size() {\n    lock.lock();\n    try { return count; } finally { lock.unlock(); }\n  }\n\n  private void enqueue(T item) {\n    items[tail] = item;\n    tail = (tail + 1) % items.length;\n    count++;\n    notEmpty.signal();   // exactly one waiting consumer can make progress\n  }\n\n  @SuppressWarnings(\"unchecked\")\n  private T dequeue() {\n    T item = (T) items[head];\n    items[head] = null;   // let GC reclaim\n    head = (head + 1) % items.length;\n    count--;\n    notFull.signal();\n    return item;\n  }\n}\n"
+    },
+    "complexity": "put/take/offer/poll O(1) amortized; O(capacity) memory (ring buffer).",
+    "hints": [
+      "Use a ring buffer (array + head, tail, count) guarded by one ReentrantLock.",
+      "Two Conditions: notFull (producers wait) and notEmpty (consumers wait). Always wait in a while loop that re-checks the predicate.",
+      "For timeouts use awaitNanos, which returns the remaining time; loop until it is <= 0."
+    ],
+    "keyPoints": [
+      "await() always inside while(predicate), never if: handles spurious wakeups and slots stolen by another thread",
+      "Separate notFull/notEmpty conditions so signal() wakes a thread that can actually make progress (no lost wakeups)",
+      "unlock() in finally; lockInterruptibly() so blocked callers can be cancelled",
+      "Timed variants use awaitNanos remaining-time loop rather than restarting the full timeout",
+      "Ring buffer nulls out dequeued slots to avoid memory leaks; count kept consistent under the lock"
+    ]
+  },
+  {
+    "id": "conc-code-02",
+    "title": "Thread-Safe LRU Cache",
+    "level": "medium",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a fixed-capacity least-recently-used cache that is safe to use from many threads.\n\n```java\nclass LRUCache<K, V> {\n  LRUCache(int capacity);\n  V get(K key);              // null if absent; marks key most-recently-used\n  void put(K key, V value);  // insert or update; evict LRU entry if at capacity\n  int size();\n}\n```\n\n**Requirements**\n- O(1) `get` and `put`.\n- Under arbitrary concurrent use, the cache never exceeds capacity, never returns a stale value for a key after a completed `put`, and its internal structure never becomes corrupted.\n\n**Allowed:** `HashMap`, `ReentrantLock` / `synchronized`. **Not allowed:** `LinkedHashMap` (build the recency list yourself), `ConcurrentHashMap`, third-party caches.\n\n**Follow-ups:** Why is a ReadWriteLock not a win here? How would you shard the cache to reduce contention, and what does that do to the global LRU guarantee?",
+    "fn": "LRUCache",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.HashMap;\nimport java.util.Map;\nimport java.util.concurrent.locks.ReentrantLock;\n\nclass LRUCache<K, V> {\n  public LRUCache(int capacity) {\n    // TODO: HashMap<K, Node> + hand-written doubly linked list + a lock\n  }\n\n  /** Returns the value or null; marks the key as most recently used. */\n  public V get(K key) {\n    // TODO\n    return null;\n  }\n\n  /** Inserts or updates; evicts the least recently used entry when at capacity. */\n  public void put(K key, V value) {\n    // TODO\n  }\n\n  public int size() {\n    // TODO\n    return 0;\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.HashMap;\nimport java.util.Map;\nimport java.util.concurrent.locks.ReentrantLock;\n\nclass LRUCache<K, V> {\n  private static final class Node<K, V> {\n    final K key; V value; Node<K, V> prev, next;\n    Node(K key, V value) { this.key = key; this.value = value; }\n  }\n\n  private final int capacity;\n  private final Map<K, Node<K, V>> map = new HashMap<>();\n  private final Node<K, V> head = new Node<>(null, null);  // sentinel; most recent is head.next\n  private final Node<K, V> tail = new Node<>(null, null);  // sentinel; least recent is tail.prev\n  // One exclusive lock: get() mutates recency order, so a read lock would NOT be safe here.\n  private final ReentrantLock lock = new ReentrantLock();\n\n  public LRUCache(int capacity) {\n    if (capacity <= 0) throw new IllegalArgumentException();\n    this.capacity = capacity;\n    head.next = tail;\n    tail.prev = head;\n  }\n\n  public V get(K key) {\n    lock.lock();\n    try {\n      Node<K, V> n = map.get(key);\n      if (n == null) return null;\n      unlink(n);\n      linkFirst(n);\n      return n.value;\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public void put(K key, V value) {\n    lock.lock();\n    try {\n      Node<K, V> n = map.get(key);\n      if (n != null) {\n        n.value = value;\n        unlink(n);\n        linkFirst(n);\n        return;\n      }\n      if (map.size() == capacity) {\n        Node<K, V> lru = tail.prev;\n        unlink(lru);\n        map.remove(lru.key);\n      }\n      n = new Node<>(key, value);\n      map.put(key, n);\n      linkFirst(n);\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public int size() {\n    lock.lock();\n    try { return map.size(); } finally { lock.unlock(); }\n  }\n\n  private void unlink(Node<K, V> n) {\n    n.prev.next = n.next;\n    n.next.prev = n.prev;\n  }\n\n  private void linkFirst(Node<K, V> n) {\n    n.next = head.next;\n    n.prev = head;\n    head.next.prev = n;\n    head.next = n;\n  }\n\n  /** Used by tests: walk the list and verify it agrees with the map. */\n  boolean checkInvariants() {\n    lock.lock();\n    try {\n      int cnt = 0;\n      for (Node<K, V> n = head.next; n != tail; n = n.next) {\n        if (n.next.prev != n || map.get(n.key) != n) return false;\n        cnt++;\n      }\n      return cnt == map.size() && cnt <= capacity;\n    } finally {\n      lock.unlock();\n    }\n  }\n}\n"
+    },
+    "complexity": "get/put O(1); O(capacity) memory. All operations serialize on one lock.",
+    "hints": [
+      "Classic design: HashMap<K, Node> + doubly linked list with head/tail sentinels.",
+      "get() moves the node to the front, so it is a WRITE to the list - it needs the exclusive lock.",
+      "To scale, shard into N independent LRU caches by key hash (approximate global LRU)."
+    ],
+    "keyPoints": [
+      "Recognizes get() mutates recency order, so read locks are unsafe; uses an exclusive lock",
+      "Map and list updated together inside one critical section (no window where they disagree)",
+      "Eviction removes from both list and map using the node key",
+      "Sentinel nodes avoid null checks; unlock in finally",
+      "Can discuss striping/sharding and approximate LRU (e.g. sampled or CLOCK) for higher throughput"
+    ]
+  },
+  {
+    "id": "conc-code-03",
+    "title": "Token-Bucket Rate Limiter (Concurrent Callers)",
+    "level": "medium",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a token-bucket rate limiter safe under concurrent callers.\n\n```java\nclass TokenBucketRateLimiter {\n  TokenBucketRateLimiter(long capacity, double refillPerSecond);\n  TokenBucketRateLimiter(long capacity, double refillPerSecond, LongSupplier nanoClock); // for tests\n  boolean tryAcquire();             // = tryAcquire(1)\n  boolean tryAcquire(int permits);  // non-blocking\n  double availableTokens();\n}\n```\n\n**Requirements**\n- The bucket starts full with `capacity` tokens and refills continuously at `refillPerSecond`, never above `capacity`.\n- Refill is lazy (computed from elapsed time on each call); no background thread.\n- With a frozen clock, if 32 threads race to call `tryAcquire()` thousands of times, **exactly** `capacity` calls succeed.\n- Use `System.nanoTime()` (monotonic), not wall-clock time.\n\n**Allowed:** `synchronized`, locks, atomics. **Not allowed:** Guava `RateLimiter`, `Semaphore`.\n\n**Follow-ups:** A lock-free version using a CAS on a packed state; how to rate-limit across many servers (Redis + Lua, or per-node share of a global budget).",
+    "fn": "TokenBucketRateLimiter",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.function.LongSupplier;\n\nclass TokenBucketRateLimiter {\n  public TokenBucketRateLimiter(long capacity, double refillPerSecond) {\n    this(capacity, refillPerSecond, System::nanoTime);\n  }\n\n  /** Test constructor: nanoClock replaces System.nanoTime(). The bucket starts full. */\n  TokenBucketRateLimiter(long capacity, double refillPerSecond, LongSupplier nanoClock) {\n    // TODO\n  }\n\n  public boolean tryAcquire() { return tryAcquire(1); }\n\n  /** Non-blocking: take `permits` tokens if available and return true, else return false. */\n  public boolean tryAcquire(int permits) {\n    // TODO: lazily refill from elapsed time, then check-and-decrement atomically\n    return false;\n  }\n\n  public double availableTokens() {\n    // TODO\n    return 0;\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.function.LongSupplier;\n\nclass TokenBucketRateLimiter {\n  private final long capacity;\n  private final double refillPerNano;\n  private final LongSupplier clock;     // injectable for deterministic tests\n  private double tokens;                // guarded by this\n  private long lastRefill;              // guarded by this\n\n  public TokenBucketRateLimiter(long capacity, double refillPerSecond) {\n    this(capacity, refillPerSecond, System::nanoTime);\n  }\n\n  TokenBucketRateLimiter(long capacity, double refillPerSecond, LongSupplier nanoClock) {\n    if (capacity <= 0 || refillPerSecond <= 0) throw new IllegalArgumentException();\n    this.capacity = capacity;\n    this.refillPerNano = refillPerSecond / 1_000_000_000.0;\n    this.clock = nanoClock;\n    this.tokens = capacity;             // start full\n    this.lastRefill = nanoClock.getAsLong();\n  }\n\n  public boolean tryAcquire() { return tryAcquire(1); }\n\n  public synchronized boolean tryAcquire(int permits) {\n    if (permits <= 0 || permits > capacity) throw new IllegalArgumentException();\n    refill();\n    if (tokens >= permits) {            // check-then-act is atomic under the monitor\n      tokens -= permits;\n      return true;\n    }\n    return false;\n  }\n\n  public synchronized double availableTokens() {\n    refill();\n    return tokens;\n  }\n\n  private void refill() {\n    long now = clock.getAsLong();\n    long elapsed = now - lastRefill;    // nanoTime values are only meaningful as differences\n    if (elapsed > 0) {\n      tokens = Math.min(capacity, tokens + elapsed * refillPerNano);\n      lastRefill = now;\n    }\n  }\n}\n"
+    },
+    "complexity": "O(1) per call; O(1) memory.",
+    "hints": [
+      "State is (tokens, lastRefillNanos). Every call: refill based on now - last, then check-and-decrement.",
+      "The refill + check + decrement must be one atomic step, or two threads can both spend the last token.",
+      "Inject the clock so the test can freeze/advance time deterministically."
+    ],
+    "keyPoints": [
+      "Refill and check-then-act happen atomically (synchronized or a single CAS on combined state)",
+      "Uses nanoTime differences, never absolute values; ignores negative elapsed",
+      "Caps tokens at capacity; fractional tokens so slow rates still refill",
+      "No background refill thread; lazy computation",
+      "Validates permits <= capacity (otherwise a request can never succeed)"
+    ]
+  },
+  {
+    "id": "conc-code-04",
+    "title": "Read-Write-Lock Cache with Single-Flight Loading",
+    "level": "hard",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a lazily-loading cache backed by an expensive loader (e.g. a DB call). Many threads read hot keys; a cache miss must **not** cause a thundering herd.\n\n```java\nclass LoadingCache<K, V> {\n  LoadingCache(Function<K, V> loader);\n  V get(K key) throws InterruptedException;\n  void invalidate(K key);\n}\n```\n\n**Requirements**\n- Hits are served concurrently (readers must not block each other).\n- **Single flight:** for any key, at most one `loader.apply(key)` runs at a time; other callers for that key wait and receive the same result.\n- Loads for *different* keys run in parallel - never call the loader while holding the cache-wide lock.\n- If the loader throws, every waiter for that load gets the exception, and a later `get` retries.\n\n**Allowed:** `ReentrantReadWriteLock`, `HashMap`, `CompletableFuture` (as a one-shot result holder). **Not allowed:** `ConcurrentHashMap.computeIfAbsent`, Caffeine/Guava caches.\n\n**Follow-ups:** Why not just call `computeIfAbsent` on a ConcurrentHashMap? How would you add TTL expiry and refresh-ahead?",
+    "fn": "LoadingCache",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.HashMap;\nimport java.util.Map;\nimport java.util.concurrent.CompletableFuture;\nimport java.util.concurrent.locks.ReadWriteLock;\nimport java.util.concurrent.locks.ReentrantReadWriteLock;\nimport java.util.function.Function;\n\nclass LoadingCache<K, V> {\n  public LoadingCache(Function<K, V> loader) {\n    // TODO\n  }\n\n  /**\n   * Returns the cached value, loading it on a miss. For any key, at most one\n   * loader call may be in flight at once; concurrent callers wait for it.\n   * If the loader throws, waiters see the exception and a later get() retries.\n   */\n  public V get(K key) throws InterruptedException {\n    // TODO: read-locked fast path, write-locked check-and-register, load outside the lock\n    return null;\n  }\n\n  public void invalidate(K key) {\n    // TODO\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.HashMap;\nimport java.util.Map;\nimport java.util.concurrent.CompletableFuture;\nimport java.util.concurrent.ExecutionException;\nimport java.util.concurrent.locks.ReadWriteLock;\nimport java.util.concurrent.locks.ReentrantReadWriteLock;\nimport java.util.function.Function;\n\nclass LoadingCache<K, V> {\n  private final Function<K, V> loader;\n  private final Map<K, V> values = new HashMap<>();                         // guarded by rw\n  private final Map<K, CompletableFuture<V>> inFlight = new HashMap<>();    // guarded by rw (write)\n  private final ReadWriteLock rw = new ReentrantReadWriteLock();\n\n  public LoadingCache(Function<K, V> loader) { this.loader = loader; }\n\n  public V get(K key) throws InterruptedException {\n    // 1) Fast path: concurrent readers share the read lock.\n    rw.readLock().lock();\n    try {\n      V v = values.get(key);\n      if (v != null) return v;\n    } finally {\n      rw.readLock().unlock();\n    }\n\n    // 2) Slow path: under the write lock, re-check and either join or become the loader.\n    CompletableFuture<V> future;\n    boolean leader = false;\n    rw.writeLock().lock();\n    try {\n      V v = values.get(key);                    // double-check: another thread may have finished\n      if (v != null) return v;\n      future = inFlight.get(key);\n      if (future == null) {\n        future = new CompletableFuture<>();\n        inFlight.put(key, future);\n        leader = true;\n      }\n    } finally {\n      rw.writeLock().unlock();\n    }\n\n    // 3) The leader runs the (slow) loader OUTSIDE any lock, so other keys are not blocked.\n    if (leader) {\n      try {\n        V loaded = loader.apply(key);\n        rw.writeLock().lock();\n        try {\n          values.put(key, loaded);\n          inFlight.remove(key);\n        } finally {\n          rw.writeLock().unlock();\n        }\n        future.complete(loaded);\n        return loaded;\n      } catch (RuntimeException | Error e) {\n        rw.writeLock().lock();\n        try { inFlight.remove(key); } finally { rw.writeLock().unlock(); }   // allow retry\n        future.completeExceptionally(e);\n        throw e;\n      }\n    }\n\n    // 4) Followers wait for the leader's result.\n    try {\n      return future.get();\n    } catch (ExecutionException e) {\n      Throwable c = e.getCause();\n      if (c instanceof RuntimeException re) throw re;\n      if (c instanceof Error err) throw err;\n      throw new RuntimeException(c);\n    }\n  }\n\n  public void invalidate(K key) {\n    rw.writeLock().lock();\n    try { values.remove(key); } finally { rw.writeLock().unlock(); }\n  }\n}\n"
+    },
+    "complexity": "Hit: O(1) under a shared read lock. Miss: O(1) bookkeeping + one loader call per key per flight.",
+    "hints": [
+      "Fast path under the read lock; on a miss take the write lock and re-check (double-checked).",
+      "Under the write lock, register an in-flight future for the key if none exists; the thread that registered it is the leader.",
+      "The leader runs the loader with no lock held, publishes the value, removes the in-flight entry, then completes the future."
+    ],
+    "keyPoints": [
+      "Double-check after upgrading from read to write lock (cannot upgrade a ReentrantReadWriteLock in place)",
+      "Exactly one loader per key in flight; followers wait on a shared future",
+      "Loader runs outside locks so a slow key does not block other keys or hits",
+      "Failure path removes the in-flight entry (allows retry) and propagates the exception to all waiters",
+      "Value published before in-flight removal so no window triggers a second load"
+    ]
+  },
+  {
+    "id": "conc-code-05",
+    "title": "CountDownLatch from Scratch",
+    "level": "medium",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a one-shot countdown latch.\n\n```java\nclass SimpleCountDownLatch {\n  SimpleCountDownLatch(long count);\n  void countDown();                    // extra calls after zero are no-ops\n  void await() throws InterruptedException;\n  boolean await(long timeout, TimeUnit unit) throws InterruptedException; // true if reached zero\n  long getCount();\n}\n```\n\n**Requirements**\n- When the count reaches zero, **all** current and future waiters are released.\n- No waiter may return before the count reaches zero.\n- `await` must be interruptible; the timed version honors its total timeout.\n\n**Allowed:** `synchronized` + `wait/notifyAll`, or `ReentrantLock` + `Condition`. **Not allowed:** `java.util.concurrent.CountDownLatch`, `CyclicBarrier`, `Phaser`, `Semaphore`, `AbstractQueuedSynchronizer`.\n\n**Follow-ups:** How does the real CountDownLatch use AQS shared mode? How would you make it reusable (a barrier)?",
+    "fn": "SimpleCountDownLatch",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.concurrent.TimeUnit;\n\nclass SimpleCountDownLatch {\n  public SimpleCountDownLatch(long count) {\n    // TODO\n  }\n\n  /** Decrements the count; when it reaches zero, releases every waiting thread. Extra calls are no-ops. */\n  public void countDown() {\n    // TODO\n  }\n\n  /** Blocks until the count is zero. */\n  public void await() throws InterruptedException {\n    // TODO\n  }\n\n  /** Returns true if the count reached zero, false if the timeout elapsed first. */\n  public boolean await(long timeout, TimeUnit unit) throws InterruptedException {\n    // TODO\n    return false;\n  }\n\n  public long getCount() {\n    // TODO\n    return 0;\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.concurrent.TimeUnit;\n\nclass SimpleCountDownLatch {\n  private long count;   // guarded by this\n\n  public SimpleCountDownLatch(long count) {\n    if (count < 0) throw new IllegalArgumentException(\"count < 0\");\n    this.count = count;\n  }\n\n  public synchronized void countDown() {\n    if (count == 0) return;              // extra countDowns are no-ops\n    if (--count == 0) notifyAll();       // wake ALL waiters, not just one\n  }\n\n  public synchronized void await() throws InterruptedException {\n    while (count > 0) wait();            // loop guards against spurious wakeups\n  }\n\n  /** Returns true if the count reached zero, false if the timeout elapsed first. */\n  public synchronized boolean await(long timeout, TimeUnit unit) throws InterruptedException {\n    long deadline = System.nanoTime() + unit.toNanos(timeout);\n    while (count > 0) {\n      long remaining = deadline - System.nanoTime();\n      if (remaining <= 0) return false;\n      TimeUnit.NANOSECONDS.timedWait(this, remaining);\n    }\n    return true;\n  }\n\n  public synchronized long getCount() { return count; }\n}\n"
+    },
+    "complexity": "countDown O(1) (O(waiters) when it hits zero); await O(1) besides blocking.",
+    "hints": [
+      "Guard the count with the object monitor.",
+      "When the count hits zero you must wake every waiter: notifyAll, not notify.",
+      "Timed await: compute a deadline once, wait for the remaining time in a loop."
+    ],
+    "keyPoints": [
+      "wait() inside while(count > 0): handles spurious wakeups",
+      "notifyAll on reaching zero (notify would strand waiters)",
+      "Count read/write all under the same monitor (visibility + atomicity)",
+      "Deadline-based timed wait; returns false on timeout; propagates InterruptedException",
+      "countDown below zero is a no-op"
+    ]
+  },
+  {
+    "id": "conc-code-06",
+    "title": "Connection Pool with Timed Acquire",
+    "level": "hard",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a generic bounded resource pool (think JDBC or MongoDB driver connection pool).\n\n```java\nclass ConnectionPool<C> {\n  ConnectionPool(Supplier<C> factory, int maxSize);\n  C acquire(long timeout, TimeUnit unit) throws InterruptedException, TimeoutException;\n  void release(C c);\n  void close();\n  int leasedCount();\n}\n```\n\n**Requirements**\n- Connections are created lazily; at most `maxSize` exist at any time.\n- `acquire` returns an idle connection, else creates one if under the limit, else waits up to `timeout` and then throws `TimeoutException`.\n- A connection is never leased to two callers at once. `release` of a connection not currently leased from this pool throws `IllegalArgumentException`.\n- `factory.get()` may be slow (network handshake): **do not call it while holding the pool lock**. If it throws, the reserved slot must be returned.\n- `close()` drops idle connections and wakes waiters, which then throw `IllegalStateException`.\n\n**Allowed:** `ReentrantLock`, `Condition`, collections. **Not allowed:** `Semaphore`, `BlockingQueue`.\n\n**Follow-ups:** Validation on borrow, max idle time, fairness vs throughput, what happens when a caller forgets to release (leak detection).",
+    "fn": "ConnectionPool",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.concurrent.TimeUnit;\nimport java.util.concurrent.TimeoutException;\nimport java.util.concurrent.locks.Condition;\nimport java.util.concurrent.locks.ReentrantLock;\nimport java.util.function.Supplier;\n\nclass ConnectionPool<C> {\n  public ConnectionPool(Supplier<C> factory, int maxSize) {\n    // TODO: connections are created lazily, never more than maxSize alive at once\n  }\n\n  /** Returns an idle connection, creates one if under maxSize, or waits; throws TimeoutException after timeout. */\n  public C acquire(long timeout, TimeUnit unit) throws InterruptedException, TimeoutException {\n    // TODO\n    return null;\n  }\n\n  /** Returns a leased connection to the pool and wakes one waiter. Rejects foreign/double releases. */\n  public void release(C c) {\n    // TODO\n  }\n\n  /** Discards idle connections; waiting and future acquire() calls throw IllegalStateException. */\n  public void close() {\n    // TODO\n  }\n\n  public int leasedCount() {\n    // TODO\n    return 0;\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.ArrayDeque;\nimport java.util.Collections;\nimport java.util.IdentityHashMap;\nimport java.util.Set;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.TimeoutException;\nimport java.util.concurrent.locks.Condition;\nimport java.util.concurrent.locks.ReentrantLock;\nimport java.util.function.Supplier;\n\nclass ConnectionPool<C> {\n  private final Supplier<C> factory;\n  private final int maxSize;\n  private final ArrayDeque<C> idle = new ArrayDeque<>();                                  // guarded by lock\n  private final Set<C> leased = Collections.newSetFromMap(new IdentityHashMap<>());       // guarded by lock\n  private int created;        // connections created OR reserved for creation; guarded by lock\n  private boolean closed;     // guarded by lock\n  private final ReentrantLock lock = new ReentrantLock(true);   // fair: FIFO-ish handoff to waiters\n  private final Condition available = lock.newCondition();\n\n  public ConnectionPool(Supplier<C> factory, int maxSize) {\n    if (maxSize <= 0) throw new IllegalArgumentException();\n    this.factory = factory;\n    this.maxSize = maxSize;\n  }\n\n  public C acquire(long timeout, TimeUnit unit) throws InterruptedException, TimeoutException {\n    long nanos = unit.toNanos(timeout);\n    lock.lockInterruptibly();\n    try {\n      while (true) {\n        if (closed) throw new IllegalStateException(\"pool closed\");\n        C c = idle.pollFirst();\n        if (c != null) { leased.add(c); return c; }\n        if (created < maxSize) { created++; break; }   // reserve a slot, create outside the lock\n        if (nanos <= 0) throw new TimeoutException(\"no connection within timeout\");\n        nanos = available.awaitNanos(nanos);\n      }\n    } finally {\n      lock.unlock();\n    }\n    // Slow I/O (connect) must not hold the pool lock.\n    C c;\n    try {\n      c = factory.get();\n    } catch (RuntimeException e) {\n      lock.lock();\n      try { created--; available.signal(); } finally { lock.unlock(); }   // give the slot back\n      throw e;\n    }\n    lock.lock();\n    try { leased.add(c); } finally { lock.unlock(); }\n    return c;\n  }\n\n  public void release(C c) {\n    lock.lock();\n    try {\n      if (!leased.remove(c)) throw new IllegalArgumentException(\"not leased from this pool\");\n      if (closed) { created--; return; }\n      idle.addLast(c);\n      available.signal();\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public void close() {\n    lock.lock();\n    try {\n      closed = true;\n      created -= idle.size();\n      idle.clear();\n      available.signalAll();   // waiters must wake and observe closed\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  public int leasedCount() {\n    lock.lock();\n    try { return leased.size(); } finally { lock.unlock(); }\n  }\n}\n"
+    },
+    "complexity": "acquire/release O(1) excluding connection creation; O(maxSize) memory.",
+    "hints": [
+      "Track idle (deque), leased (identity set) and created (count, including slots reserved for in-progress creation).",
+      "Reserve a slot (created++) under the lock, then create outside the lock; roll back on failure.",
+      "Wait on a Condition with awaitNanos in a loop; release() signals one waiter."
+    ],
+    "keyPoints": [
+      "Never exceeds maxSize even with concurrent creation (reserve-then-create)",
+      "Slow factory call outside the lock; failure releases the reservation and signals",
+      "Timed wait loop with awaitNanos; throws TimeoutException precisely when time is up",
+      "Double/foreign release detected via identity set",
+      "close() uses signalAll so all waiters observe shutdown; fairness discussed (fair lock or FIFO handoff)"
+    ]
+  },
+  {
+    "id": "conc-code-07",
+    "title": "Striped Counter (LongAdder-Style)",
+    "level": "hard",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "A single `AtomicLong` becomes a hotspot when 64 cores increment it: every CAS fights over one cache line. Implement a striped counter in the spirit of `LongAdder`.\n\n```java\nclass StripedCounter {\n  StripedCounter();              // stripes = availableProcessors()\n  StripedCounter(int stripes);\n  void increment();\n  void add(long x);\n  long sum();                    // exact once writers quiesce\n  void reset();\n}\n```\n\n**Requirements**\n- No lost updates: after all writers finish, `sum()` equals the total of everything added.\n- Writers on different threads should usually hit different cells; avoid **false sharing** between cells.\n- `sum()` may run concurrently with writers (it need not be a linearizable snapshot).\n\n**Allowed:** `AtomicLongArray`, `AtomicLong`, `VarHandle`. **Not allowed:** `LongAdder`, `LongAccumulator`, `synchronized` on the hot path.\n\n**Follow-ups:** Why is sum() not a snapshot? How does LongAdder grow its cell array lazily and rehash a thread's probe on contention? When is a plain AtomicLong better?",
+    "fn": "StripedCounter",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.concurrent.atomic.AtomicLongArray;\n\nclass StripedCounter {\n  public StripedCounter() { this(Runtime.getRuntime().availableProcessors()); }\n\n  public StripedCounter(int stripes) {\n    // TODO: an array of padded cells, one CAS target per stripe\n  }\n\n  public void increment() { add(1); }\n\n  public void add(long x) {\n    // TODO: pick a stripe from the current thread; on CAS failure try another stripe\n  }\n\n  /** Sum of all stripes (exact once writers have finished). */\n  public long sum() {\n    // TODO\n    return 0;\n  }\n\n  public void reset() {\n    // TODO\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.concurrent.atomic.AtomicLongArray;\n\nclass StripedCounter {\n  // Each logical cell occupies its own 64-byte region (8 longs) to avoid false sharing.\n  private static final int PAD = 8;\n  private final int mask;\n  private final AtomicLongArray cells;\n\n  public StripedCounter() { this(Runtime.getRuntime().availableProcessors()); }\n\n  public StripedCounter(int stripes) {\n    int n = 1;\n    while (n < Math.max(1, stripes)) n <<= 1;   // power of two so we can mask instead of mod\n    mask = n - 1;\n    cells = new AtomicLongArray(n * PAD);\n  }\n\n  public void increment() { add(1); }\n\n  public void add(long x) {\n    int idx = index();\n    // Fast path: one CAS on \"our\" stripe. On contention, move to another stripe and retry.\n    for (int attempt = 0; ; attempt++) {\n      int slot = ((idx + attempt) & mask) * PAD;\n      long cur = cells.get(slot);\n      if (cells.compareAndSet(slot, cur, cur + x)) return;\n    }\n  }\n\n  /** Not an atomic snapshot: concurrent adds may or may not be included. Exact once writers quiesce. */\n  public long sum() {\n    long s = 0;\n    for (int i = 0; i <= mask; i++) s += cells.get(i * PAD);\n    return s;\n  }\n\n  public void reset() {\n    for (int i = 0; i <= mask; i++) cells.set(i * PAD, 0);\n  }\n\n  private static int index() {\n    // Spread the thread id so neighbouring ids do not cluster (Fibonacci hashing).\n    long h = Thread.currentThread().threadId() * 0x9E3779B97F4A7C15L;\n    return (int) (h >>> 32);\n  }\n}\n"
+    },
+    "complexity": "add: O(1) expected (one CAS, retries move to a different stripe). sum: O(stripes). Memory O(stripes * 64 bytes).",
+    "hints": [
+      "Keep an array of cells and pick one from a hash of the current thread.",
+      "Pad cells so two of them never share a 64-byte cache line (e.g. use every 8th slot of an AtomicLongArray).",
+      "On CAS failure, try the next stripe instead of hammering the same one."
+    ],
+    "keyPoints": [
+      "CAS retry loop (or getAndAdd) per cell: no lost updates",
+      "Padding/spacing cells to avoid false sharing; power-of-two masking",
+      "Thread-to-stripe hashing spreads threads; contention moves the thread to another cell",
+      "Explains sum() is weakly consistent but exact at quiescence",
+      "Knows the trade-off: more memory and slower reads for much faster contended writes"
+    ]
+  },
+  {
+    "id": "conc-code-08",
+    "title": "Producer-Consumer with Poison-Pill Shutdown",
+    "level": "medium",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Build a worker pipeline: many producers submit items, N consumer threads process them, and shutdown is graceful.\n\n```java\nclass PoisonPillPipeline<T> {\n  PoisonPillPipeline(int consumers, int capacity, Consumer<T> handler); // starts consumers\n  void submit(T item) throws InterruptedException;   // blocks when full (backpressure)\n  boolean shutdownAndAwait(long timeout, TimeUnit unit) throws InterruptedException;\n}\n```\n\n**Requirements**\n- Every item successfully submitted before `shutdownAndAwait` is processed exactly once.\n- Shutdown uses **poison pills**: one sentinel per consumer, enqueued after all accepted items; each consumer exits when it takes a pill.\n- `submit` after shutdown begins throws `IllegalStateException`. Shutdown is idempotent.\n- A handler that throws must not kill its consumer (otherwise a pill is never consumed and shutdown hangs).\n- `shutdownAndAwait` returns false if consumers do not finish within the timeout.\n\n**Allowed:** `ArrayBlockingQueue` / `LinkedBlockingQueue`, `Thread`. **Not allowed:** `ExecutorService`.\n\n**Follow-ups:** Poison pill vs. interrupt vs. a volatile flag + poll(timeout). How do you handle multiple producers that each want to send a pill?",
+    "fn": "PoisonPillPipeline",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.concurrent.ArrayBlockingQueue;\nimport java.util.concurrent.BlockingQueue;\nimport java.util.concurrent.TimeUnit;\nimport java.util.function.Consumer;\n\nclass PoisonPillPipeline<T> {\n  public PoisonPillPipeline(int consumers, int capacity, Consumer<T> handler) {\n    // TODO: bounded queue + start `consumers` threads running a take() loop\n  }\n\n  /** Blocks when the queue is full. Throws IllegalStateException after shutdown has begun. */\n  public void submit(T item) throws InterruptedException {\n    // TODO\n  }\n\n  /** Drain everything submitted so far, stop every consumer via poison pills, wait for them. */\n  public boolean shutdownAndAwait(long timeout, TimeUnit unit) throws InterruptedException {\n    // TODO\n    return false;\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.ArrayList;\nimport java.util.List;\nimport java.util.concurrent.ArrayBlockingQueue;\nimport java.util.concurrent.BlockingQueue;\nimport java.util.concurrent.TimeUnit;\nimport java.util.function.Consumer;\n\nclass PoisonPillPipeline<T> {\n  // A private sentinel object: cannot collide with any real item (unlike null or a magic value).\n  private static final Object POISON = new Object();\n\n  private final BlockingQueue<Object> queue;\n  private final List<Thread> workers = new ArrayList<>();\n  private final Consumer<T> handler;\n  private volatile boolean shuttingDown;\n  private final Object submitLock = new Object();   // orders submits before the pills\n\n  public PoisonPillPipeline(int consumers, int capacity, Consumer<T> handler) {\n    this.queue = new ArrayBlockingQueue<>(capacity);\n    this.handler = handler;\n    for (int i = 0; i < consumers; i++) {\n      Thread t = new Thread(this::consumeLoop, \"consumer-\" + i);\n      workers.add(t);\n      t.start();\n    }\n  }\n\n  /** Blocks if the queue is full (backpressure). Rejected after shutdown has begun. */\n  public void submit(T item) throws InterruptedException {\n    if (item == null) throw new NullPointerException();\n    synchronized (submitLock) {\n      if (shuttingDown) throw new IllegalStateException(\"shutting down\");\n      queue.put(item);\n    }\n  }\n\n  /**\n   * Graceful: every item submitted before this call is processed, then each consumer\n   * receives exactly one pill and exits. Returns true if all consumers finished in time.\n   */\n  public boolean shutdownAndAwait(long timeout, TimeUnit unit) throws InterruptedException {\n    synchronized (submitLock) {\n      if (!shuttingDown) {\n        shuttingDown = true;\n        for (int i = 0; i < workers.size(); i++) queue.put(POISON);  // one pill PER consumer\n      }\n    }\n    long deadline = System.nanoTime() + unit.toNanos(timeout);\n    for (Thread t : workers) {\n      long remaining = deadline - System.nanoTime();\n      if (remaining <= 0) return false;\n      TimeUnit.NANOSECONDS.timedJoin(t, remaining);\n      if (t.isAlive()) return false;\n    }\n    return true;\n  }\n\n  @SuppressWarnings(\"unchecked\")\n  private void consumeLoop() {\n    try {\n      while (true) {\n        Object o = queue.take();\n        if (o == POISON) return;          // do not re-enqueue: each consumer owns one pill\n        try {\n          handler.accept((T) o);\n        } catch (RuntimeException e) {\n          // A bad item must not kill the consumer, or its pill would never be consumed.\n          System.err.println(\"handler failed: \" + e);\n        }\n      }\n    } catch (InterruptedException e) {\n      Thread.currentThread().interrupt();   // forced shutdown path: exit promptly\n    }\n  }\n}\n"
+    },
+    "complexity": "O(1) per item; shutdown O(consumers).",
+    "hints": [
+      "Use a private static final Object as the pill so it can never equal a real item.",
+      "Put exactly one pill per consumer; a consumer that takes a pill returns without re-enqueueing it.",
+      "Make \"check not shut down + enqueue\" atomic with respect to \"mark shut down + enqueue pills\", so no item lands behind the pills."
+    ],
+    "keyPoints": [
+      "Unique sentinel object (not null, not a magic value)",
+      "One pill per consumer; FIFO queue guarantees all earlier items drain first",
+      "Race between submit and shutdown closed (items never enqueued after pills)",
+      "Handler exceptions caught inside the loop; interruption restores the flag and exits",
+      "Bounded queue for backpressure; timed join honoring total timeout"
+    ]
+  },
+  {
+    "id": "conc-code-09",
+    "title": "Delayed Task Executor (DelayQueue-Style)",
+    "level": "hard",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a single-worker scheduler that runs tasks after a delay - a tiny `ScheduledExecutorService`.\n\n```java\nclass DelayedTaskExecutor {\n  DelayedTaskExecutor();                                   // starts one worker thread\n  void schedule(Runnable task, long delay, TimeUnit unit); // thread-safe\n  void shutdown() throws InterruptedException;             // discard pending, join worker\n}\n```\n\n**Requirements**\n- A task never runs before its deadline, and runs promptly after it (no polling loops with `sleep`).\n- Tasks run in deadline order (FIFO for equal deadlines).\n- If a task with an *earlier* deadline is scheduled while the worker is sleeping toward a later one, the worker must wake and run the earlier task first.\n- A throwing task must not kill the worker. Tasks run without holding the scheduler lock.\n- After `shutdown`, `schedule` throws `IllegalStateException`.\n\n**Allowed:** `PriorityQueue`, `ReentrantLock`, `Condition`, atomics. **Not allowed:** `DelayQueue`, `ScheduledExecutorService`, `Timer`.\n\n**Follow-ups:** The leader/follower optimisation in DelayQueue for multiple workers; hierarchical timing wheels (Kafka, Netty) for millions of timers.",
+    "fn": "DelayedTaskExecutor",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.PriorityQueue;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.locks.Condition;\nimport java.util.concurrent.locks.ReentrantLock;\n\nclass DelayedTaskExecutor {\n  public DelayedTaskExecutor() {\n    // TODO: start ONE worker thread that sleeps until the earliest deadline\n  }\n\n  /** Runs task on the worker thread no earlier than `delay` from now. Thread-safe. */\n  public void schedule(Runnable task, long delay, TimeUnit unit) {\n    // TODO\n  }\n\n  /** Reject new tasks, discard pending ones, wait for the worker to exit. */\n  public void shutdown() throws InterruptedException {\n    // TODO\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.PriorityQueue;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.atomic.AtomicLong;\nimport java.util.concurrent.locks.Condition;\nimport java.util.concurrent.locks.ReentrantLock;\n\nclass DelayedTaskExecutor {\n  private static final class Task implements Comparable<Task> {\n    final long runAt;   // System.nanoTime() deadline\n    final long seq;     // FIFO tie-break for equal deadlines\n    final Runnable body;\n    Task(long runAt, long seq, Runnable body) { this.runAt = runAt; this.seq = seq; this.body = body; }\n    public int compareTo(Task o) {\n      long d = runAt - o.runAt;          // overflow-safe nanoTime comparison\n      if (d != 0) return d < 0 ? -1 : 1;\n      return Long.compare(seq, o.seq);\n    }\n  }\n\n  private final PriorityQueue<Task> heap = new PriorityQueue<>();   // guarded by lock\n  private final ReentrantLock lock = new ReentrantLock();\n  private final Condition changed = lock.newCondition();\n  private final AtomicLong seq = new AtomicLong();\n  private final Thread worker;\n  private boolean shutdown;                                         // guarded by lock\n\n  public DelayedTaskExecutor() {\n    worker = new Thread(this::loop, \"delayed-executor\");\n    worker.setDaemon(true);\n    worker.start();\n  }\n\n  public void schedule(Runnable task, long delay, TimeUnit unit) {\n    Task t = new Task(System.nanoTime() + unit.toNanos(Math.max(0, delay)), seq.getAndIncrement(), task);\n    lock.lock();\n    try {\n      if (shutdown) throw new IllegalStateException(\"shut down\");\n      heap.add(t);\n      // Only the head matters to the sleeper: wake it if the new task is now earliest.\n      if (heap.peek() == t) changed.signal();\n    } finally {\n      lock.unlock();\n    }\n  }\n\n  /** Stops accepting tasks; pending tasks are discarded; waits for a running task to finish. */\n  public void shutdown() throws InterruptedException {\n    lock.lock();\n    try {\n      shutdown = true;\n      heap.clear();\n      changed.signal();\n    } finally {\n      lock.unlock();\n    }\n    worker.join();\n  }\n\n  private void loop() {\n    while (true) {\n      Task next;\n      lock.lock();\n      try {\n        while (true) {\n          if (shutdown) return;\n          Task head = heap.peek();\n          if (head == null) { changed.await(); continue; }\n          long wait = head.runAt - System.nanoTime();\n          if (wait <= 0) { next = heap.poll(); break; }\n          changed.awaitNanos(wait);   // woken early by an earlier schedule() or shutdown\n        }\n      } catch (InterruptedException e) {\n        return;\n      } finally {\n        lock.unlock();\n      }\n      try {\n        next.body.run();              // run OUTSIDE the lock so schedule() never blocks on a task\n      } catch (RuntimeException e) {\n        System.err.println(\"task failed: \" + e);   // a failing task must not kill the worker\n      }\n    }\n  }\n}\n"
+    },
+    "complexity": "schedule O(log n); dispatching each task O(log n); O(n) memory.",
+    "hints": [
+      "Min-heap keyed by nanoTime deadline (+ a sequence number for ties).",
+      "Worker: under the lock, peek; if empty await(); if not due, awaitNanos(remaining); else poll and run it outside the lock.",
+      "schedule() signals the condition only when the new task became the head of the heap."
+    ],
+    "keyPoints": [
+      "Timed wait on a Condition (awaitNanos), re-checking the head after every wakeup",
+      "Signal when a new earliest task arrives (no oversleeping / missed preemption)",
+      "Overflow-safe nanoTime comparisons (a - b < 0)",
+      "Task executed outside the lock; exceptions caught so the worker survives",
+      "Clean shutdown: flag under lock, signal, join; rejects later schedules"
+    ]
+  },
+  {
+    "id": "conc-code-10",
+    "title": "Concurrent Web Crawler (Bounded Parallelism + Dedup)",
+    "level": "hard",
+    "topic": "Concurrency",
+    "javaOnly": true,
+    "prompt": "Implement a multithreaded crawler (LeetCode 1242 style, but with real termination and bounded concurrency).\n\n```java\nclass WebCrawler {\n  WebCrawler(Function<String, List<String>> fetchLinks, int parallelism); // fetchLinks is blocking I/O\n  Set<String> crawl(String startUrl) throws InterruptedException;\n  static String hostOf(String url);  // provided\n}\n```\n\n**Requirements**\n- Return every URL reachable from `startUrl` whose host equals the start URL's host (including `startUrl`).\n- Each URL is fetched **at most once**, even when many pages link to it simultaneously.\n- At most `parallelism` fetches run at any moment.\n- `crawl` returns as soon as all work is finished - detect termination without sleeping or polling.\n- A fetch that throws is treated as a page with no links; it must not hang or abort the crawl.\n- No thread leaks: worker threads are shut down before `crawl` returns.\n\n**Allowed:** `ExecutorService`, `ConcurrentHashMap`, atomics, `synchronized`/`wait`. Avoid parallel streams.\n\n**Follow-ups:** Politeness (per-host rate limits), crawling across machines (URL frontier partitioned by host hash), using virtual threads + a Semaphore instead of a fixed pool.",
+    "fn": "WebCrawler",
+    "starter": {
+      "js": "// This problem is Java-only.\n",
+      "java": "import java.util.List;\nimport java.util.Set;\nimport java.util.concurrent.ConcurrentHashMap;\nimport java.util.concurrent.ExecutorService;\nimport java.util.concurrent.Executors;\nimport java.util.concurrent.atomic.AtomicInteger;\nimport java.util.function.Function;\n\nclass WebCrawler {\n  public WebCrawler(Function<String, List<String>> fetchLinks, int parallelism) {\n    // TODO\n  }\n\n  /**\n   * Returns every URL reachable from startUrl whose host equals startUrl's host.\n   * At most `parallelism` fetches run at once; each URL is fetched at most once.\n   */\n  public Set<String> crawl(String startUrl) throws InterruptedException {\n    // TODO: concurrent dedup set + worker pool + a way to detect \"no work left\"\n    return null;\n  }\n\n  static String hostOf(String url) {\n    int start = url.indexOf(\"://\");\n    start = start < 0 ? 0 : start + 3;\n    int end = url.indexOf('/', start);\n    return end < 0 ? url.substring(start) : url.substring(start, end);\n  }\n}\n"
+    },
+    "tests": [],
+    "solution": {
+      "js": "",
+      "java": "import java.util.List;\nimport java.util.Set;\nimport java.util.concurrent.ConcurrentHashMap;\nimport java.util.concurrent.ExecutorService;\nimport java.util.concurrent.Executors;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.atomic.AtomicInteger;\nimport java.util.function.Function;\n\nclass WebCrawler {\n  private final Function<String, List<String>> fetchLinks;   // blocking I/O, thread-safe\n  private final int parallelism;\n\n  public WebCrawler(Function<String, List<String>> fetchLinks, int parallelism) {\n    if (parallelism <= 0) throw new IllegalArgumentException();\n    this.fetchLinks = fetchLinks;\n    this.parallelism = parallelism;\n  }\n\n  /** Crawls every URL reachable from startUrl on the same host; each URL is fetched at most once. */\n  public Set<String> crawl(String startUrl) throws InterruptedException {\n    String host = hostOf(startUrl);\n    Set<String> seen = ConcurrentHashMap.newKeySet();\n    AtomicInteger pending = new AtomicInteger();          // submitted-but-unfinished tasks\n    Object done = new Object();\n    ExecutorService pool = Executors.newFixedThreadPool(parallelism);  // bounds concurrent fetches\n    try {\n      seen.add(startUrl);\n      pending.incrementAndGet();\n      submit(pool, startUrl, host, seen, pending, done);\n      synchronized (done) {\n        while (pending.get() > 0) done.wait();            // termination: no task in flight\n      }\n    } finally {\n      pool.shutdownNow();\n      pool.awaitTermination(5, TimeUnit.SECONDS);\n    }\n    return seen;\n  }\n\n  private void submit(ExecutorService pool, String url, String host, Set<String> seen,\n                      AtomicInteger pending, Object done) {\n    pool.execute(() -> {\n      try {\n        List<String> links;\n        try {\n          links = fetchLinks.apply(url);\n        } catch (RuntimeException e) {\n          links = List.of();                              // one bad page must not hang the crawl\n        }\n        for (String next : links) {\n          // add() is the atomic dedup gate: exactly one thread wins per URL.\n          if (hostOf(next).equals(host) && seen.add(next)) {\n            pending.incrementAndGet();                    // increment BEFORE our own decrement\n            submit(pool, next, host, seen, pending, done);\n          }\n        }\n      } finally {\n        if (pending.decrementAndGet() == 0) {\n          synchronized (done) { done.notifyAll(); }\n        }\n      }\n    });\n  }\n\n  static String hostOf(String url) {\n    int start = url.indexOf(\"://\");\n    start = start < 0 ? 0 : start + 3;\n    int end = url.indexOf('/', start);\n    return end < 0 ? url.substring(start) : url.substring(start, end);\n  }\n}\n"
+    },
+    "complexity": "O(V + E) work over reachable pages; O(V) memory for the seen set; wall time ~ (V / parallelism) * fetch latency.",
+    "hints": [
+      "ConcurrentHashMap.newKeySet().add(url) is an atomic \"first one wins\" dedup check.",
+      "A fixed thread pool of size parallelism bounds concurrent fetches.",
+      "Count pending tasks: increment before submitting a child, decrement when a task finishes; when it hits zero, the crawl is done."
+    ],
+    "keyPoints": [
+      "Atomic dedup via set.add return value (no check-then-act race)",
+      "Pending counter incremented before child submission so it cannot reach zero early",
+      "Termination signaled via wait/notify or a latch, not sleep-polling",
+      "Bounded pool; executor shut down in finally (no thread leak)",
+      "Fetch failures handled inside the task; decrement in finally"
+    ]
+  }
+]

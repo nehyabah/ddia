@@ -948,3 +948,40 @@ button.themechip{cursor:pointer}
 .task .tt b,.listrow .lr-t b,.focusrow .fr-t b,.step-t b,.qrow-h b{color:var(--ink)}
 .brand .logo{background:#fff;border:1px solid var(--glass-line);box-shadow:var(--shadow-sm)}
 @media (max-width:420px){.hero .sub{padding-right:64px}}
+
+/* ---------- accountability ---------- */
+.commitcard{margin:12px 0 4px}
+.cc-h{display:flex;justify-content:space-between;align-items:center;gap:12px;text-decoration:none;color:inherit}
+.cc-h .eyebrow{font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cc-h b{font-size:1.05rem}
+.cc-streak{display:grid;text-align:center;line-height:1.1}
+.cc-streak b{font-size:1.5rem;color:var(--orange)}.cc-streak small{font-size:.66rem;color:var(--muted)}
+.commitcard .bar{display:block;height:6px;border-radius:3px;background:var(--line);margin:10px 0 2px;overflow:hidden}
+.commitcard .bar i{display:block;height:100%;border-radius:3px}
+.cc-dots{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;margin:12px 0 8px}
+.cc-dots i{aspect-ratio:1;border-radius:4px;background:var(--surface3)}
+.cc-dots .dot-kept{background:var(--teal)}.cc-dots .dot-missed{background:var(--red)}.cc-dots .dot-bonus{background:color-mix(in srgb,var(--teal) 45%,transparent)}
+.cc-dots .dot-today{background:transparent;border:2px solid var(--accent)}.cc-dots .dot-before{opacity:.35}
+.cc-foot{line-height:1.5}
+.reflect{padding:12px;border-radius:14px;background:var(--amberSoft);margin-bottom:12px}
+.reflect .primary{margin-top:10px}
+.daypick{display:flex;gap:6px;flex-wrap:wrap}
+.daypick button{flex:1;min-width:42px;padding:10px 0;border-radius:12px;border:1px solid var(--line2);background:var(--glass);font-weight:600;font-size:.85rem}
+.daypick button.on{background:var(--accent);color:var(--onAccent);border-color:var(--accent)}
+
+/* ---------- interviewer follow-ups ---------- */
+.followups{margin-top:14px;padding-top:12px;border-top:1px solid var(--glass-line);display:grid;gap:10px}
+.fu{display:grid;gap:6px}
+.fu-q,.fu-a{padding:10px 12px;border-radius:14px;font-size:.92rem;max-width:92%}
+.fu-q{background:var(--surface2);justify-self:start;border-bottom-left-radius:4px}
+.fu-a{background:var(--accentSoft);justify-self:end;border-bottom-right-radius:4px}
+.fu-who{display:block;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:2px}
+.fu-g{font-size:.85rem}.fu-g details{margin-top:4px}.fu-g summary{cursor:pointer;color:var(--accent);font-weight:600}
+.fu-reply{display:grid;gap:8px}.fu-reply .primary{justify-self:end;margin:0}
+.fu-ask{justify-self:start;margin-top:0}
+/* chapter cards: thin progress bar instead of ring + status text */
+.node .nprog{margin-top:auto;display:flex;align-items:center;gap:8px}
+.node .nbar{flex:1;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.node .nbar i{display:block;height:100%;border-radius:2px;background:var(--accent)}
+.node .nprog.up .nbar i{background:var(--teal)}
+.node .npct{font-size:.72rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;min-width:30px;text-align:right}

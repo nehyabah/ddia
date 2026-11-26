@@ -4,6 +4,9 @@ import fs from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+// Deliberately buggy practical code can leave rejected promises behind; they are not test failures.
+process.on("unhandledRejection", () => {});
+
 // Isolated database for every run.
 process.env.DB_PATH = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ddia-test-")), "t.sqlite");
 
@@ -15,9 +18,11 @@ const { content, loadPrep, sameResult } = await import("../src/routes/prep.js");
 const { chapterLocks } = await import("../src/routes/study.js");
 const { computeReadiness } = await import("../src/routes/readiness.js");
 const { buildPlan } = await import("../src/routes/plan.js");
+const { summary: commit } = await import("../src/routes/accountability.js");
+const { practical, loadPractical } = await import("../src/routes/prep.js");
 const { Aggregator, Query } = await import("mingo");
 
-seedContent(); seedJava(); seedPuzzles(); loadPrep();
+seedContent(); seedJava(); seedPuzzles(); loadPrep(); loadPractical();
 const newUser = (name: string) => Number(db.prepare("INSERT INTO users (username, pw_hash) VALUES (?, 'x')").run(name).lastInsertRowid);
 
 test("levels grow by 35% per level", () => {
@@ -129,8 +134,45 @@ test("content: every MongoDB lab solution produces its expected result", () => {
 
 test("content: design prompts all have 7 sections with key points", () => {
   assert.ok(content.design.length >= 24);
+  const KEYS: Record<string, string[]> = {
+    system: ["requirements", "api", "data", "architecture", "scale", "failures", "tradeoffs"],
+    ood: ["requirements", "entities", "relationships", "methods", "patterns", "concurrency"],
+    api: ["resources", "endpoints", "requests", "pagination", "versioning", "security"],
+  };
   for (const p of content.design) {
-    assert.deepEqual(p.sections.map((s) => s.key), ["requirements", "api", "data", "architecture", "scale", "failures", "tradeoffs"], p.id);
+    assert.deepEqual(p.sections.map((s) => s.key), KEYS[p.type ?? "system"], p.id);
     for (const s of p.sections) assert.ok(s.keyPoints.length >= 3, `${p.id}:${s.key}`);
+  }
+});
+
+test("accountability: kept vs missed planned days and the kept streak", () => {
+  const u = newUser("commit");
+  const DAY = 86400000;
+  const day = (n: number) => { const d = new Date(Date.now() - n * DAY); const p = (x: number) => String(x).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+  db.prepare("UPDATE users SET study_days = ?, weekly_minutes = 700, commit_set_at = ? WHERE id = ?").run(JSON.stringify([0, 1, 2, 3, 4, 5, 6]), Date.now() - 10 * DAY, u);
+  // 100 min/day target; kept yesterday and the day before, missed 3 days ago
+  for (const [n, min] of [[1, 120], [2, 100], [3, 5]] as const) db.prepare("INSERT INTO activity (user_id, day, seconds) VALUES (?, ?, ?)").run(u, day(n), min * 60);
+  const c = commit(u);
+  assert.equal(c.perDay, 100);
+  assert.equal(c.keptStreak, 2);
+  assert.equal(c.days.find((d) => d.day === day(3))!.status, "missed");
+  assert.ok(c.needsReflection, "a recent missed day asks for a reflection");
+});
+
+test("content: practical rounds - fixed files and solutions pass", async () => {
+  const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
+  const runAll = async (code: string, tests: { call: string; expected: unknown }[]) => {
+    let ok = 0;
+    for (const t of tests) { try { let g = new Function(`${code}
+return (${t.call});`)(); if (g && typeof g.then === "function") g = await g; if (canon(g) === canon(t.expected)) ok++; } catch { /* fails */ } }
+    return ok;
+  };
+  for (const p of practical) {
+    if (p.kind === "bugsquash") {
+      const join = (fs: { code: string }[]) => fs.map((f) => f.code).join("\n");
+      assert.equal(await runAll(join(p.fixedFiles!), p.tests), p.tests.length, `${p.id} fixed`);
+    } else {
+      assert.equal(await runAll(`${p.fakeApi}\n${p.solution}`, p.tests), p.tests.length, `${p.id} solution`);
+    }
   }
 });

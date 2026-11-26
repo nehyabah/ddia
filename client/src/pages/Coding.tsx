@@ -8,9 +8,9 @@ import { Prose } from "../components/CodeView";
 import { Icon } from "../components/ui";
 import { CompanyChip, CompanyFilter, useCompanyFilter } from "./Companies";
 
-type Item = { id: string; company: string | null; title: string; level: string; topic: string; solved: boolean; attempts: number; bestPassed: number; total: number; javaScore: number | null };
+type Item = { id: string; javaOnly?: boolean; company: string | null; title: string; level: string; topic: string; solved: boolean; attempts: number; bestPassed: number; total: number; javaScore: number | null };
 type Problem = {
-  id: string; title: string; level: string; topic: string; prompt: string; fn: string; hints: string[]; complexity: string;
+  javaOnly?: boolean; id: string; title: string; level: string; topic: string; prompt: string; fn: string; hints: string[]; complexity: string;
   tests: { name: string; call: string; expected: unknown }[]; code: { js: string; java: string }; starter: { js: string; java: string };
   solved: boolean; attempts: number; solution: { js: string; java: string } | null;
 };
@@ -31,7 +31,7 @@ export function CodingList() {
       <div className="list">
         {list.map((d) => (
           <Link key={d.id} to={`/coding/${d.id}`} className="listrow">
-            <span className="lr-t"><b>{d.title}</b><small><span className={`lvl ${d.level}`}>{d.level}</span> · {d.topic}{d.attempts && !d.solved ? ` · ${d.bestPassed}/${d.total} tests` : ""}</small></span>
+            <span className="lr-t"><b>{d.title}</b><small><span className={`lvl ${d.level}`}>{d.level}</span> · {d.topic}{d.javaOnly ? " · Java" : ""}{d.attempts && !d.solved ? ` · ${d.bestPassed}/${d.total} tests` : ""}</small></span>
             <CompanyChip id={d.company} />
             {d.solved ? <span className="donemark"><Icon name="check" size={13} /></span> : <Icon name="arrow" />}
           </Link>
@@ -55,7 +55,7 @@ export function CodingPlay() {
   const saved = useRef({ js: "", java: "" });
   const { data: list } = useLoad(() => api.get<Item[]>("/coding"), []);
 
-  useEffect(() => { if (data) { setCode(data.code); saved.current = data.code; setRun(null); setHints(0); setErr(null); } }, [data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (data) { setCode(data.code); saved.current = data.code; setRun(null); setHints(0); setErr(null); setLang(data.javaOnly ? "java" : "js"); } }, [data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!data || code[lang] === saved.current[lang]) return;
     const t = setTimeout(() => api.put(`/coding/${data.id}/code`, { lang, code: code[lang] }).then(() => { saved.current = { ...saved.current, [lang]: code[lang] }; }).catch(() => {}), 1000);
@@ -87,10 +87,10 @@ export function CodingPlay() {
       <h2>{data.title}</h2>
       <section className="panel"><Prose text={data.prompt} /></section>
 
-      <div className="seg" role="tablist">
+      {data.javaOnly ? <p className="small muted">Java only: write it, then get a code review focused on correctness under concurrency.</p> : <div className="seg" role="tablist">
         <button role="tab" aria-selected={lang === "js"} className={lang === "js" ? "on" : ""} onClick={() => setLang("js")}>JavaScript · runs tests</button>
         <button role="tab" aria-selected={lang === "java"} className={lang === "java" ? "on" : ""} onClick={() => setLang("java")}>Java · reviewed</button>
-      </div>
+      </div>}
       <Editor value={code[lang]} onChange={(v) => setCode({ ...code, [lang]: v })} rows={16} />
       <div className="row" style={{ gap: 8, alignItems: "center" }}>
         {lang === "js" && <button className="primary" onClick={runTests} disabled={busy}>{busy ? "Running…" : "Run tests"}</button>}

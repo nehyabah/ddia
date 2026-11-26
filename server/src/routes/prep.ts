@@ -52,9 +52,9 @@ CREATE TABLE IF NOT EXISTS mongo_progress (
 /* ---------- content ---------- */
 export type DesignSection = { key: string; title: string; prompt: string; keyPoints: string[] };
 export type CompanyProfile = { id: string; name: string; summary: string; loop: { round: string; what: string; tips: string[] }[]; values: { name: string; meaning: string }[]; valuesNote?: string; weights: Record<string, number>; focusTopics: string[] };
-export type DesignPrompt = { company?: string; id: string; title: string; level: string; brief: string; constraints: string[]; sections: DesignSection[]; modelSummary: string };
+export type DesignPrompt = { type?: "system" | "ood" | "api"; company?: string; id: string; title: string; level: string; brief: string; constraints: string[]; sections: DesignSection[]; modelSummary: string };
 export type CodingProblem = {
-  company?: string; id: string; title: string; level: string; topic: string; prompt: string; fn: string;
+  javaOnly?: boolean; company?: string; id: string; title: string; level: string; topic: string; prompt: string; fn: string;
   starter: { js: string; java: string }; tests: { name: string; call: string; expected: unknown }[];
   solution: { js: string; java: string }; complexity: string; hints: string[]; keyPoints: string[];
 };
@@ -77,8 +77,8 @@ export const content = {
   companies: [] as CompanyProfile[],
 };
 export function loadPrep() {
-  content.design = load("design/prompts.json", []);
-  content.coding = load("coding/problems.json", []);
+  content.design = [...load<DesignPrompt[]>("design/prompts.json", []), ...load<DesignPrompt[]>("design/ood.json", []), ...load<DesignPrompt[]>("design/api.json", [])];
+  content.coding = [...load<CodingProblem[]>("coding/problems.json", []), ...load<CodingProblem[]>("coding/concurrency.json", [])];
   content.behavioral = load("behavioral/questions.json", content.behavioral);
   content.mongo = load("mongo/exercises.json", []);
   content.datasets = load("mongo/datasets.json", {});
@@ -111,7 +111,7 @@ registerReference("design", (id) => {
   const s = p.sections.find((x) => x.key === key);
   if (!s) throw new HttpError(404, "No such section");
   return {
-    question: `System design interview: ${p.title}.\n${p.brief}\nConstraints: ${p.constraints.join("; ")}\n\nSection "${s.title}": ${s.prompt}`,
+    question: `${p.type === "ood" ? "Object-oriented design" : p.type === "api" ? "API design" : "System design"} interview: ${p.title}.\n${p.brief}\nConstraints: ${p.constraints.join("; ")}\n\nSection "${s.title}": ${s.prompt}`,
     reference: "Key points a strong senior answer covers in this section:\n" + s.keyPoints.map((k) => `- ${k}`).join("\n") +
       `\n\nOverall strong design (context only; grade this section): ${p.modelSummary}`,
   };
@@ -158,7 +158,7 @@ prep.get("/design", (req, res) => {
     const mine = rows.filter((r) => r.prompt_id === p.id);
     const passed = mine.filter((r) => (r.best_score ?? 0) >= 7).length;
     const scores = mine.filter((r) => r.best_score != null).map((r) => r.best_score!);
-    return { id: p.id, company: p.company ?? null, title: p.title, level: p.level, brief: p.brief, sections: p.sections.length, passed, started: mine.some((r) => r.len > 0 || r.best_score != null),
+    return { id: p.id, type: p.type ?? "system", company: p.company ?? null, title: p.title, level: p.level, brief: p.brief, sections: p.sections.length, passed, started: mine.some((r) => r.len > 0 || r.best_score != null),
       avg: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null };
   }));
 });
@@ -166,7 +166,7 @@ prep.get("/design/:id", (req, res) => {
   const p = findOr404(content.design, String(req.params.id), "design prompt");
   const rows = db.prepare("SELECT section, answer, best_score FROM design_progress WHERE user_id = ? AND prompt_id = ?").all(req.userId, p.id) as { section: string; answer: string; best_score: number | null }[];
   res.json({
-    id: p.id, title: p.title, level: p.level, brief: p.brief, constraints: p.constraints,
+    id: p.id, type: p.type ?? "system", title: p.title, level: p.level, brief: p.brief, constraints: p.constraints,
     sections: p.sections.map((s) => { const r = rows.find((x) => x.section === s.key); return { key: s.key, title: s.title, prompt: s.prompt, answer: r?.answer ?? "", best: r?.best_score ?? null }; }),
     modelSummary: rows.filter((r) => (r.best_score ?? 0) >= 7).length >= p.sections.length ? p.modelSummary : null,
   });
@@ -198,14 +198,14 @@ prep.get("/coding", (req, res) => {
   const rows = db.prepare("SELECT problem_id, solved, attempts, best_passed, total, java_score FROM coding_progress WHERE user_id = ?").all(req.userId) as { problem_id: string; solved: number; attempts: number; best_passed: number; total: number; java_score: number | null }[];
   res.json(content.coding.map((p) => {
     const r = rows.find((x) => x.problem_id === p.id);
-    return { id: p.id, company: p.company ?? null, title: p.title, level: p.level, topic: p.topic, solved: !!r?.solved, attempts: r?.attempts ?? 0, bestPassed: r?.best_passed ?? 0, total: p.tests.length, javaScore: r?.java_score ?? null };
+    return { id: p.id, javaOnly: !!p.javaOnly, company: p.company ?? null, title: p.title, level: p.level, topic: p.topic, solved: !!r?.solved, attempts: r?.attempts ?? 0, bestPassed: r?.best_passed ?? 0, total: p.tests.length, javaScore: r?.java_score ?? null };
   }));
 });
 prep.get("/coding/:id", (req, res) => {
   const p = findOr404(content.coding, String(req.params.id), "problem");
   const r = db.prepare("SELECT code_js, code_java, solved, attempts FROM coding_progress WHERE user_id = ? AND problem_id = ?").get(req.userId, p.id) as { code_js: string; code_java: string; solved: number; attempts: number } | undefined;
   res.json({
-    id: p.id, title: p.title, level: p.level, topic: p.topic, prompt: p.prompt, fn: p.fn, starter: p.starter, hints: p.hints, complexity: p.complexity,
+    id: p.id, javaOnly: !!p.javaOnly, title: p.title, level: p.level, topic: p.topic, prompt: p.prompt, fn: p.fn, starter: p.starter, hints: p.hints, complexity: p.complexity,
     tests: p.tests.map((t) => ({ name: t.name, call: t.call, expected: t.expected })),
     code: { js: r?.code_js || p.starter.js, java: r?.code_java || p.starter.java }, solved: !!r?.solved, attempts: r?.attempts ?? 0,
     solution: r?.solved || (r?.attempts ?? 0) >= 4 ? p.solution : null,
@@ -342,4 +342,66 @@ prep.put("/me/companies", (req, res) => {
   const ids = Array.isArray(req.body?.targets) ? (req.body.targets as unknown[]).filter((x): x is string => typeof x === "string" && content.companies.some((c) => c.id === x)) : [];
   db.prepare("UPDATE users SET target_companies = ? WHERE id = ?").run(JSON.stringify([...new Set(ids)]), req.userId);
   res.json({ targets: ids });
+});
+
+/* ---------- practical rounds: bug squash (multi-file) + integration (fake API) ---------- */
+export type PFile = { path: string; code: string };
+export type Practical = {
+  id: string; kind: "bugsquash" | "integration"; title: string; level: string; company?: string; brief: string;
+  files?: PFile[]; bugs?: number; fixedFiles?: PFile[]; explanation?: string;
+  docs?: string; fakeApi?: string; fn?: string; starter?: string; solution?: string; keyPoints?: string[];
+  tests: { name: string; call: string; expected: unknown }[]; hints: string[];
+};
+export const practical: Practical[] = [];
+export function loadPractical() {
+  practical.length = 0;
+  for (const c of fs.existsSync(path.join(C, "companies")) ? fs.readdirSync(path.join(C, "companies")) : []) {
+    practical.push(...load<Practical[]>(`companies/${c}/bugsquash.json`, []).map((x) => ({ ...x, kind: "bugsquash" as const, company: c })));
+    practical.push(...load<Practical[]>(`companies/${c}/integration.json`, []).map((x) => ({ ...x, kind: "integration" as const, company: c })));
+  }
+}
+db.exec(`CREATE TABLE IF NOT EXISTS practical_progress (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL,
+  work TEXT NOT NULL DEFAULT '', attempts INTEGER NOT NULL DEFAULT 0, best_passed INTEGER NOT NULL DEFAULT 0,
+  solved INTEGER NOT NULL DEFAULT 0, solved_day TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, item_id))`);
+
+prep.get("/practical", (req, res) => {
+  const rows = db.prepare("SELECT item_id, attempts, best_passed, solved FROM practical_progress WHERE user_id = ?").all(req.userId) as { item_id: string; attempts: number; best_passed: number; solved: number }[];
+  res.json(practical.map((p) => { const r = rows.find((x) => x.item_id === p.id); return { id: p.id, kind: p.kind, title: p.title, level: p.level, company: p.company, total: p.tests.length, attempts: r?.attempts ?? 0, bestPassed: r?.best_passed ?? 0, solved: !!r?.solved }; }));
+});
+prep.get("/practical/:id", (req, res) => {
+  const p = findOr404(practical, String(req.params.id), "exercise");
+  const r = db.prepare("SELECT work, attempts, solved FROM practical_progress WHERE user_id = ? AND item_id = ?").get(req.userId, p.id) as { work: string; attempts: number; solved: number } | undefined;
+  const reveal = !!r?.solved || (r?.attempts ?? 0) >= 4;
+  let work: unknown = null; try { work = r?.work ? JSON.parse(r.work) : null; } catch { /* ignore */ }
+  res.json({
+    id: p.id, kind: p.kind, title: p.title, level: p.level, company: p.company, brief: p.brief, hints: p.hints, tests: p.tests,
+    files: p.files, bugs: p.bugs, docs: p.docs, fakeApi: p.fakeApi, fn: p.fn, starter: p.starter,
+    work, attempts: r?.attempts ?? 0, solved: !!r?.solved,
+    reveal: reveal ? { fixedFiles: p.fixedFiles ?? null, solution: p.solution ?? null, explanation: p.explanation ?? null, keyPoints: p.keyPoints ?? null } : null,
+  });
+});
+prep.put("/practical/:id/work", (req, res) => {
+  const p = findOr404(practical, String(req.params.id), "exercise");
+  const work = JSON.stringify(req.body?.work ?? null).slice(0, 60000);
+  db.prepare(`INSERT INTO practical_progress (user_id, item_id, work, updated_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, item_id) DO UPDATE SET work = excluded.work, updated_at = excluded.updated_at`).run(req.userId, p.id, work, Date.now());
+  res.json({ ok: true });
+});
+prep.post("/practical/:id/result", (req, res) => {
+  const u = req.userId!;
+  const p = findOr404(practical, String(req.params.id), "exercise");
+  const passed = Math.max(0, Math.min(p.tests.length, Number(req.body?.passed) | 0));
+  const work = JSON.stringify(req.body?.work ?? null).slice(0, 60000);
+  const prior = db.prepare("SELECT attempts, solved FROM practical_progress WHERE user_id = ? AND item_id = ?").get(u, p.id) as { attempts: number; solved: number } | undefined;
+  const all = passed === p.tests.length;
+  db.prepare(`INSERT INTO practical_progress (user_id, item_id, work, attempts, best_passed, solved, solved_day, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+    ON CONFLICT(user_id, item_id) DO UPDATE SET work = excluded.work, attempts = attempts + 1, best_passed = MAX(best_passed, excluded.best_passed),
+      solved = MAX(solved, excluded.solved), solved_day = COALESCE(solved_day, excluded.solved_day), updated_at = excluded.updated_at`)
+    .run(u, p.id, work, passed, all ? 1 : 0, all ? localDay() : null, Date.now());
+  let xp = 0, badges: string[] = [];
+  if (all && !prior?.solved) { xp = Math.round((XP[p.level] ?? 30) * (prior?.attempts ? 0.6 : 1) * 1.5); badges = addXP(u, xp, `practical:${p.id}`); }
+  const attempts = (prior?.attempts ?? 0) + 1;
+  res.json({ passed, total: p.tests.length, solved: all, xp, newBadges: nb(badges),
+    reveal: all || attempts >= 4 ? { fixedFiles: p.fixedFiles ?? null, solution: p.solution ?? null, explanation: p.explanation ?? null, keyPoints: p.keyPoints ?? null } : null });
 });

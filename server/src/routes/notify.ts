@@ -8,6 +8,7 @@ import { DB_PATH, db } from "../db.js";
 import { HttpError } from "../http.js";
 import { dueCount, localDay } from "../progress.js";
 import { buildPlan } from "./plan.js";
+import { partnerTick, summary as commitSummary } from "./accountability.js";
 
 /* ============================================================
    Push reminders (Web Push / VAPID) and nightly database backups.
@@ -93,6 +94,7 @@ async function reminderTick() {
     const plan = buildPlan(u.id);
     let msg: { title: string; body: string; url: string } | null = null;
     if (u.last_day !== today && u.streak > 0) msg = { title: `Keep your ${u.streak}-day streak`, body: due ? `${due} reviews are due. Ten minutes keeps it alive.` : "A short session keeps it alive.", url: due ? "/review" : "/" };
+    else if ((() => { const c = commitSummary(u.id); return c.configured && c.today.planned && !c.today.done; })()) { const c = commitSummary(u.id); msg = { title: `Study day: ${c.today.minutes}/${c.today.target} min`, body: `You committed to ${c.settings.weeklyMinutes} min this week. ${c.keptStreak ? `Keep your ${c.keptStreak}-day kept streak.` : "Start a kept streak today."}`, url: "/" }; }
     else if (due > 0) msg = { title: `${due} reviews due`, body: "Reviewing on time is what makes it stick.", url: "/review" };
     else if (plan.total && plan.done < plan.total) msg = { title: `Today's plan: ${plan.done}/${plan.total} done`, body: plan.tasks.find((t) => !t.done)?.label ?? "Keep going.", url: "/" };
     if (plan.daysLeft != null && plan.daysLeft > 0 && plan.daysLeft <= 14 && msg) msg.title = `${plan.daysLeft} days to go · ${msg.title}`;
@@ -140,8 +142,15 @@ async function backupTick() {
   catch (e) { console.error("[backup] failed", e); }
 }
 
+let partnerDay = "";
+async function partnerDaily() {
+  const d = new Date(); const day = d.toISOString().slice(0, 10);
+  if (d.getUTCHours() !== 9 || partnerDay === day) return;
+  partnerDay = day; await partnerTick();
+}
+
 export function startSchedulers() {
-  const tick = () => { reminderTick().catch((e) => console.error("[push] tick", e)); backupTick().catch(() => {}); };
+  const tick = () => { reminderTick().catch((e) => console.error("[push] tick", e)); backupTick().catch(() => {}); partnerDaily().catch((e) => console.error("[partner]", e)); };
   setTimeout(tick, 30000);
   setInterval(tick, 10 * 60000).unref();
 }

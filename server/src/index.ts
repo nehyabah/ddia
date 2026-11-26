@@ -12,15 +12,17 @@ import { ai } from "./routes/ai.js";
 import { puzzles, seedPuzzles } from "./routes/puzzles.js";
 import { report, startWeeklyEmails } from "./routes/report.js";
 import { readiness } from "./routes/readiness.js";
-import { loadPrep, prep } from "./routes/prep.js";
+import { loadPractical, loadPrep, prep } from "./routes/prep.js";
 import { plan } from "./routes/plan.js";
 import { notify, startSchedulers } from "./routes/notify.js";
+import { accountability } from "./routes/accountability.js";
 
 seedContent();
 seedJava();
 seedPuzzles();
 startWeeklyEmails();
 loadPrep();
+loadPractical();
 startSchedulers();
 
 const app = express();
@@ -32,7 +34,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 app.use("/api", auth);
-app.use("/api", requireUser, account, study, insights, java, ai, puzzles, report, readiness, prep, plan, notify);
+app.use("/api", requireUser, account, study, insights, java, ai, puzzles, report, readiness, prep, plan, notify, accountability);
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found" });
 });

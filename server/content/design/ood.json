@@ -1,0 +1,902 @@
+[
+  {
+    "id": "ood-01",
+    "type": "ood",
+    "title": "Design a parking lot",
+    "level": "core",
+    "company": "microsoft",
+    "brief": "Design the object model for a multi-level parking garage. Vehicles of different sizes arrive, get assigned a compatible spot, receive a ticket, and pay on exit based on time parked. Focus on classes and how they collaborate, not on hardware.",
+    "constraints": [
+      "Multiple floors, each with motorcycle, compact, large and EV-charging spots",
+      "Vehicle types: motorcycle, car, truck; a smaller vehicle may use a larger spot",
+      "Hourly pricing that may vary by spot type",
+      "Several entry and exit gates operating concurrently",
+      "No reservations in the first version"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Pin down the actors, the main use cases and what is explicitly out of scope.",
+        "keyPoints": [
+          "Use cases: park (assign spot, issue ticket), unpark (compute fee, pay, free spot), show availability per floor/type",
+          "Actors: driver, entry/exit gate, attendant/admin who configures floors and rates",
+          "Fit rules: motorcycle -> any spot, car -> compact or large, truck -> large only",
+          "Full lot must reject at the entry gate with a clear message",
+          "Non-goals: reservations, license plate recognition, payment processor internals"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "List the core classes and the single responsibility of each.",
+        "keyPoints": [
+          "ParkingLot: aggregate root holding floors, gates and the spot-assignment strategy",
+          "Level/Floor: owns its ParkingSpots and per-type free counts",
+          "ParkingSpot (id, type, occupant) with canFit(Vehicle) and assign/release",
+          "Vehicle (abstract) with Motorcycle, Car, Truck subclasses exposing size",
+          "Ticket (id, vehicle, spot, entryTime, exitTime, status) and Payment",
+          "EntryGate/ExitGate as thin controllers delegating to ParkingLot"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "Describe composition vs association and the interfaces that decouple policy from structure.",
+        "keyPoints": [
+          "ParkingLot composes Levels; Level composes ParkingSpots (lifetime owned)",
+          "Ticket associates a Vehicle with a ParkingSpot; spot holds a back-reference only while occupied",
+          "SpotAssignmentStrategy interface: findSpot(Vehicle, levels) -> Optional<ParkingSpot>",
+          "PricingStrategy interface: calculate(Ticket, now) -> Money",
+          "PaymentProcessor interface so cash/card/app are interchangeable"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk through park and unpark with method signatures.",
+        "keyPoints": [
+          "Ticket ParkingLot.park(Vehicle v): strategy.findSpot -> spot.assign(v) -> new Ticket(v, spot, clock.now())",
+          "Money ExitGate.computeFee(Ticket t) -> pricing.calculate(t, clock.now())",
+          "Receipt ExitGate.pay(Ticket t, PaymentMethod m) marks ticket PAID",
+          "void ParkingLot.unpark(Ticket t): validate PAID, spot.release(), level.incrementFree(type)",
+          "Map<SpotType,Integer> getAvailability(levelId) served from counters, not scans"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Which patterns apply and how would you add new spot types or pricing rules?",
+        "keyPoints": [
+          "Strategy for spot assignment (nearest-to-entrance, fill-lowest-floor) and pricing",
+          "Factory for creating Vehicle/Spot from type enums",
+          "Singleton-ish ParkingLot only if justified; prefer dependency injection",
+          "Observer to push availability changes to display boards",
+          "Open/closed: new EV spot = new SpotType + fit rule, no edits to park()"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Two cars at different gates want the last compact spot. What happens? Other edge cases?",
+        "keyPoints": [
+          "Spot assignment must be atomic: lock per spot or compareAndSet on occupant",
+          "Per-level lock or concurrent free-spot queues to avoid a global bottleneck",
+          "Lost ticket: charge max daily rate, look up by plate",
+          "Payment succeeds but gate fails: ticket status PAID lets driver retry exit",
+          "Clock injection for testable fee calculation across midnight/daylight saving"
+        ]
+      }
+    ],
+    "modelSummary": "The ParkingLot aggregate owns Levels, which own ParkingSpots typed by size. Vehicles are an abstract hierarchy with a size used by ParkingSpot.canFit. Entry gates call ParkingLot.park, which delegates to a SpotAssignmentStrategy and issues a Ticket. Exit gates compute the fee via a PricingStrategy and take payment via a PaymentProcessor before unpark releases the spot. Availability is kept in per-level counters and published to display boards via Observer. Spot claiming is atomic (CAS on occupant or per-level lock) so concurrent gates never double-assign. Classes: ParkingLot, Level, ParkingSpot, SpotType, Vehicle{Motorcycle,Car,Truck}, Ticket, Payment, EntryGate, ExitGate, SpotAssignmentStrategy, PricingStrategy, PaymentProcessor."
+  },
+  {
+    "id": "ood-02",
+    "type": "ood",
+    "title": "Design an elevator system",
+    "level": "advanced",
+    "company": "microsoft",
+    "brief": "Design the control software for a bank of elevators in an office building. Riders press up/down hall buttons and floor buttons inside the car. Your controller decides which car serves which request. Model the classes and the scheduling logic.",
+    "constraints": [
+      "N elevators (e.g. 4) serving M floors (e.g. 30)",
+      "Hall calls (floor + direction) and car calls (destination inside the car)",
+      "Each car has capacity and a door; maintenance/emergency modes exist",
+      "Simulation-friendly: time advances in ticks",
+      "Optimise average wait time, not strict fairness"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Clarify request types, states and what \"good\" scheduling means.",
+        "keyPoints": [
+          "Hall call = (floor, direction); car call = destination from inside a specific car",
+          "Car states: IDLE, MOVING_UP, MOVING_DOWN, DOORS_OPEN, MAINTENANCE",
+          "Must not reverse direction while it still has requests ahead (SCAN/LOOK)",
+          "Emergency stop and fire mode override normal scheduling",
+          "Non-goals: physical motor control, destination dispatch kiosks"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Identify the classes.",
+        "keyPoints": [
+          "ElevatorController/Dispatcher: receives hall calls and assigns them to cars",
+          "ElevatorCar: id, currentFloor, direction, state, up/down stop sets",
+          "Request (HallRequest, CarRequest) value objects",
+          "Door with open/close and obstruction sensor",
+          "Floor/HallPanel and CarPanel as input sources",
+          "SchedulingStrategy chooses which car takes a hall call"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "How do the pieces talk to each other?",
+        "keyPoints": [
+          "Controller has many ElevatorCars; each car owns its Door and stop queues",
+          "Panels depend on a RequestSink interface implemented by the controller (or car for car calls)",
+          "SchedulingStrategy interface: ElevatorCar select(HallRequest, List<ElevatorCar>)",
+          "Cars publish state changes (arrived, doorsOpened) to listeners: panels light up/clear",
+          "State pattern: ElevatorState implementations handle tick() and onRequest()"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk a hall call from button press to the rider stepping out.",
+        "keyPoints": [
+          "void HallPanel.press(Direction d) -> controller.submit(new HallRequest(floor, d))",
+          "ElevatorCar Controller.submit(HallRequest r): strategy.select(r, cars).addStop(r.floor, r.dir)",
+          "void ElevatorCar.tick(): if stop at currentFloor -> openDoors(); else move one floor in direction",
+          "Next stop: TreeSet upStops.ceiling(current) when going up; flip direction only when empty (LOOK)",
+          "void CarPanel.press(int floor) -> car.addStop(floor) directly"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Which patterns, and how do you swap the dispatch algorithm?",
+        "keyPoints": [
+          "Strategy: nearest-car, LOOK-cost, zoning (low/high-rise banks)",
+          "State pattern for car modes; maintenance just refuses new assignments",
+          "Observer for lights and displays",
+          "Command objects for requests make logging and replay simple",
+          "Cost function: distance + penalty for opposite direction + load factor"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Discuss concurrent button presses and failure cases.",
+        "keyPoints": [
+          "Controller processes requests on a single event loop or with a lock per car",
+          "Duplicate hall presses are idempotent (set semantics)",
+          "Car goes to maintenance: reassign its pending hall calls to other cars",
+          "Full car skips hall pickups but still serves car calls",
+          "Door obstruction keeps doors open with a timeout and alarm"
+        ]
+      }
+    ],
+    "modelSummary": "A central ElevatorController receives HallRequests from floor panels and uses a pluggable SchedulingStrategy to assign each to an ElevatorCar via a cost function. Each car keeps up and down stop sets (sorted) and runs LOOK: serve stops in the current direction, reverse only when none remain. Car calls go directly to the car. ElevatorCar behaviour is modelled with the State pattern (Idle, MovingUp, MovingDown, DoorsOpen, Maintenance) and time advances via tick(). Observers update hall lanterns and displays. Requests are idempotent sets, and a car entering maintenance hands its pending hall calls back to the controller. Classes: ElevatorController, ElevatorCar, ElevatorState, Door, HallRequest, CarRequest, Direction, HallPanel, CarPanel, SchedulingStrategy."
+  },
+  {
+    "id": "ood-03",
+    "type": "ood",
+    "title": "Design an in-memory file system",
+    "level": "core",
+    "company": "microsoft",
+    "brief": "Design an in-memory file system that supports directories and files addressed by absolute paths like /a/b/c.txt. Support mkdir -p, ls, writing and appending to files, reading, and deleting. Think about the class hierarchy and path resolution.",
+    "constraints": [
+      "Absolute Unix-style paths, \"/\" as root",
+      "Operations: mkdir, ls, createFile, append, read, rm (recursive optional), move",
+      "ls on a file returns just that file name; ls on a dir returns sorted children",
+      "Single process, but multiple threads may call it",
+      "No persistence or permissions in v1"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Define operations and their semantics on errors.",
+        "keyPoints": [
+          "mkdir(path) creates intermediate directories (mkdir -p semantics)",
+          "ls returns lexicographically sorted names; on a file returns [name]",
+          "append to a missing file creates it; read of missing path throws NotFound",
+          "rm of non-empty dir requires recursive flag",
+          "Errors: PathNotFound, NotADirectory, AlreadyExists, IsADirectory"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Name the classes.",
+        "keyPoints": [
+          "Entry (abstract): name, parent, createdAt, modifiedAt, size()",
+          "Directory extends Entry: Map<String,Entry> children (TreeMap for sorted ls)",
+          "File extends Entry: StringBuilder/byte[] content",
+          "FileSystem facade: root Directory and path operations",
+          "Path value object: parse(\"/a/b\") -> [\"a\",\"b\"], handles trailing slash and \".\"/\"..\""
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "Explain the hierarchy and why it is a Composite.",
+        "keyPoints": [
+          "Composite pattern: Directory contains Entries, which may be Files or Directories",
+          "size() is recursive on Directory, direct on File",
+          "FileSystem depends on a PathResolver; entries do not know about string paths",
+          "Parent pointer enables getPath() and move without a full search",
+          "Optional Visitor for operations like find, du, serialize"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk through mkdir, write and ls.",
+        "keyPoints": [
+          "Directory resolve(Path p, boolean create): walk components from root, create missing dirs if create",
+          "void mkdir(String path) -> resolve(Path.parse(path), true)",
+          "void append(String path, String data): parent = resolve(p.parent(), true); file = parent.getOrCreateFile(name); file.append(data)",
+          "List<String> ls(String path): entry = lookup(path); entry is File ? [name] : sorted children keys",
+          "void move(String src, String dst): detach from old parent, rename, attach to new parent; reject moving a dir into its own subtree"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "How would you extend it with permissions, links or search?",
+        "keyPoints": [
+          "Composite for the tree; Visitor for find/du without bloating Entry",
+          "Permission checks via a decorator or an AccessPolicy interface on resolve",
+          "Symlinks as a new Entry subtype resolved with a hop limit to avoid cycles",
+          "Storage strategy interface so File content could be chunked or on disk",
+          "Observer for file watchers (onCreate, onModify)"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "What breaks with concurrent callers?",
+        "keyPoints": [
+          "Coarse ReadWriteLock on the FileSystem is simplest and correct",
+          "Finer: per-directory locks acquired top-down in path order to avoid deadlock",
+          "move needs both parents locked in a consistent order (e.g. by path or id)",
+          "Edge cases: root \"/\" ls, trailing slashes, duplicate names across file/dir",
+          "Deleting a directory while another thread appends below it must fail cleanly"
+        ]
+      }
+    ],
+    "modelSummary": "The file system is a Composite: abstract Entry with File and Directory subclasses, where Directory holds a TreeMap of children so ls is naturally sorted. A FileSystem facade parses paths into a Path value object and walks from root via resolve(path, create), which also implements mkdir -p. Files hold content in a buffer supporting append and read; size is recursive for directories. Parent pointers support getPath and move, which rejects moving a directory into its own subtree. Extensions use Visitor (find, du), decorators for permissions, and a Symlink entry with a hop limit. Concurrency starts with a ReadWriteLock and can be refined to ordered per-directory locks. Classes: FileSystem, Path, Entry, Directory, File, PathResolver, EntryVisitor."
+  },
+  {
+    "id": "ood-04",
+    "type": "ood",
+    "title": "Design a cache with pluggable eviction (LRU/LFU)",
+    "level": "advanced",
+    "company": "microsoft",
+    "brief": "Design a generic in-memory key-value cache with a fixed capacity. It should support get and put in O(1), and the eviction policy must be pluggable so we can choose LRU, LFU or others at construction time.",
+    "constraints": [
+      "Generic Cache<K,V> with fixed max entries",
+      "get/put O(1) average for LRU and LFU",
+      "Optional per-entry TTL",
+      "Thread-safe for concurrent readers and writers",
+      "Expose hit/miss/eviction stats"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Define the API and behaviour at capacity.",
+        "keyPoints": [
+          "get(k) returns value and counts as an access; put(k,v) inserts or updates",
+          "At capacity, put of a new key evicts exactly one victim chosen by policy",
+          "Update of an existing key never evicts",
+          "TTL-expired entries treated as misses and removed lazily",
+          "Eviction listener callback for metrics or write-back"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Name the classes.",
+        "keyPoints": [
+          "Cache<K,V> interface and a default implementation holding Map<K,Entry<V>>",
+          "EvictionPolicy<K> interface: onAccess, onInsert, onRemove, evict() -> K",
+          "LRUPolicy: doubly linked list + node map; move-to-front on access",
+          "LFUPolicy: key->freq, freq->LinkedHashSet<K>, minFreq pointer",
+          "CacheStats and an optional Clock for TTL"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "How does the cache talk to the policy?",
+        "keyPoints": [
+          "Cache composes one EvictionPolicy injected via constructor (Strategy)",
+          "Cache owns storage; policy only tracks ordering metadata of keys",
+          "Policy never touches values: clean separation of concerns",
+          "EvictionListener<K,V> notified after removal",
+          "Builder: CacheBuilder.capacity(100).policy(new LFUPolicy()).ttl(...)"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk through get and put under LRU and LFU.",
+        "keyPoints": [
+          "V get(K k): e = map.get(k); if null or expired -> miss; policy.onAccess(k); return e.value",
+          "void put(K k, V v): if exists -> update, onAccess; else if size==cap -> victim = policy.evict(); map.remove(victim); then insert + onInsert",
+          "LRU evict(): remove tail of linked list in O(1)",
+          "LFU onAccess: move key from freq f bucket to f+1, bump minFreq if bucket f emptied and f==minFreq",
+          "LFU onInsert: freq=1, minFreq=1; evict(): pop oldest from bucket[minFreq] (LRU tiebreak)"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "How do you add new policies or features without modifying the cache?",
+        "keyPoints": [
+          "Strategy for eviction: FIFO, Random, ARC slot in by implementing EvictionPolicy",
+          "Decorator for stats, logging or synchronization around a base cache",
+          "Template method optional for common bookkeeping",
+          "Factory/Builder to configure capacity, TTL and policy",
+          "Write-through/write-back via a loader/writer interface (CacheLoader)"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Make it thread-safe and discuss pitfalls.",
+        "keyPoints": [
+          "LRU mutates on every read, so a plain ReadWriteLock does not help get(); use a mutex",
+          "Lock striping/segmenting by key hash scales, each segment with its own policy (approximate global LRU)",
+          "Caffeine-style: record accesses in a buffer and apply to the policy asynchronously",
+          "Capacity 0, null keys/values, and put during eviction listener re-entrancy",
+          "Thundering herd on miss: computeIfAbsent with per-key futures"
+        ]
+      }
+    ],
+    "modelSummary": "Cache<K,V> stores entries in a HashMap and delegates ordering decisions to an injected EvictionPolicy<K> (Strategy), which receives onInsert/onAccess/onRemove events and returns a victim from evict(). LRUPolicy uses a hashmap plus doubly linked list for O(1) move-to-front and tail eviction. LFUPolicy keeps key->frequency, frequency->LinkedHashSet buckets and a minFreq pointer, giving O(1) updates with LRU tiebreaking. Updates never evict; inserts at capacity evict exactly one key. TTL is checked lazily using an injected Clock. Thread safety starts with a single lock (reads mutate policy state) and scales via segmentation or buffered access recording. Classes: Cache, ConcurrentCache, EvictionPolicy, LRUPolicy, LFUPolicy, Entry, CacheStats, EvictionListener, CacheBuilder."
+  },
+  {
+    "id": "ood-05",
+    "type": "ood",
+    "title": "Design a library management system",
+    "level": "core",
+    "brief": "Design the object model for a public library. Members search the catalog, borrow and return physical copies, place holds on books that are checked out, and pay fines for late returns.",
+    "constraints": [
+      "A title (Book) can have many physical copies (BookItem)",
+      "Members may borrow up to 5 items for 14 days",
+      "Holds queue in FIFO order per book",
+      "Late fee per day, capped",
+      "Librarians manage catalog and members"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "List the use cases and business rules.",
+        "keyPoints": [
+          "Search by title, author, subject, ISBN",
+          "Checkout, return, renew (blocked if holds exist), place/cancel hold",
+          "Fine accrues on overdue return; members with unpaid fines over threshold cannot borrow",
+          "Notifications on hold availability and due dates",
+          "Non-goals: e-books, inter-library loans"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Name the classes.",
+        "keyPoints": [
+          "Book (ISBN, title, authors) vs BookItem (barcode, status, location)",
+          "Member and Librarian extending Account/Person",
+          "Loan (item, member, issuedAt, dueAt, returnedAt)",
+          "Hold (book, member, createdAt, status)",
+          "Fine; Catalog for search indexes; LibraryService facade"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "Show associations and interfaces.",
+        "keyPoints": [
+          "Book 1..* BookItem; Member 0..5 active Loans",
+          "Hold attaches to Book (any copy), Loan to a specific BookItem",
+          "Catalog exposes search interfaces by attribute (Map indexes)",
+          "FinePolicy interface computes amount from Loan",
+          "NotificationService interface (email/SMS)"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk checkout and return.",
+        "keyPoints": [
+          "Loan checkout(memberId, barcode): validate member limits/fines, item AVAILABLE or RESERVED for this member, create Loan, item.status=LOANED",
+          "void returnItem(barcode): close Loan, fine = finePolicy.compute(loan, today)",
+          "On return: if holds queue non-empty -> item.status=RESERVED, notify head member, set pickup deadline",
+          "Loan renew(loanId): reject if holds exist or renew count exceeded",
+          "List<Book> Catalog.search(Query q)"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Patterns and extensibility.",
+        "keyPoints": [
+          "Strategy for FinePolicy (per member type)",
+          "Observer for notifications on hold availability",
+          "State for BookItem (Available, Loaned, Reserved, Lost)",
+          "Repository interfaces for persistence",
+          "Specification pattern for composable search queries"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Edge cases and races.",
+        "keyPoints": [
+          "Two members checking out the last copy: atomic status transition on BookItem",
+          "Hold expires if not picked up: move to next in queue",
+          "Lost item: charge replacement cost, close loan",
+          "Returning an item not on loan or at a different branch",
+          "Member deleted with active loans: block or soft-delete"
+        ]
+      }
+    ],
+    "modelSummary": "The model separates Book (catalog title) from BookItem (physical copy with barcode and status). Members borrow BookItems via Loans with due dates and return them through a LibraryService facade that enforces limits and fine thresholds. Holds are placed on a Book and queued FIFO; on return, the copy becomes RESERVED for the head of the queue and the member is notified via an Observer-driven NotificationService. Fines are computed by a pluggable FinePolicy. BookItem lifecycle uses the State pattern and status transitions are atomic to avoid double checkout. Classes: Library, LibraryService, Catalog, Book, BookItem, Account, Member, Librarian, Loan, Hold, Fine, FinePolicy, NotificationService."
+  },
+  {
+    "id": "ood-06",
+    "type": "ood",
+    "title": "Design a chess game with move validation",
+    "level": "advanced",
+    "company": "microsoft",
+    "brief": "Design the classes for a two-player chess game. The engine must validate moves according to the rules, detect check, checkmate and stalemate, and support castling, en passant and promotion. No AI opponent.",
+    "constraints": [
+      "Standard 8x8 board, two human players",
+      "Full legal move validation including not leaving own king in check",
+      "Special moves: castling, en passant, promotion",
+      "Move history with undo",
+      "Detect checkmate, stalemate; optional draw rules"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Clarify rules and features in scope.",
+        "keyPoints": [
+          "makeMove(from, to, promotion?) validates and applies or rejects",
+          "Turn order enforced; game states ACTIVE, CHECK, CHECKMATE, STALEMATE, RESIGNED",
+          "Undo last move; export PGN/FEN optional",
+          "Draw by threefold repetition and 50-move rule as stretch",
+          "Clock/timer out of scope"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Name the classes.",
+        "keyPoints": [
+          "Game: board, players, current turn, status, move history",
+          "Board: 8x8 Square grid or Piece[64]; Position value object",
+          "Piece (abstract): color, type; subclasses King, Queen, Rook, Bishop, Knight, Pawn",
+          "Move: from, to, piece, captured, special flag (castle, en passant, promotion)",
+          "Player; MoveValidator/RuleEngine"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "How do pieces, board and rules interact?",
+        "keyPoints": [
+          "Each Piece generates pseudo-legal moves: List<Move> candidateMoves(Board, Position)",
+          "Sliding pieces share a ray-walking helper (Rook/Bishop/Queen)",
+          "RuleEngine filters pseudo-legal moves by simulating and checking king safety",
+          "Game depends on RuleEngine; Board knows nothing of turns",
+          "Move objects are Commands with apply/undo on Board"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk through makeMove.",
+        "keyPoints": [
+          "MoveResult Game.makeMove(Position from, Position to, PieceType promo)",
+          "Check piece exists and belongs to current player",
+          "legal = ruleEngine.legalMoves(board, from); match target else reject",
+          "move.apply(board); history.push(move); switch turn",
+          "status: inCheck(opponent) && no legal moves -> CHECKMATE; !inCheck && none -> STALEMATE",
+          "boolean isSquareAttacked(Board, Position, Color) used for check and castling path"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Patterns and variants.",
+        "keyPoints": [
+          "Polymorphism/Strategy for per-piece movement",
+          "Command for Move with undo, enabling history and takeback",
+          "State for game status transitions",
+          "Factory to set up the initial board from FEN",
+          "Variants (Chess960) via a pluggable setup and castling rule"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Edge cases.",
+        "keyPoints": [
+          "Castling: king and rook unmoved, squares empty, king not in/through/into check",
+          "En passant only immediately after an opponent double pawn push (store en passant target)",
+          "Pinned pieces: handled by simulate-then-check-king approach",
+          "Promotion requires choice; default to queen if absent",
+          "Network play: server is authoritative; reject stale moves via move number"
+        ]
+      }
+    ],
+    "modelSummary": "A Game holds a Board, two Players, turn, status and a stack of Move commands. Pieces are polymorphic and generate pseudo-legal moves; sliding pieces share a ray helper. A RuleEngine filters them by applying each move to the board, checking isSquareAttacked on the own king, and undoing, which naturally handles pins and check evasion. Special moves (castling, en passant, promotion) are flagged on Move and validated using board state such as castling rights and the en passant target. After each move the engine sets CHECK, CHECKMATE or STALEMATE. Move as Command enables undo and history. Classes: Game, Board, Position, Piece{King,Queen,Rook,Bishop,Knight,Pawn}, Move, MoveType, RuleEngine, Player, GameStatus."
+  },
+  {
+    "id": "ood-07",
+    "type": "ood",
+    "title": "Design a rate limiter library with strategies",
+    "level": "core",
+    "brief": "Design an in-process rate limiting library that application developers can drop into their services. It should support multiple algorithms, multiple limits per key, and be easy to extend with new algorithms or a distributed backing store later.",
+    "constraints": [
+      "Algorithms: token bucket, fixed window, sliding window log/counter",
+      "Limits keyed by arbitrary string (user id, IP)",
+      "Thread-safe, low overhead (sub-microsecond for in-memory)",
+      "Pluggable clock for testing",
+      "Pluggable storage (in-memory now, Redis later)"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Define the developer-facing API.",
+        "keyPoints": [
+          "boolean tryAcquire(key) and tryAcquire(key, permits)",
+          "Return decision with remaining and retryAfter for HTTP headers",
+          "Configure per rule: capacity/limit, window or refill rate",
+          "Multiple rules per key (all must pass)",
+          "Idle keys must not leak memory"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Name the classes.",
+        "keyPoints": [
+          "RateLimiter interface: Decision tryAcquire(String key, int permits)",
+          "TokenBucketLimiter, FixedWindowLimiter, SlidingWindowLimiter implementations",
+          "RateLimitConfig (limit, window, refillRate)",
+          "Decision value object (allowed, remaining, retryAfterMs)",
+          "Clock interface; StateStore interface for bucket/window state"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "Relationships and interfaces.",
+        "keyPoints": [
+          "Strategy: algorithms implement RateLimiter",
+          "Limiters depend on StateStore and Clock abstractions (DIP)",
+          "CompositeRateLimiter combines several limiters (AND semantics)",
+          "RateLimiterFactory/Registry builds limiters from config",
+          "Middleware/filter integrates library with HTTP frameworks"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk through token bucket tryAcquire.",
+        "keyPoints": [
+          "Decision TokenBucketLimiter.tryAcquire(key, n)",
+          "state = store.get(key) or new Bucket(capacity, now)",
+          "tokens = min(capacity, tokens + (now - last) * rate); last = now",
+          "if tokens >= n -> tokens -= n, allowed; else retryAfter = (n - tokens)/rate",
+          "Sliding window counter: estimate = prev * (1 - elapsed/window) + curr"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Extensibility.",
+        "keyPoints": [
+          "New algorithm = new class implementing RateLimiter, registered in factory",
+          "Decorator to add metrics/logging to any limiter",
+          "Composite for multi-rule evaluation",
+          "Redis-backed store implements atomic ops via Lua script",
+          "Builder for fluent configuration"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Thread safety and edge cases.",
+        "keyPoints": [
+          "Per-key atomicity: ConcurrentHashMap.compute or per-bucket lock/CAS",
+          "Avoid global locks; no lock held across stores",
+          "Composite: avoid consuming from rule A if rule B rejects (check-then-commit or refund)",
+          "Clock going backwards: clamp elapsed to >= 0",
+          "Evict idle keys via TTL or periodic sweep"
+        ]
+      }
+    ],
+    "modelSummary": "The library exposes a RateLimiter interface returning a Decision (allowed, remaining, retryAfter). Algorithms are Strategy implementations: TokenBucketLimiter, FixedWindowLimiter, SlidingWindowLogLimiter and SlidingWindowCounterLimiter. Each depends on a Clock and a StateStore abstraction, so tests use a fake clock and production can swap in a Redis store with atomic Lua scripts. CompositeRateLimiter enforces several rules with check-then-commit semantics, and decorators add metrics. Per-key atomicity uses ConcurrentHashMap.compute or CAS, with idle keys expired. Classes: RateLimiter, Decision, RateLimitConfig, TokenBucketLimiter, FixedWindowLimiter, SlidingWindowLimiter, CompositeRateLimiter, StateStore, InMemoryStateStore, Clock, RateLimiterFactory."
+  },
+  {
+    "id": "ood-08",
+    "type": "ood",
+    "title": "Design a logger / event bus with sinks",
+    "level": "core",
+    "company": "microsoft",
+    "brief": "Design a logging framework (think a mini log4j/Serilog) where application code logs messages at levels, and messages are routed to multiple sinks such as console, file and a remote collector. Sinks can be added at runtime, and slow sinks must not block the application.",
+    "constraints": [
+      "Levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL",
+      "Multiple sinks with independent level thresholds and formatters",
+      "Structured fields (key/value context) supported",
+      "Async delivery with bounded buffer",
+      "Hierarchical named loggers (com.app.db)"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Clarify API and guarantees.",
+        "keyPoints": [
+          "logger.info(msg, fields) and level-check shortcut isEnabled(level)",
+          "Per-logger and per-sink level filtering",
+          "Formatters: plain text, JSON",
+          "Ordering per logger preserved; at-most-once vs at-least-once to remote sink stated",
+          "Flush on shutdown"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Name the classes.",
+        "keyPoints": [
+          "LoggerFactory/LogManager returns named Logger instances (cached)",
+          "Logger: name, level, list of sinks (or inherits from parent)",
+          "LogEvent: timestamp, level, loggerName, message, fields, thread, exception",
+          "Sink interface: write(LogEvent); ConsoleSink, FileSink, HttpSink",
+          "Formatter interface; Filter interface",
+          "AsyncDispatcher with bounded queue and worker thread"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "Relationships.",
+        "keyPoints": [
+          "Logger -> Dispatcher -> many Sinks (publish/subscribe)",
+          "Each Sink has a Formatter and optional Filter (Strategy)",
+          "Logger hierarchy: child delegates to parent sinks unless additivity=false",
+          "Sinks implement Closeable for flush/shutdown",
+          "Same bus generalizes to an EventBus: topics -> subscribers"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk a log call end to end.",
+        "keyPoints": [
+          "void Logger.log(Level l, String msg, Map fields): if l < effectiveLevel return (cheap)",
+          "event = new LogEvent(clock.now(), l, name, msg, fields, MDC context)",
+          "dispatcher.enqueue(event) -> offer to bounded queue",
+          "Worker: for sink in sinks: if sink.accepts(event) sink.write(formatter.format(event))",
+          "void LogManager.shutdown(): drain queue, flush and close sinks"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Patterns.",
+        "keyPoints": [
+          "Observer/publish-subscribe between logger and sinks",
+          "Strategy for formatters, filters and overflow policy",
+          "Decorator: BufferedSink, RetryingSink, BatchingSink wrapping HttpSink",
+          "Singleton LogManager with factory for loggers",
+          "Chain of responsibility for filters"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Concurrency and failure.",
+        "keyPoints": [
+          "Bounded queue overflow policy: block, drop newest, drop DEBUG first; count drops",
+          "One slow sink must not stall others: per-sink queue/worker",
+          "Sink exception is caught and reported to an internal error handler, never thrown to app",
+          "Lazy message formatting (supplier) to avoid cost when level disabled",
+          "File rotation by size/time with atomic rename"
+        ]
+      }
+    ],
+    "modelSummary": "A LogManager hands out cached, hierarchically named Logger instances that do a cheap level check then build an immutable LogEvent with timestamp, level, message, structured fields and context. Events are enqueued on a bounded AsyncDispatcher queue; worker threads fan them out to registered Sinks (Observer/pub-sub). Each Sink has its own level threshold, Filter and Formatter (Strategy), and decorators add batching, buffering and retry. Overflow policy is explicit and drop counts are reported; sink exceptions are isolated. Shutdown drains and flushes. Classes: LogManager, Logger, Level, LogEvent, Dispatcher, AsyncDispatcher, Sink{ConsoleSink,FileSink,HttpSink}, Formatter{TextFormatter,JsonFormatter}, Filter, BatchingSink."
+  },
+  {
+    "id": "ood-09",
+    "type": "ood",
+    "title": "Design a vending machine",
+    "level": "core",
+    "brief": "Design the software for a vending machine. Users insert coins or bills, select a product, receive the product and change, or cancel and get a refund. Model it with clean state transitions.",
+    "constraints": [
+      "Products in slots with price and quantity",
+      "Accepts coins and bills of fixed denominations",
+      "Must return exact change or refuse the sale",
+      "Admin can restock items and collect cash",
+      "Single user at a time"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Use cases and rules.",
+        "keyPoints": [
+          "Insert money, select product, dispense, return change, cancel/refund",
+          "Reject selection if sold out or insufficient funds",
+          "Refuse sale if exact change cannot be made",
+          "Admin restock and cash collection mode",
+          "Display messages for each state"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Classes.",
+        "keyPoints": [
+          "VendingMachine context: current state, inventory, balance, cash box",
+          "State interface with IdleState, HasMoneyState, DispensingState, MaintenanceState",
+          "Inventory: Map<SlotCode, Slot(product, qty)>",
+          "Product (name, price); Coin/Bill denominations enum",
+          "CashBox/ChangeMaker holding denomination counts"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "Relationships.",
+        "keyPoints": [
+          "VendingMachine delegates every action to its current State",
+          "States receive the machine as context to transition: machine.setState(...)",
+          "ChangeMaker strategy computes change from available denominations",
+          "Dispenser and Display hardware behind interfaces for testing",
+          "Inventory and CashBox are owned by the machine"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk the purchase flow.",
+        "keyPoints": [
+          "void insertMoney(Denomination d) -> state.insertMoney(this, d)",
+          "void selectProduct(SlotCode c): check qty>0, balance>=price, change computable",
+          "Map<Denomination,Integer> ChangeMaker.makeChange(amount, available) (greedy for canonical sets, DP otherwise)",
+          "dispense: inventory.decrement, cashBox.commit, return change, setState(Idle)",
+          "List<Denomination> cancel(): refund inserted money, go Idle"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Patterns.",
+        "keyPoints": [
+          "State pattern removes large switch statements per action",
+          "Strategy for change making and payment methods (card later)",
+          "Observer for low-stock alerts to operator",
+          "Command for admin operations",
+          "Adding card payment = new PaymentMethod and maybe a new state"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Edge cases.",
+        "keyPoints": [
+          "Dispense jam: refund or retry; do not decrement inventory until confirmed",
+          "Power loss mid-transaction: persist balance before acting",
+          "Invalid/counterfeit currency rejected at insert",
+          "Inserting money in Dispensing state is rejected and returned",
+          "Greedy change fails for non-canonical sets; use DP with limited counts"
+        ]
+      }
+    ],
+    "modelSummary": "VendingMachine is the context of a State pattern with IdleState, HasMoneyState, DispensingState and MaintenanceState; each public action (insertMoney, selectProduct, cancel, restock) delegates to the current state, which validates and transitions. Inventory maps slot codes to products and quantities, and a CashBox tracks denomination counts. A ChangeMaker strategy computes exact change with limited coin counts (DP when greedy is unsafe) and the sale is refused if change is impossible. Inventory is decremented only after the dispenser confirms. Hardware sits behind Dispenser and Display interfaces. Classes: VendingMachine, State{Idle,HasMoney,Dispensing,Maintenance}, Inventory, Slot, Product, Denomination, CashBox, ChangeMaker, Dispenser, Display."
+  },
+  {
+    "id": "ood-10",
+    "type": "ood",
+    "title": "Design a meeting room scheduler",
+    "level": "advanced",
+    "brief": "Design a meeting room booking system for a company (think Outlook room booking). Users search for available rooms by time, capacity and equipment, book them, and may create recurring meetings. Double booking must never happen.",
+    "constraints": [
+      "Multiple buildings with rooms having capacity and equipment",
+      "Bookings in 15-minute granularity, time zones matter",
+      "Recurring meetings (daily/weekly) with exceptions",
+      "Concurrent booking attempts for the same room",
+      "Notify attendees on create/update/cancel"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & use cases",
+        "prompt": "Use cases.",
+        "keyPoints": [
+          "Search available rooms for [start,end) with capacity and features",
+          "Book, update, cancel; recurring series with single-instance edits",
+          "No overlapping bookings per room (half-open intervals)",
+          "Attendee invites and notifications",
+          "Non-goals: full calendar sync with external providers"
+        ]
+      },
+      {
+        "key": "entities",
+        "title": "Core classes & responsibilities",
+        "prompt": "Classes.",
+        "keyPoints": [
+          "Room (id, building, floor, capacity, features)",
+          "Meeting/Booking (id, room, organizer, attendees, interval, status)",
+          "TimeSlot/Interval value object with overlaps()",
+          "RecurrenceRule (frequency, interval, until/count, exceptions)",
+          "Scheduler/BookingService; RoomRepository; Calendar per room"
+        ]
+      },
+      {
+        "key": "relationships",
+        "title": "Relationships & interfaces",
+        "prompt": "Relationships.",
+        "keyPoints": [
+          "Room 1..* Bookings via a RoomCalendar (sorted interval structure)",
+          "RecurringSeries generates Booking instances; exceptions override instances",
+          "RoomSearch uses Specification/filters for capacity and features",
+          "NotificationService (Observer) on booking events",
+          "RoomSelectionStrategy for suggesting best room (smallest fit, nearest)"
+        ]
+      },
+      {
+        "key": "methods",
+        "title": "Key methods & flows",
+        "prompt": "Walk through booking.",
+        "keyPoints": [
+          "List<Room> findAvailable(Interval i, int capacity, Set<Feature> f)",
+          "Booking book(roomId, Interval i, User org, List<User> attendees)",
+          "RoomCalendar.isFree(i): TreeMap floorEntry/ceilingEntry check O(log n)",
+          "Series bookRecurring(roomId, Interval first, RecurrenceRule r): expand instances, all-or-nothing or report conflicts",
+          "void cancel(bookingId) -> remove from calendar, notify"
+        ]
+      },
+      {
+        "key": "patterns",
+        "title": "Patterns & extensibility",
+        "prompt": "Patterns and extensions.",
+        "keyPoints": [
+          "Strategy for room selection; Specification for filters",
+          "Observer for notifications",
+          "Interval tree or sorted map per room for overlap queries",
+          "Factory for recurrence expansion",
+          "Extend to desks or equipment by generalizing Room to Resource"
+        ]
+      },
+      {
+        "key": "concurrency",
+        "title": "Concurrency & edge cases",
+        "prompt": "Races and edge cases.",
+        "keyPoints": [
+          "Check-and-insert on RoomCalendar must be atomic: per-room lock",
+          "In a DB: exclusion constraint on (room, tsrange) or SELECT FOR UPDATE",
+          "Recurring booking conflicts: report which instances fail",
+          "Store UTC, render in local time; DST shifts for recurring meetings",
+          "Back-to-back meetings allowed with half-open [start,end)"
+        ]
+      }
+    ],
+    "modelSummary": "Rooms carry capacity and features; each Room has a RoomCalendar storing bookings in a sorted map keyed by start time so isFree(interval) is an O(log n) neighbour check on half-open intervals. BookingService handles search (filtered by Specification and ranked by a RoomSelectionStrategy), book, update and cancel. Recurring meetings are a RecurringSeries with a RecurrenceRule that expands to instances, with per-instance exceptions. Double booking is prevented with a per-room lock in memory or a database exclusion constraint. Times are stored in UTC and recurrence is expanded in the organizer time zone. Notifications use Observer. Classes: Room, Building, Feature, Interval, Booking, RecurringSeries, RecurrenceRule, RoomCalendar, BookingService, RoomSelectionStrategy, NotificationService."
+  }
+]

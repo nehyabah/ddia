@@ -6,20 +6,24 @@ import { GradeBox } from "../components/GradeBox";
 import { Icon } from "../components/ui";
 import { CompanyChip, CompanyFilter, useCompanyFilter } from "./Companies";
 
-type Item = { id: string; company: string | null; title: string; level: string; brief: string; sections: number; passed: number; started: boolean; avg: number | null };
+type Item = { id: string; type: "system" | "ood" | "api"; company: string | null; title: string; level: string; brief: string; sections: number; passed: number; started: boolean; avg: number | null };
 type Section = { key: string; title: string; prompt: string; answer: string; best: number | null };
 type Prompt = { id: string; title: string; level: string; brief: string; constraints: string[]; sections: Section[]; modelSummary: string | null };
 
 export function DesignList() {
   const { data } = useLoad(() => api.get<Item[]>("/design"), []);
   const [company, setCompany] = useCompanyFilter();
+  const [type, setType] = useState<"system" | "ood" | "api">("system");
   if (!data) return <div className="center">Loading…</div>;
-  const list = data.filter((d) => !company || d.company === company || (company === "general" && !d.company));
+  const list = data.filter((d) => d.type === type).filter((d) => !company || d.company === company || (company === "general" && !d.company));
   return (
     <>
       <Link to="/prep" className="back"><Icon name="back" />Prep</Link>
-      <h2>System design</h2>
+      <h2>Design</h2>
       <p className="lede">Work through a design section by section, the way an interviewer runs it. Each section is reviewed against what a strong senior answer covers; 7/10 passes.</p>
+      <div className="seg">
+        {([["system", "System"], ["ood", "Object-oriented"], ["api", "API"]] as const).map(([k, l]) => <button key={k} className={type === k ? "on" : ""} onClick={() => setType(k)}>{l} ({data.filter((d) => d.type === k).length})</button>)}
+      </div>
       <CompanyFilter value={company} onChange={setCompany} />
       <div className="list">
         {list.map((d) => (
@@ -43,7 +47,7 @@ export function DesignPlay() {
   const current = open ?? data.sections.find((s) => (s.best ?? 0) < 7)?.key ?? data.sections[0].key;
   return (
     <>
-      <Link to="/design" className="back"><Icon name="back" />System design</Link>
+      <Link to="/design" className="back"><Icon name="back" />Design</Link>
       <h2>{data.title}</h2>
       <section className="panel">
         <p style={{ marginTop: 0 }}>{data.brief}</p>

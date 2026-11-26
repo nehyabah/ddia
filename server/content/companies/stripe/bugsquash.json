@@ -1,0 +1,686 @@
+[
+  {
+    "id": "stripe-bug-01",
+    "title": "Partial refunds rejected and amounts off by a cent",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "**Ticket #4812 — Refunds service**\n\nThe refunds module converts decimal amounts from the dashboard into integer cents, keeps a list of refunds per charge, and refuses refunds that exceed what is left.\n\nReported by support:\n\n> A merchant charged a customer **$19.99**. The charge shows up in our system as **$19.98**. Separately, after refunding $4 of a $10 charge, they tried to refund the remaining $6 and got `amount_too_large`. Refunding $5.99 worked fine.\n\nFiles: `money.js` (conversion/formatting), `refunds.js` (the `Charge` class). Make every test pass.",
+    "files": [
+      {
+        "path": "money.js",
+        "code": "// All money is stored as integer cents.\nfunction toCents(amount) {\n  return Math.floor(amount * 100);\n}\n\nfunction formatCents(cents) {\n  const sign = cents < 0 ? \"-\" : \"\";\n  const abs = Math.abs(cents);\n  return sign + \"$\" + Math.floor(abs / 100) + \".\" + String(abs % 100).padStart(2, \"0\");\n}\n\n// \"12.50\" or \"$12.50\" -> 12.5\nfunction parseAmount(input) {\n  const n = Number(String(input).replace(/[$,s]/g, \"\"));\n  if (!Number.isFinite(n)) throw new Error(\"invalid_amount\");\n  return n;\n}\n"
+      },
+      {
+        "path": "refunds.js",
+        "code": "class Charge {\n  constructor(id, amountDecimal) {\n    this.id = id;\n    this.amount = toCents(amountDecimal);\n    this.refunds = [];\n  }\n\n  refunded() {\n    return this.refunds.reduce((sum, r) => sum + r.amount, 0);\n  }\n\n  refundable() {\n    return this.amount - this.refunded();\n  }\n\n  refund(amountDecimal) {\n    const cents = toCents(amountDecimal);\n    if (cents <= 0) throw new Error(\"invalid_amount\");\n    if (cents >= this.refundable()) throw new Error(\"amount_too_large\");\n    this.refunds.push({ amount: cents, n: this.refunds.length + 1 });\n    return this.refundable();\n  }\n\n  get status() {\n    const r = this.refunded();\n    return r === 0 ? \"succeeded\" : r === this.amount ? \"refunded\" : \"partially_refunded\";\n  }\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "formats negative cents",
+        "call": "formatCents(-1234)",
+        "expected": "-$12.34"
+      },
+      {
+        "name": "$19.99 converts to 1999 cents",
+        "call": "toCents(19.99)",
+        "expected": 1999
+      },
+      {
+        "name": "charge amount stored correctly",
+        "call": "new Charge(\"ch_1\", 0.29).amount",
+        "expected": 29
+      },
+      {
+        "name": "refund less than remainder",
+        "call": "(() => { const c = new Charge(\"ch_1\", 10); return c.refund(4); })()",
+        "expected": 600
+      },
+      {
+        "name": "refund exactly the remainder",
+        "call": "(() => { const c = new Charge(\"ch_1\", 10); c.refund(4); try { return c.refund(6); } catch (e) { return e.message; } })()",
+        "expected": 0
+      },
+      {
+        "name": "over-refund is rejected",
+        "call": "(() => { const c = new Charge(\"ch_1\", 50); c.refund(20); try { return c.refund(30.5); } catch (e) { return e.message; } })()",
+        "expected": "amount_too_large"
+      },
+      {
+        "name": "zero refund is rejected",
+        "call": "(() => { try { return new Charge(\"ch_1\", 5).refund(0); } catch (e) { return e.message; } })()",
+        "expected": "invalid_amount"
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "money.js",
+        "code": "// All money is stored as integer cents.\nfunction toCents(amount) {\n  return Math.round(amount * 100); // FIX: Math.floor truncated float error (19.99 * 100 === 1998.9999999999998)\n}\n\nfunction formatCents(cents) {\n  const sign = cents < 0 ? \"-\" : \"\";\n  const abs = Math.abs(cents);\n  return sign + \"$\" + Math.floor(abs / 100) + \".\" + String(abs % 100).padStart(2, \"0\");\n}\n\n// \"12.50\" or \"$12.50\" -> 12.5\nfunction parseAmount(input) {\n  const n = Number(String(input).replace(/[$,s]/g, \"\"));\n  if (!Number.isFinite(n)) throw new Error(\"invalid_amount\");\n  return n;\n}\n"
+      },
+      {
+        "path": "refunds.js",
+        "code": "class Charge {\n  constructor(id, amountDecimal) {\n    this.id = id;\n    this.amount = toCents(amountDecimal);\n    this.refunds = [];\n  }\n\n  refunded() {\n    return this.refunds.reduce((sum, r) => sum + r.amount, 0);\n  }\n\n  refundable() {\n    return this.amount - this.refunded();\n  }\n\n  refund(amountDecimal) {\n    const cents = toCents(amountDecimal);\n    if (cents <= 0) throw new Error(\"invalid_amount\");\n    if (cents > this.refundable()) throw new Error(\"amount_too_large\"); // FIX: was >=, which blocked refunding exactly the remainder\n    this.refunds.push({ amount: cents, n: this.refunds.length + 1 });\n    return this.refundable();\n  }\n\n  get status() {\n    const r = this.refunded();\n    return r === 0 ? \"succeeded\" : r === this.amount ? \"refunded\" : \"partially_refunded\";\n  }\n}\n"
+      }
+    ],
+    "hints": [
+      "Try toCents(19.99) in isolation. What is 19.99 * 100 in IEEE-754 floating point?",
+      "There are two bugs. For the second, look at the boundary: what should happen when the refund equals exactly what is left?",
+      "Rounding (not truncating) is the right way to turn a decimal amount into cents; the comparison should only reject refunds strictly larger than the refundable amount."
+    ],
+    "explanation": "**Bug 1: float truncation in `toCents`.** `19.99 * 100` is `1998.9999999999998` in binary floating point and `Math.floor` drops it to 1998. Use `Math.round` at the boundary where decimals enter the system, and keep integer cents everywhere else.\n\n**Bug 2: off-by-one comparison in `refund`.** `cents >= this.refundable()` rejects a refund equal to the remaining balance, so a charge can never be fully refunded in pieces. It should be `>`.\n\n**How to find them:** reproduce each ticket symptom as a tiny call (`toCents(19.99)`, refund 4 then 6). The first points straight at the conversion; the second is a classic boundary: always test \"exactly equal\" as well as \"less than\" and \"greater than\"."
+  },
+  {
+    "id": "stripe-bug-02",
+    "title": "Customer export has duplicates and an extra empty request",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "**Ticket #5120 — Customer CSV export**\n\n`api.js` implements a Stripe-style cursor-paginated list endpoint (`limit`, `starting_after`, `has_more`). `client.js` walks every page to build an export.\n\nReported by a merchant:\n\n> Our export of 5 customers came back with some customers listed two or three times. Our API logs also show the exporter makes one more list request than it should, and that request always returns an empty page.\n\nFix the server-side pagination so the existing client works.",
+    "files": [
+      {
+        "path": "store.js",
+        "code": "const customers = [];\n\nfunction seed(n) {\n  customers.length = 0;\n  for (let i = 1; i <= n; i++) {\n    customers.push({ id: \"cus_\" + String(i).padStart(3, \"0\"), created: 1700000000 + i * 60 });\n  }\n}\n"
+      },
+      {
+        "path": "api.js",
+        "code": "// GET /v1/customers?limit=&starting_after=\nfunction listCustomers({ limit = 10, starting_after } = {}) {\n  let start = 0;\n  if (starting_after) {\n    const idx = customers.findIndex((c) => c.id === starting_after);\n    if (idx === -1) throw new Error(\"resource_missing\");\n    start = idx;\n  }\n  const data = customers.slice(start, start + limit);\n  return { object: \"list\", data, has_more: start + limit <= customers.length };\n}\n\n// GET /v1/customers/:id\nfunction retrieveCustomer(id) {\n  const c = customers.find((x) => x.id === id);\n  if (!c) throw new Error(\"resource_missing\");\n  return c;\n}\n"
+      },
+      {
+        "path": "client.js",
+        "code": "let apiCalls = 0;\n\nfunction exportAll(limit) {\n  apiCalls = 0;\n  const out = [];\n  let cursor;\n  while (true) {\n    apiCalls++;\n    const page = listCustomers({ limit, starting_after: cursor });\n    if (page.data.length === 0) break;\n    out.push(...page.data.map((c) => c.id));\n    if (!page.has_more) break;\n    cursor = page.data[page.data.length - 1].id;\n  }\n  return out;\n}\n\n// one CSV row per customer, header first\nfunction toCsvRows(ids) {\n  return [\"id\"].concat(ids.map((id) => JSON.stringify(id)));\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "first page",
+        "call": "(() => { seed(3); return listCustomers({ limit: 2 }).data.map((c) => c.id); })()",
+        "expected": [
+          "cus_001",
+          "cus_002"
+        ]
+      },
+      {
+        "name": "unknown cursor errors",
+        "call": "(() => { seed(3); try { listCustomers({ starting_after: \"cus_999\" }); return \"no error\"; } catch (e) { return e.message; } })()",
+        "expected": "resource_missing"
+      },
+      {
+        "name": "second page starts after cursor",
+        "call": "(() => { seed(5); return listCustomers({ limit: 2, starting_after: \"cus_002\" }).data.map((c) => c.id); })()",
+        "expected": [
+          "cus_003",
+          "cus_004"
+        ]
+      },
+      {
+        "name": "export has no duplicates",
+        "call": "(() => { seed(5); return exportAll(2); })()",
+        "expected": [
+          "cus_001",
+          "cus_002",
+          "cus_003",
+          "cus_004",
+          "cus_005"
+        ]
+      },
+      {
+        "name": "exact final page has has_more=false",
+        "call": "(() => { seed(4); return listCustomers({ limit: 2, starting_after: \"cus_002\" }).has_more; })()",
+        "expected": false
+      },
+      {
+        "name": "no extra empty request",
+        "call": "(() => { seed(4); exportAll(2); return apiCalls; })()",
+        "expected": 2
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "store.js",
+        "code": "const customers = [];\n\nfunction seed(n) {\n  customers.length = 0;\n  for (let i = 1; i <= n; i++) {\n    customers.push({ id: \"cus_\" + String(i).padStart(3, \"0\"), created: 1700000000 + i * 60 });\n  }\n}\n"
+      },
+      {
+        "path": "api.js",
+        "code": "// GET /v1/customers?limit=&starting_after=\nfunction listCustomers({ limit = 10, starting_after } = {}) {\n  let start = 0;\n  if (starting_after) {\n    const idx = customers.findIndex((c) => c.id === starting_after);\n    if (idx === -1) throw new Error(\"resource_missing\");\n    start = idx + 1; // FIX: was idx, so every page re-returned the cursor object\n  }\n  const data = customers.slice(start, start + limit);\n  return { object: \"list\", data, has_more: start + limit < customers.length }; // FIX: was <=, reported has_more on the exact last page\n}\n\n// GET /v1/customers/:id\nfunction retrieveCustomer(id) {\n  const c = customers.find((x) => x.id === id);\n  if (!c) throw new Error(\"resource_missing\");\n  return c;\n}\n"
+      },
+      {
+        "path": "client.js",
+        "code": "let apiCalls = 0;\n\nfunction exportAll(limit) {\n  apiCalls = 0;\n  const out = [];\n  let cursor;\n  while (true) {\n    apiCalls++;\n    const page = listCustomers({ limit, starting_after: cursor });\n    if (page.data.length === 0) break;\n    out.push(...page.data.map((c) => c.id));\n    if (!page.has_more) break;\n    cursor = page.data[page.data.length - 1].id;\n  }\n  return out;\n}\n\n// one CSV row per customer, header first\nfunction toCsvRows(ids) {\n  return [\"id\"].concat(ids.map((id) => JSON.stringify(id)));\n}\n"
+      }
+    ],
+    "hints": [
+      "Call listCustomers by hand with starting_after set to the last id of page one. Which customer comes first?",
+      "starting_after is exclusive. Then check has_more when the remaining items exactly fill the page.",
+      "Two lines in api.js: the start offset and the has_more comparison."
+    ],
+    "explanation": "**Bug 1: inclusive cursor.** `starting_after` means *strictly after* the given object, but the code started the slice *at* it (`start = idx`), so each page repeated the previous page's last item and the export advanced one item at a time with duplicates.\n\n**Bug 2: off-by-one `has_more`.** With `<=`, a page that ends exactly at the last element still claims more data exists, so clients make an extra request that returns an empty page.\n\n**How to find them:** log the ids per page for a small seeded data set (4–5 items, page size 2). Duplicates at page boundaries point at the cursor; an empty trailing page points at `has_more`. Always test lengths that are an exact multiple of the page size."
+  },
+  {
+    "id": "stripe-bug-03",
+    "title": "Idempotent replays leak across accounts and corrupt responses",
+    "level": "hard",
+    "company": "stripe",
+    "brief": "**Ticket #6031 — Idempotency layer (sev-2)**\n\n`server.js` wraps charge creation with an idempotency store: a repeated request with the same `Idempotency-Key` must return the original response (marked `replayed: true`) instead of charging twice; reusing a key with different parameters returns 409.\n\nTwo reports:\n\n1. > Account `acct_B` sent key `order-1` and got back a charge that belongs to `acct_A`. No charge was created for B.\n2. > Our audit log stores the response from the *first* request. After the client retried, the logged first response suddenly shows `replayed: true`.",
+    "files": [
+      {
+        "path": "store.js",
+        "code": "class IdempotencyStore {\n  constructor() {\n    this.entries = new Map();\n  }\n  get(scopeKey) {\n    return this.entries.get(scopeKey);\n  }\n  put(scopeKey, fingerprint, response) {\n    this.entries.set(scopeKey, { fingerprint, response });\n  }\n  get size() {\n    return this.entries.size;\n  }\n}\n"
+      },
+      {
+        "path": "charges.js",
+        "code": "let nextChargeId = 1;\nconst createdCharges = [];\n\nfunction createCharge(account, params) {\n  const charge = { id: \"ch_\" + nextChargeId++, account, amount: params.amount, currency: params.currency, status: \"succeeded\" };\n  createdCharges.push(charge);\n  return charge;\n}\n"
+      },
+      {
+        "path": "server.js",
+        "code": "const idem = new IdempotencyStore();\n\nfunction fingerprint(body) {\n  return JSON.stringify(Object.keys(body).sort().map((k) => [k, body[k]]));\n}\n\n// req: { account, idempotencyKey, body: { amount, currency } }\nfunction handle(req) {\n  const scopeKey = req.idempotencyKey;\n  const hit = idem.get(scopeKey);\n  if (hit) {\n    if (hit.fingerprint !== fingerprint(req.body)) {\n      return { status: 409, body: { error: \"idempotency_key_reused\" } };\n    }\n    hit.response.replayed = true;\n    return { status: 200, body: hit.response };\n  }\n  const charge = createCharge(req.account, req.body);\n  idem.put(scopeKey, fingerprint(req.body), charge);\n  return { status: 200, body: charge };\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "replay returns same charge",
+        "call": "(() => { const req = { account: \"acct_A\", idempotencyKey: \"k1\", body: { amount: 500, currency: \"usd\" } }; const a = handle(req); const b = handle(req); return [a.body.id, b.body.id, b.body.replayed, createdCharges.length]; })()",
+        "expected": [
+          "ch_1",
+          "ch_1",
+          true,
+          1
+        ]
+      },
+      {
+        "name": "key reuse with different params is 409",
+        "call": "(() => { handle({ account: \"acct_A\", idempotencyKey: \"k1\", body: { amount: 500, currency: \"usd\" } }); return handle({ account: \"acct_A\", idempotencyKey: \"k1\", body: { amount: 700, currency: \"usd\" } }).status; })()",
+        "expected": 409
+      },
+      {
+        "name": "param order does not matter",
+        "call": "(() => { handle({ account: \"acct_A\", idempotencyKey: \"k1\", body: { amount: 500, currency: \"usd\" } }); return handle({ account: \"acct_A\", idempotencyKey: \"k1\", body: { currency: \"usd\", amount: 500 } }).status; })()",
+        "expected": 200
+      },
+      {
+        "name": "first response is not mutated by replay",
+        "call": "(() => { const req = { account: \"acct_A\", idempotencyKey: \"k1\", body: { amount: 500, currency: \"usd\" } }; const first = handle(req); handle(req); return first.body.replayed === undefined; })()",
+        "expected": true
+      },
+      {
+        "name": "keys are scoped per account",
+        "call": "(() => { const a = handle({ account: \"acct_A\", idempotencyKey: \"order-1\", body: { amount: 500, currency: \"usd\" } }); const b = handle({ account: \"acct_B\", idempotencyKey: \"order-1\", body: { amount: 500, currency: \"usd\" } }); return [a.body.account, b.body.account, createdCharges.length]; })()",
+        "expected": [
+          "acct_A",
+          "acct_B",
+          2
+        ]
+      },
+      {
+        "name": "second account with different params is not a conflict",
+        "call": "(() => { handle({ account: \"acct_A\", idempotencyKey: \"order-1\", body: { amount: 500, currency: \"usd\" } }); return handle({ account: \"acct_B\", idempotencyKey: \"order-1\", body: { amount: 900, currency: \"eur\" } }).status; })()",
+        "expected": 200
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "store.js",
+        "code": "class IdempotencyStore {\n  constructor() {\n    this.entries = new Map();\n  }\n  get(scopeKey) {\n    return this.entries.get(scopeKey);\n  }\n  put(scopeKey, fingerprint, response) {\n    this.entries.set(scopeKey, { fingerprint, response });\n  }\n  get size() {\n    return this.entries.size;\n  }\n}\n"
+      },
+      {
+        "path": "charges.js",
+        "code": "let nextChargeId = 1;\nconst createdCharges = [];\n\nfunction createCharge(account, params) {\n  const charge = { id: \"ch_\" + nextChargeId++, account, amount: params.amount, currency: params.currency, status: \"succeeded\" };\n  createdCharges.push(charge);\n  return charge;\n}\n"
+      },
+      {
+        "path": "server.js",
+        "code": "const idem = new IdempotencyStore();\n\nfunction fingerprint(body) {\n  return JSON.stringify(Object.keys(body).sort().map((k) => [k, body[k]]));\n}\n\n// req: { account, idempotencyKey, body: { amount, currency } }\nfunction handle(req) {\n  const scopeKey = req.account + \":\" + req.idempotencyKey; // FIX: keys must be scoped per account\n  const hit = idem.get(scopeKey);\n  if (hit) {\n    if (hit.fingerprint !== fingerprint(req.body)) {\n      return { status: 409, body: { error: \"idempotency_key_reused\" } };\n    }\n    return { status: 200, body: { ...hit.response, replayed: true } }; // FIX: copy instead of mutating the cached (and already returned) object\n  }\n  const charge = createCharge(req.account, req.body);\n  idem.put(scopeKey, fingerprint(req.body), charge);\n  return { status: 200, body: charge };\n}\n"
+      }
+    ],
+    "hints": [
+      "Think about what the cache key is. Who chooses idempotency keys, and can two merchants choose the same one?",
+      "Follow the object identity: is the object returned on the first request the same object that sits in the store?",
+      "Scope the key by account, and never mutate cached state on read; return a copy with the extra flag."
+    ],
+    "explanation": "**Bug 1: unscoped idempotency keys.** Keys are chosen by clients, so two accounts can easily send `order-1`. The store must be keyed by `(account, key)`; otherwise one merchant receives another merchant's charge (a data leak) and their own charge is silently never created.\n\n**Bug 2: mutating shared cached state.** On replay the code set `replayed = true` on the cached object. That object is the very one returned (and logged) by the first request, so history was rewritten. Return a copy (`{ ...hit.response, replayed: true }`).\n\n**How to find them:** for report 1, ask \"what is the key of this map?\" and whether it is unique across tenants. For report 2, a value changing after it was returned almost always means aliasing; look for writes to objects that came out of a cache."
+  },
+  {
+    "id": "stripe-bug-04",
+    "title": "Monthly invoice totals and proration are wrong",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "**Ticket #3377 — Billing reports**\n\n`dates.js` has calendar helpers, `proration.js` prorates a monthly price by days used, and `invoices.js` groups invoice amounts by month (UTC, keys like `2024-02`).\n\nReported by finance:\n\n> The February revenue report shows invoices under **2024-01**. Also, a customer on a $10.00/month plan who used 10 of 30 days was billed **$3.30**; we expected **$3.33**. A full month of a $29.99 plan prorated over 31/31 days came out as $30.07.",
+    "files": [
+      {
+        "path": "dates.js",
+        "code": "const DAY_MS = 24 * 60 * 60 * 1000;\n\nfunction monthKey(tsSeconds) {\n  const d = new Date(tsSeconds * 1000);\n  return d.getUTCFullYear() + \"-\" + String(d.getUTCMonth()).padStart(2, \"0\");\n}\n\n// month1 is 1-12\nfunction daysInMonth(year, month1) {\n  return new Date(Date.UTC(year, month1, 0)).getUTCDate();\n}\n\nfunction addDays(tsSeconds, days) {\n  return tsSeconds + days * (DAY_MS / 1000);\n}\n"
+      },
+      {
+        "path": "proration.js",
+        "code": "function prorate(amountCents, daysUsed, totalDays) {\n  return Math.round(amountCents / totalDays) * daysUsed;\n}\n"
+      },
+      {
+        "path": "invoices.js",
+        "code": "function totalsByMonth(invoices) {\n  const totals = {};\n  for (const inv of invoices) {\n    const k = monthKey(inv.created);\n    totals[k] = (totals[k] || 0) + inv.amount;\n  }\n  return totals;\n}\n\n// net 30 by default\nfunction dueDate(inv, terms = 30) {\n  return addDays(inv.created, terms);\n}\n\nfunction isOverdue(inv, nowSeconds) {\n  return inv.status !== \"paid\" && nowSeconds > dueDate(inv);\n}\n\nfunction invoiceLine(description, monthlyCents, daysUsed, totalDays) {\n  return { description, amount: prorate(monthlyCents, daysUsed, totalDays) };\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "leap-year February has 29 days",
+        "call": "daysInMonth(2024, 2)",
+        "expected": 29
+      },
+      {
+        "name": "proration of an evenly divisible amount",
+        "call": "prorate(3000, 10, 30)",
+        "expected": 1000
+      },
+      {
+        "name": "month key for 2024-02-01T00:00Z",
+        "call": "monthKey(1706745600)",
+        "expected": "2024-02"
+      },
+      {
+        "name": "month key for December",
+        "call": "monthKey(1735603200)",
+        "expected": "2024-12"
+      },
+      {
+        "name": "prorate $10 for 10/30 days",
+        "call": "prorate(1000, 10, 30)",
+        "expected": 333
+      },
+      {
+        "name": "full month prorates to the full price",
+        "call": "prorate(2999, 31, 31)",
+        "expected": 2999
+      },
+      {
+        "name": "totals grouped by month",
+        "call": "totalsByMonth([{ created: 1706745600, amount: 500 }, { created: 1706745600 + 86400 * 5, amount: 250 }, { created: 1704067200, amount: 100 }])",
+        "expected": {
+          "2024-02": 750,
+          "2024-01": 100
+        }
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "dates.js",
+        "code": "const DAY_MS = 24 * 60 * 60 * 1000;\n\nfunction monthKey(tsSeconds) {\n  const d = new Date(tsSeconds * 1000);\n  return d.getUTCFullYear() + \"-\" + String(d.getUTCMonth() + 1).padStart(2, \"0\"); // FIX: getUTCMonth() is 0-based\n}\n\n// month1 is 1-12\nfunction daysInMonth(year, month1) {\n  return new Date(Date.UTC(year, month1, 0)).getUTCDate();\n}\n\nfunction addDays(tsSeconds, days) {\n  return tsSeconds + days * (DAY_MS / 1000);\n}\n"
+      },
+      {
+        "path": "proration.js",
+        "code": "function prorate(amountCents, daysUsed, totalDays) {\n  return Math.round((amountCents * daysUsed) / totalDays); // FIX: was Math.round(amountCents / totalDays) * daysUsed, rounding per day and multiplying the error\n}\n"
+      },
+      {
+        "path": "invoices.js",
+        "code": "function totalsByMonth(invoices) {\n  const totals = {};\n  for (const inv of invoices) {\n    const k = monthKey(inv.created);\n    totals[k] = (totals[k] || 0) + inv.amount;\n  }\n  return totals;\n}\n\n// net 30 by default\nfunction dueDate(inv, terms = 30) {\n  return addDays(inv.created, terms);\n}\n\nfunction isOverdue(inv, nowSeconds) {\n  return inv.status !== \"paid\" && nowSeconds > dueDate(inv);\n}\n\nfunction invoiceLine(description, monthlyCents, daysUsed, totalDays) {\n  return { description, amount: prorate(monthlyCents, daysUsed, totalDays) };\n}\n"
+      }
+    ],
+    "hints": [
+      "Run monthKey on a timestamp you know is in February. JavaScript Date has one famous 0-based field.",
+      "For proration, compare rounding once at the end vs rounding a per-day price and multiplying it.",
+      "Multiply first, divide and round last: round(amount * used / total)."
+    ],
+    "explanation": "**Bug 1: 0-based month.** `getUTCMonth()` returns 0–11, so February became `-01` (and January `-00`). Add 1.\n\n**Bug 2: rounding too early.** `Math.round(1000 / 30) * 10` = 33 × 10 = 330, and `round(2999/31) * 31` = 97 × 31 = 3007. Rounding a per-unit rate and then multiplying multiplies the rounding error. Do exact integer multiplication first and round once.\n\n**How to find them:** reproduce the reported numbers exactly (10/30 → 330, 31/31 → 3007); a result that is a clean multiple of `daysUsed` gives away the early rounding. For dates, test one known timestamp per helper and include month boundaries (Jan, Dec)."
+  },
+  {
+    "id": "stripe-bug-05",
+    "title": "Webhook dispatcher marks failed deliveries as delivered",
+    "level": "hard",
+    "company": "stripe",
+    "brief": "**Ticket #7702 — Webhook delivery**\n\n`dispatcher.js` delivers an event to a merchant endpoint, retrying failures with exponential backoff (`backoff.js`) up to `maxAttempts` total attempts, and returns a delivery log. `endpoint.js` is a test double whose `send` rejects for the first N calls.\n\nReported by a merchant:\n\n> Our endpoint was returning 500s during an incident, but your dashboard says every event was **delivered on the first attempt**, and you never retried. Also, when we configured 3 attempts, it looks like at most 2 would ever be made.",
+    "files": [
+      {
+        "path": "endpoint.js",
+        "code": "function makeEndpoint(failuresBeforeSuccess) {\n  let calls = 0;\n  return {\n    get calls() {\n      return calls;\n    },\n    async send(event) {\n      calls++;\n      if (calls <= failuresBeforeSuccess) throw new Error(\"HTTP 500\");\n      return { status: 200, id: event.id };\n    },\n  };\n}\n"
+      },
+      {
+        "path": "backoff.js",
+        "code": "// seconds to wait after the given failed attempt (1-based)\nfunction backoffSeconds(attempt) {\n  return Math.min(2 ** (attempt - 1) * 10, 3600);\n}\n\nfunction makeEvent(id, type, data) {\n  return { id, object: \"event\", type, data: { object: data }, created: 1700000000 };\n}\n"
+      },
+      {
+        "path": "dispatcher.js",
+        "code": "async function deliver(event, endpoint, maxAttempts) {\n  const log = [];\n  for (let attempt = 1; attempt < maxAttempts; attempt++) {\n    try {\n      endpoint.send(event);\n      log.push({ attempt, ok: true });\n      return { delivered: true, log };\n    } catch (e) {\n      log.push({ attempt, ok: false, retryIn: attempt < maxAttempts ? backoffSeconds(attempt) : null });\n    }\n  }\n  return { delivered: false, log };\n}\n\nasync function deliverAll(events, endpoint, maxAttempts) {\n  const results = {};\n  for (const ev of events) results[ev.id] = (await deliver(ev, endpoint, maxAttempts)).delivered;\n  return results;\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "backoff schedule",
+        "call": "[1, 2, 3, 10].map(backoffSeconds)",
+        "expected": [
+          10,
+          20,
+          40,
+          3600
+        ]
+      },
+      {
+        "name": "healthy endpoint delivers once",
+        "call": "(async () => { const ep = makeEndpoint(0); const r = await deliver({ id: \"evt_1\" }, ep, 3); return [r.delivered, ep.calls]; })()",
+        "expected": [
+          true,
+          1
+        ]
+      },
+      {
+        "name": "retries until success",
+        "call": "(async () => { const ep = makeEndpoint(2); const r = await deliver({ id: \"evt_1\" }, ep, 5); return { delivered: r.delivered, calls: ep.calls, oks: r.log.map((l) => l.ok) }; })()",
+        "expected": {
+          "delivered": true,
+          "calls": 3,
+          "oks": [
+            false,
+            false,
+            true
+          ]
+        }
+      },
+      {
+        "name": "succeeds on the final allowed attempt",
+        "call": "(async () => { const ep = makeEndpoint(2); const r = await deliver({ id: \"evt_1\" }, ep, 3); return [r.delivered, ep.calls]; })()",
+        "expected": [
+          true,
+          3
+        ]
+      },
+      {
+        "name": "gives up after maxAttempts",
+        "call": "(async () => { const ep = makeEndpoint(10); const r = await deliver({ id: \"evt_1\" }, ep, 3); return { delivered: r.delivered, calls: ep.calls, retryIn: r.log.map((l) => l.retryIn) }; })()",
+        "expected": {
+          "delivered": false,
+          "calls": 3,
+          "retryIn": [
+            10,
+            20,
+            null
+          ]
+        }
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "endpoint.js",
+        "code": "function makeEndpoint(failuresBeforeSuccess) {\n  let calls = 0;\n  return {\n    get calls() {\n      return calls;\n    },\n    async send(event) {\n      calls++;\n      if (calls <= failuresBeforeSuccess) throw new Error(\"HTTP 500\");\n      return { status: 200, id: event.id };\n    },\n  };\n}\n"
+      },
+      {
+        "path": "backoff.js",
+        "code": "// seconds to wait after the given failed attempt (1-based)\nfunction backoffSeconds(attempt) {\n  return Math.min(2 ** (attempt - 1) * 10, 3600);\n}\n\nfunction makeEvent(id, type, data) {\n  return { id, object: \"event\", type, data: { object: data }, created: 1700000000 };\n}\n"
+      },
+      {
+        "path": "dispatcher.js",
+        "code": "async function deliver(event, endpoint, maxAttempts) {\n  const log = [];\n  for (let attempt = 1; attempt <= maxAttempts; attempt++) { // FIX: was attempt < maxAttempts (one attempt short)\n    try {\n      await endpoint.send(event); // FIX: missing await, so the rejection escaped the try/catch\n      log.push({ attempt, ok: true });\n      return { delivered: true, log };\n    } catch (e) {\n      log.push({ attempt, ok: false, retryIn: attempt < maxAttempts ? backoffSeconds(attempt) : null });\n    }\n  }\n  return { delivered: false, log };\n}\n\nasync function deliverAll(events, endpoint, maxAttempts) {\n  const results = {};\n  for (const ev of events) results[ev.id] = (await deliver(ev, endpoint, maxAttempts)).delivered;\n  return results;\n}\n"
+      }
+    ],
+    "hints": [
+      "If send() rejects, where does the rejection go when nobody awaits the promise?",
+      "Count the loop iterations for maxAttempts = 3.",
+      "Await the async call inside the try, and make the loop inclusive of maxAttempts."
+    ],
+    "explanation": "**Bug 1: missing `await`.** `endpoint.send` is async; without `await` the call returns a pending promise immediately, the `try` block finishes, the attempt is logged as ok, and the later rejection becomes an unhandled rejection that the `catch` never sees. Every delivery looked successful on attempt 1.\n\n**Bug 2: off-by-one loop bound.** `attempt < maxAttempts` performs `maxAttempts - 1` attempts.\n\n**How to find them:** \"always succeeds on the first try even when the dependency is down\" is the signature of an un-awaited promise; check every async call inside a try/catch. Then count loop iterations for a small value (3) by hand. Unhandled-rejection warnings in the console are a strong clue too."
+  },
+  {
+    "id": "stripe-bug-06",
+    "title": "Balance report shows JPY as 5.00 and ignores sort order",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "**Ticket #2219 — Multi-currency balance report**\n\n`currency.js` knows each currency's number of minor units (USD 2, JPY 0, KWD 3) and formats amounts. `report.js` sums transactions per currency and returns rows sorted alphabetically by currency code.\n\nReported by a merchant in Japan:\n\n> Our balance of ¥500 is displayed as **\"5.00 JPY\"**. Also the report rows are not sorted; they just come back in whatever order our transactions arrived.",
+    "files": [
+      {
+        "path": "currency.js",
+        "code": "const MINOR_UNITS = { usd: 2, eur: 2, gbp: 2, jpy: 0, kwd: 3 };\n\nfunction minorUnits(currency) {\n  const d = MINOR_UNITS[currency];\n  return d || 2;\n}\n\nfunction toMajor(amountMinor, currency) {\n  return amountMinor / 10 ** minorUnits(currency);\n}\n\nfunction format(amountMinor, currency) {\n  return toMajor(amountMinor, currency).toFixed(minorUnits(currency)) + \" \" + currency.toUpperCase();\n}\n\n// \"10.50\" in usd -> 1050\nfunction fromMajor(major, currency) {\n  return Math.round(Number(major) * 10 ** minorUnits(currency));\n}\n\nfunction isSupported(currency) {\n  return Object.prototype.hasOwnProperty.call(MINOR_UNITS, currency);\n}\n"
+      },
+      {
+        "path": "report.js",
+        "code": "function balanceReport(txns) {\n  const totals = new Map();\n  for (const t of txns) {\n    totals.set(t.currency, (totals.get(t.currency) || 0) + t.amount);\n  }\n  return [...totals.entries()]\n    .map(([currency, total]) => ({ currency, total, display: format(total, currency) }))\n    .sort((a, b) => a.currency - b.currency);\n}\n\n// ids of transactions whose currency the report cannot format reliably\n// (they fall back to 2 decimals); finance reviews these by hand\nfunction unsupported(txns) {\n  return txns.filter((t) => !isSupported(t.currency)).map((t) => t.id);\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "formats USD",
+        "call": "format(1050, \"usd\")",
+        "expected": "10.50 USD"
+      },
+      {
+        "name": "formats KWD (3 decimals)",
+        "call": "format(1234, \"kwd\")",
+        "expected": "1.234 KWD"
+      },
+      {
+        "name": "unknown currency defaults to 2",
+        "call": "minorUnits(\"chf\")",
+        "expected": 2
+      },
+      {
+        "name": "formats JPY (zero-decimal)",
+        "call": "format(500, \"jpy\")",
+        "expected": "500 JPY"
+      },
+      {
+        "name": "report sorted by currency",
+        "call": "balanceReport([{ currency: \"usd\", amount: 100 }, { currency: \"eur\", amount: 200 }, { currency: \"jpy\", amount: 300 }, { currency: \"usd\", amount: 50 }]).map((r) => r.currency)",
+        "expected": [
+          "eur",
+          "jpy",
+          "usd"
+        ]
+      },
+      {
+        "name": "full report",
+        "call": "balanceReport([{ currency: \"jpy\", amount: 500 }, { currency: \"gbp\", amount: 999 }])",
+        "expected": [
+          {
+            "currency": "gbp",
+            "total": 999,
+            "display": "9.99 GBP"
+          },
+          {
+            "currency": "jpy",
+            "total": 500,
+            "display": "500 JPY"
+          }
+        ]
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "currency.js",
+        "code": "const MINOR_UNITS = { usd: 2, eur: 2, gbp: 2, jpy: 0, kwd: 3 };\n\nfunction minorUnits(currency) {\n  const d = MINOR_UNITS[currency];\n  return d === undefined ? 2 : d; // FIX: was d || 2, which treated JPY's 0 as \"missing\"\n}\n\nfunction toMajor(amountMinor, currency) {\n  return amountMinor / 10 ** minorUnits(currency);\n}\n\nfunction format(amountMinor, currency) {\n  return toMajor(amountMinor, currency).toFixed(minorUnits(currency)) + \" \" + currency.toUpperCase();\n}\n\n// \"10.50\" in usd -> 1050\nfunction fromMajor(major, currency) {\n  return Math.round(Number(major) * 10 ** minorUnits(currency));\n}\n\nfunction isSupported(currency) {\n  return Object.prototype.hasOwnProperty.call(MINOR_UNITS, currency);\n}\n"
+      },
+      {
+        "path": "report.js",
+        "code": "function balanceReport(txns) {\n  const totals = new Map();\n  for (const t of txns) {\n    totals.set(t.currency, (totals.get(t.currency) || 0) + t.amount);\n  }\n  return [...totals.entries()]\n    .map(([currency, total]) => ({ currency, total, display: format(total, currency) }))\n    .sort((a, b) => a.currency.localeCompare(b.currency)); // FIX: was a.currency - b.currency (string subtraction is NaN)\n}\n\n// ids of transactions whose currency the report cannot format reliably\n// (they fall back to 2 decimals); finance reviews these by hand\nfunction unsupported(txns) {\n  return txns.filter((t) => !isSupported(t.currency)).map((t) => t.id);\n}\n"
+      }
+    ],
+    "hints": [
+      "What does `0 || 2` evaluate to?",
+      "What does a comparator return for `\"usd\" - \"eur\"`, and what does Array.prototype.sort do with that?",
+      "Check for undefined explicitly (or use `??`), and compare strings with localeCompare or < / >."
+    ],
+    "explanation": "**Bug 1: falsy-zero default.** `d || 2` replaces any falsy value, and 0 (JPY, KRW, ...) is falsy, so zero-decimal currencies were treated as 2-decimal: 500 became 5.00. Use `d === undefined ? 2 : d` or `d ?? 2`.\n\n**Bug 2: broken comparator.** Subtracting strings gives `NaN`, which sort treats as \"equal\", so the (stable) sort left rows in insertion order. Compare strings with `localeCompare`.\n\n**How to find them:** zero-decimal currencies are the classic money edge case; whenever you see `||` used for defaults, ask whether 0 or \"\" is a legitimate value. For sorting, test with input that is deliberately out of order."
+  },
+  {
+    "id": "stripe-bug-07",
+    "title": "Retry wrapper double-charges and retries card declines",
+    "level": "hard",
+    "company": "stripe",
+    "brief": "**Ticket #8015 — Charge client retries (sev-1)**\n\n`retry.js` posts a charge to the gateway with an idempotency key and retries on transient failures (429 and 5xx) up to `maxAttempts`. `gateway.js` is a scripted fake: an outcome of `\"503_after_commit\"` means the charge was created but the response was lost (the realistic case retries must survive).\n\nReports:\n\n1. > A customer was charged **twice** for one order during a gateway incident.\n2. > A declined card (400 `card_declined`) was attempted 3 times and the issuer flagged us for velocity.",
+    "files": [
+      {
+        "path": "gateway.js",
+        "code": "// script: outcome per call (\"ok\" | \"503_after_commit\" | \"400\"); the last entry repeats\nfunction makeGateway(script) {\n  const charges = new Map();\n  let call = 0;\n  return {\n    charges,\n    get calls() {\n      return call;\n    },\n    async post(body, idemKey) {\n      const outcome = script[Math.min(call++, script.length - 1)];\n      if (outcome === \"400\") return { status: 400, body: { error: \"card_declined\" } };\n      if (!charges.has(idemKey)) charges.set(idemKey, { id: \"ch_\" + (charges.size + 1), amount: body.amount });\n      if (outcome === \"503_after_commit\") return { status: 503, body: { error: \"unavailable\" } };\n      return { status: 200, body: charges.get(idemKey) };\n    },\n  };\n}\n"
+      },
+      {
+        "path": "keys.js",
+        "code": "let keySeq = 0;\nfunction newIdempotencyKey() {\n  return \"idem_\" + ++keySeq;\n}\n"
+      },
+      {
+        "path": "retry.js",
+        "code": "function isRetryable(status) {\n  return status >= 400;\n}\n\nasync function chargeWithRetry(gateway, body, maxAttempts) {\n  let last;\n  let attempts = 0;\n  while (attempts < maxAttempts) {\n    attempts++;\n    const key = newIdempotencyKey();\n    last = await gateway.post(body, key);\n    if (last.status === 200) return { ok: true, charge: last.body, attempts };\n    if (!isRetryable(last.status)) break;\n  }\n  return { ok: false, error: last.body.error, attempts };\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "happy path",
+        "call": "(async () => { const g = makeGateway([\"ok\"]); const r = await chargeWithRetry(g, { amount: 500 }, 3); return [r.ok, r.charge.id, r.attempts]; })()",
+        "expected": [
+          true,
+          "ch_1",
+          1
+        ]
+      },
+      {
+        "name": "isRetryable classification",
+        "call": "[200, 400, 402, 404, 429, 500, 503].map(isRetryable)",
+        "expected": [
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "name": "lost response then success creates one charge",
+        "call": "(async () => { const g = makeGateway([\"503_after_commit\", \"ok\"]); const r = await chargeWithRetry(g, { amount: 500 }, 3); return { ok: r.ok, id: r.charge.id, charges: g.charges.size }; })()",
+        "expected": {
+          "ok": true,
+          "id": "ch_1",
+          "charges": 1
+        }
+      },
+      {
+        "name": "decline is not retried",
+        "call": "(async () => { const g = makeGateway([\"400\"]); const r = await chargeWithRetry(g, { amount: 500 }, 3); return { ok: r.ok, error: r.error, calls: g.calls }; })()",
+        "expected": {
+          "ok": false,
+          "error": "card_declined",
+          "calls": 1
+        }
+      },
+      {
+        "name": "persistent 503 gives up with one charge recorded",
+        "call": "(async () => { const g = makeGateway([\"503_after_commit\"]); const r = await chargeWithRetry(g, { amount: 500 }, 3); return { ok: r.ok, error: r.error, calls: g.calls, charges: g.charges.size }; })()",
+        "expected": {
+          "ok": false,
+          "error": "unavailable",
+          "calls": 3,
+          "charges": 1
+        }
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "gateway.js",
+        "code": "// script: outcome per call (\"ok\" | \"503_after_commit\" | \"400\"); the last entry repeats\nfunction makeGateway(script) {\n  const charges = new Map();\n  let call = 0;\n  return {\n    charges,\n    get calls() {\n      return call;\n    },\n    async post(body, idemKey) {\n      const outcome = script[Math.min(call++, script.length - 1)];\n      if (outcome === \"400\") return { status: 400, body: { error: \"card_declined\" } };\n      if (!charges.has(idemKey)) charges.set(idemKey, { id: \"ch_\" + (charges.size + 1), amount: body.amount });\n      if (outcome === \"503_after_commit\") return { status: 503, body: { error: \"unavailable\" } };\n      return { status: 200, body: charges.get(idemKey) };\n    },\n  };\n}\n"
+      },
+      {
+        "path": "keys.js",
+        "code": "let keySeq = 0;\nfunction newIdempotencyKey() {\n  return \"idem_\" + ++keySeq;\n}\n"
+      },
+      {
+        "path": "retry.js",
+        "code": "function isRetryable(status) {\n  return status === 429 || status >= 500; // FIX: was status >= 400, which retried card declines\n}\n\nasync function chargeWithRetry(gateway, body, maxAttempts) {\n  const key = newIdempotencyKey(); // FIX: key was generated inside the loop, so each retry looked like a new charge\n  let last;\n  let attempts = 0;\n  while (attempts < maxAttempts) {\n    attempts++;\n    last = await gateway.post(body, key);\n    if (last.status === 200) return { ok: true, charge: last.body, attempts };\n    if (!isRetryable(last.status)) break;\n  }\n  return { ok: false, error: last.body.error, attempts };\n}\n"
+      }
+    ],
+    "hints": [
+      "Which HTTP statuses are worth retrying? Would retrying a decline ever change the outcome?",
+      "An idempotency key only helps if the retry sends the same key as the original attempt. Where is the key created?",
+      "Retry only 429/5xx, and generate the key once per logical operation, outside the retry loop."
+    ],
+    "explanation": "**Bug 1: retrying non-retryable errors.** `status >= 400` includes 4xx client errors like card declines; retrying them can't succeed and annoys issuers. Retry 429 and 5xx only.\n\n**Bug 2: new idempotency key per attempt.** The key identifies the *logical operation*, so it must be created once and reused across retries. Generated inside the loop, a retry after a \"committed but response lost\" 503 looks like a brand-new charge, and the customer is charged twice.\n\n**How to find them:** walk through the scripted failure step by step and watch `gateway.charges`. Double charges almost always mean the retry wasn't idempotent; check where the key comes from. For the decline, write down the retry predicate as a table of statuses."
+  },
+  {
+    "id": "stripe-bug-08",
+    "title": "Payout installments lose cents and hold days leak between merchants",
+    "level": "medium",
+    "company": "stripe",
+    "brief": "**Ticket #4410 — Payout scheduling**\n\n`config.js` builds a payout schedule from defaults plus per-merchant overrides. `split.js` splits a balance into N installments that must be whole cents and sum exactly to the total (earlier installments absorb the remainder). `payouts.js` plans the payouts.\n\nReports:\n\n> Splitting $1.00 into 3 payouts gave **33.333... cents** each, which our bank rejected.\n\n> Merchant B never configured any hold days, but their schedule contains **2024-12-25**, which is a hold day Merchant A configured.",
+    "files": [
+      {
+        "path": "config.js",
+        "code": "const DEFAULT_SCHEDULE = { interval: \"weekly\", minimumCents: 1000, holdDays: [] };\n\nfunction makeSchedule(overrides = {}) {\n  const s = { ...DEFAULT_SCHEDULE };\n  if (overrides.interval) s.interval = overrides.interval;\n  if (overrides.minimumCents !== undefined) s.minimumCents = overrides.minimumCents;\n  for (const d of overrides.holdDays || []) s.holdDays.push(d);\n  return s;\n}\n"
+      },
+      {
+        "path": "split.js",
+        "code": "function splitEvenly(totalCents, parts) {\n  const base = totalCents / parts;\n  const remainder = totalCents - base * parts;\n  const out = [];\n  for (let i = 0; i < parts; i++) out.push(base + (i < remainder ? 1 : 0));\n  return out;\n}\n"
+      },
+      {
+        "path": "payouts.js",
+        "code": "function planPayouts(balanceCents, schedule, parts) {\n  if (balanceCents < schedule.minimumCents) return [];\n  return splitEvenly(balanceCents, parts);\n}\n\nconst WEEKDAYS = [\"sunday\", \"monday\", \"tuesday\", \"wednesday\", \"thursday\", \"friday\", \"saturday\"];\n\nfunction nextPayoutDate(isoDate, schedule) {\n  const d = new Date(isoDate + \"T00:00:00Z\");\n  const step = schedule.interval === \"daily\" ? 1 : 7;\n  do {\n    d.setUTCDate(d.getUTCDate() + step);\n  } while (schedule.holdDays.includes(d.toISOString().slice(0, 10)));\n  return d.toISOString().slice(0, 10);\n}\n\n// human-readable summary for the dashboard\n// e.g. \"weekly payouts, minimum 1000 cents, 0 hold day(s)\"\nfunction describe(schedule) {\n  return schedule.interval + \" payouts, minimum \" + schedule.minimumCents + \" cents, \" + schedule.holdDays.length + \" hold day(s)\";\n}\n"
+      }
+    ],
+    "bugs": 2,
+    "tests": [
+      {
+        "name": "even split",
+        "call": "splitEvenly(90, 3)",
+        "expected": [
+          30,
+          30,
+          30
+        ]
+      },
+      {
+        "name": "below minimum plans nothing",
+        "call": "planPayouts(500, makeSchedule(), 2)",
+        "expected": []
+      },
+      {
+        "name": "uneven split uses whole cents",
+        "call": "splitEvenly(100, 3)",
+        "expected": [
+          34,
+          33,
+          33
+        ]
+      },
+      {
+        "name": "split always sums to total",
+        "call": "[1001, 7, 99999].every((t) => splitEvenly(t, 4).reduce((a, b) => a + b, 0) === t && splitEvenly(t, 4).every(Number.isInteger))",
+        "expected": true
+      },
+      {
+        "name": "plan with override",
+        "call": "planPayouts(1001, makeSchedule({ minimumCents: 1000, interval: \"daily\" }), 2)",
+        "expected": [
+          501,
+          500
+        ]
+      },
+      {
+        "name": "hold days do not leak between schedules",
+        "call": "(() => { const a = makeSchedule({ holdDays: [\"2024-12-25\"] }); const b = makeSchedule(); return { a: a.holdDays, b: b.holdDays, defaults: DEFAULT_SCHEDULE.holdDays }; })()",
+        "expected": {
+          "a": [
+            "2024-12-25"
+          ],
+          "b": [],
+          "defaults": []
+        }
+      }
+    ],
+    "fixedFiles": [
+      {
+        "path": "config.js",
+        "code": "const DEFAULT_SCHEDULE = { interval: \"weekly\", minimumCents: 1000, holdDays: [] };\n\nfunction makeSchedule(overrides = {}) {\n  const s = { ...DEFAULT_SCHEDULE, holdDays: [...DEFAULT_SCHEDULE.holdDays] }; // FIX: a plain spread shared the holdDays array with the defaults\n  if (overrides.interval) s.interval = overrides.interval;\n  if (overrides.minimumCents !== undefined) s.minimumCents = overrides.minimumCents;\n  for (const d of overrides.holdDays || []) s.holdDays.push(d);\n  return s;\n}\n"
+      },
+      {
+        "path": "split.js",
+        "code": "function splitEvenly(totalCents, parts) {\n  const base = Math.floor(totalCents / parts); // FIX: was totalCents / parts, producing fractional cents\n  const remainder = totalCents - base * parts;\n  const out = [];\n  for (let i = 0; i < parts; i++) out.push(base + (i < remainder ? 1 : 0));\n  return out;\n}\n"
+      },
+      {
+        "path": "payouts.js",
+        "code": "function planPayouts(balanceCents, schedule, parts) {\n  if (balanceCents < schedule.minimumCents) return [];\n  return splitEvenly(balanceCents, parts);\n}\n\nconst WEEKDAYS = [\"sunday\", \"monday\", \"tuesday\", \"wednesday\", \"thursday\", \"friday\", \"saturday\"];\n\nfunction nextPayoutDate(isoDate, schedule) {\n  const d = new Date(isoDate + \"T00:00:00Z\");\n  const step = schedule.interval === \"daily\" ? 1 : 7;\n  do {\n    d.setUTCDate(d.getUTCDate() + step);\n  } while (schedule.holdDays.includes(d.toISOString().slice(0, 10)));\n  return d.toISOString().slice(0, 10);\n}\n\n// human-readable summary for the dashboard\n// e.g. \"weekly payouts, minimum 1000 cents, 0 hold day(s)\"\nfunction describe(schedule) {\n  return schedule.interval + \" payouts, minimum \" + schedule.minimumCents + \" cents, \" + schedule.holdDays.length + \" hold day(s)\";\n}\n"
+      }
+    ],
+    "hints": [
+      "Object spread is shallow. What does `{ ...obj }.holdDays === obj.holdDays` evaluate to?",
+      "JavaScript `/` is never integer division. What is 100 / 3, and what is the remainder computed from it?",
+      "Copy the array when building the schedule, and floor the base share so the remainder is a whole number of cents."
+    ],
+    "explanation": "**Bug 1: shallow copy of shared defaults.** `{ ...DEFAULT_SCHEDULE }` copies the reference to the same `holdDays` array, so `push` modified the defaults for every merchant created afterwards. Copy nested mutable values (or freeze defaults).\n\n**Bug 2: no integer division.** `100 / 3` is 33.333..., so the \"remainder\" is ~0 and every installment was fractional. Floor the base and distribute `total - base * parts` leftover cents one by one.\n\n**How to find them:** state that leaks between unrelated objects means shared references; search for writes (`push`) into something that came from a module-level constant. For money, assert invariants: every installment is an integer and they sum to the total."
+  }
+]
