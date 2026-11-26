@@ -985,3 +985,39 @@ button.themechip{cursor:pointer}
 .node .nbar i{display:block;height:100%;border-radius:2px;background:var(--accent)}
 .node .nprog.up .nbar i{background:var(--teal)}
 .node .npct{font-size:.72rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;min-width:30px;text-align:right}
+
+/* ---------- AI "thinking" animation (used everywhere the AI works) ---------- */
+.thinking{margin-top:12px;padding:14px;border-radius:16px;background:color-mix(in srgb,var(--accent) 6%,var(--glass));border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);animation:pagein .3s ease}
+.thinking.compact{padding:10px 12px;margin-top:4px}
+.th-row{display:flex;align-items:center;gap:12px}
+.th-orb{position:relative;width:34px;height:34px;flex:none}
+.th-orb b{position:absolute;inset:11px;border-radius:50%;background:var(--accent);animation:th-core 1.6s ease-in-out infinite}
+.th-orb i{position:absolute;inset:0;animation:th-spin 1.8s linear infinite}
+.th-orb i::before{content:"";position:absolute;top:0;left:50%;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:var(--accent)}
+.th-orb i:nth-child(2){animation-duration:2.6s;animation-direction:reverse;inset:4px}
+.th-orb i:nth-child(2)::before{background:var(--orange);width:6px;height:6px;margin-left:-3px}
+.th-orb i:nth-child(3){animation-duration:3.4s;inset:8px}
+.th-orb i:nth-child(3)::before{background:var(--teal);width:5px;height:5px;margin-left:-2.5px}
+.compact .th-orb{width:26px;height:26px}.compact .th-orb b{inset:8px}
+@keyframes th-spin{to{transform:rotate(360deg)}}
+@keyframes th-core{0%,100%{transform:scale(.7);opacity:.75}50%{transform:scale(1.05);opacity:1}}
+.th-text{font-weight:600;font-size:.9rem;color:var(--ink);animation:th-in .45s cubic-bezier(.2,.8,.2,1)}
+.th-text::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:th-dots 1.2s steps(4,end) infinite}
+@keyframes th-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes th-dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+.th-ghost{display:flex;gap:14px;align-items:center;margin-top:14px;padding:12px;border-radius:14px;background:color-mix(in srgb,var(--surface) 55%,transparent)}
+.g-ring{width:52px;height:52px;border-radius:50%;border:6px solid var(--line);flex:none;animation:th-pulse 1.4s ease-in-out infinite}
+.g-lines{flex:1;display:grid;gap:8px}
+.g-lines i{height:9px;border-radius:5px;background:var(--line);animation:th-pulse 1.4s ease-in-out infinite}
+.g-lines i:nth-child(2){animation-delay:.15s}.g-lines i:nth-child(3){animation-delay:.3s}
+@keyframes th-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.th-orb i,.th-orb b,.g-ring,.g-lines i,.th-text::after{animation:none!important}}
+
+/* ---------- phones: no top header ---------- */
+@media (max-width:760px){
+  .topbar{display:none}
+  .wrap{padding-top:calc(14px + env(safe-area-inset-top,0px))}
+  .mockbar{top:calc(6px + env(safe-area-inset-top,0px))}
+  html{scroll-padding-top:16px}
+}
+.commit-cta{margin-top:12px}

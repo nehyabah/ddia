@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type Badge } from "../api";
 import { useProfile } from "../state";
 import { Icon, Ring } from "./ui";
+import { Thinking } from "./Thinking";
 
 export type Grade = {
   score: number; verdict: string; covered: string[]; missed: string[]; mistakes: string[];
@@ -67,10 +68,10 @@ export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, h
       <div className="coach-bar">
         <span className="small muted">{words ? `${words} words` : "Write your answer"}{words > 0 && answer.trim().length < 15 ? " · a little more" : ""}</span>
         <button className="primary coach-go" onClick={submit} disabled={busy || answer.trim().length < 15}>
-          {busy ? <span className="spin" /> : <Icon name="check" />}{busy ? "Reviewing" : grade ? "Review again" : "Review answer"}
+          <Icon name="check" />{grade ? "Review again" : "Review answer"}
         </button>
       </div>
-      {busy && <div className="coach-steps"><span>Reading</span><span className="d1">Comparing</span><span className="d2">Scoring</span></div>}
+      {busy && <Thinking phases={["Reading your answer", "Checking it against the reference", "Weighing what you missed", "Scoring"]} />}
       {err && <p className="err">{err}</p>}
       {grade && (
         <div className="coach-res">
@@ -142,11 +143,12 @@ function FollowUps({ kind, id, answer }: { kind: string; id: string; answer: str
       {open ? (
         <div className="fu-reply">
           <textarea className="field" rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply as you would out loud…" disabled={busy} />
-          <button className="primary coach-go" onClick={send} disabled={busy || reply.trim().length < 10}>{busy ? <span className="spin" /> : null}Reply</button>
+          <button className="primary coach-go" onClick={send} disabled={busy || reply.trim().length < 10}>Reply</button>
         </div>
       ) : turns.length < 3 ? (
-        <button className="ghost fu-ask" onClick={ask} disabled={busy}>{busy ? <span className="spin" /> : <Icon name="mic" />}{turns.length ? "Another follow-up" : "Interviewer follow-up"}</button>
+        <button className="ghost fu-ask" onClick={ask} disabled={busy}><Icon name="mic" />{turns.length ? "Another follow-up" : "Interviewer follow-up"}</button>
       ) : <p className="small muted">Three follow-ups done. That’s a realistic grilling.</p>}
+      {busy && <Thinking compact phases={open ? ["Listening", "Weighing your reply", "Scoring"] : ["The interviewer is thinking", "Finding the weak spot"]} />}
       {err && <p className="err">{err}</p>}
     </div>
   );
