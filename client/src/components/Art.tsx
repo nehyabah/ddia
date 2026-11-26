@@ -99,12 +99,12 @@ const CHAPTER_ICON: Record<number, string> = {
 };
 const TINTS = ["blue", "slate", "sand", "sky"] as const;
 
-export function Pic({ name, chapter, tint, className }: { name?: string; chapter?: number; tint?: (typeof TINTS)[number]; className?: string }) {
+export function Pic({ name, chapter, tint, className, plain }: { name?: string; chapter?: number; tint?: (typeof TINTS)[number]; className?: string; plain?: boolean }) {
   const icon = name ?? (chapter != null ? CHAPTER_ICON[chapter] : undefined);
   if (!icon) return <Art seed={chapter ?? 1} className={className} />;
   const t = tint ?? TINTS[(chapter ?? 0) % TINTS.length];
   return (
-    <span className={`pic tint-${t} ${className ?? ""}`}>
+    <span className={`pic ${plain ? "plain" : `tint-${t}`} ${className ?? ""}`}>
       <img src={`/art/${icon}.webp`} alt="" loading="lazy" decoding="async" draggable={false} />
     </span>
   );

@@ -21,6 +21,11 @@ export function StatsPage() {
   return (
     <>
       <h2>Your progress</h2>
+      <Link to="/readiness" className="trackcard" style={{ marginBottom: 10 }}>
+        <span className="ti ddia"><Icon name="trophy" /></span>
+        <span className="tx"><h4>Interview readiness</h4><p>Your score per area and overall, from all your activity.</p></span>
+        <span className="go"><Icon name="arrow" /></span>
+      </Link>
       <Link to="/report" className="trackcard" style={{ marginBottom: 16 }}>
         <span className="ti ddia"><Icon name="chart" /></span>
         <span className="tx"><h4>Weekly report</h4><p>Time on the platform, what you did, what needs work, and email it to yourself.</p></span>

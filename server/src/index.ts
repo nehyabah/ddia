@@ -11,6 +11,7 @@ import { java, seedJava } from "./routes/java.js";
 import { ai } from "./routes/ai.js";
 import { puzzles, seedPuzzles } from "./routes/puzzles.js";
 import { report, startWeeklyEmails } from "./routes/report.js";
+import { readiness } from "./routes/readiness.js";
 
 seedContent();
 seedJava();
@@ -26,7 +27,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 app.use("/api", auth);
-app.use("/api", requireUser, account, study, insights, java, ai, puzzles, report);
+app.use("/api", requireUser, account, study, insights, java, ai, puzzles, report, readiness);
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found" });
 });

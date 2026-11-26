@@ -20,6 +20,7 @@ import { JavaLessons } from "./pages/JavaLessons";
 import { JavaBrowse } from "./pages/JavaBrowse";
 import { PuzzlePlay, PuzzlesHome } from "./pages/Puzzles";
 import { ReportPage } from "./pages/ReportPage";
+import { ReadinessPage } from "./pages/Readiness";
 
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
 
@@ -128,6 +129,7 @@ export function App() {
           <Route path="/puzzles/play" element={<PuzzlePlay />} />
           <Route path="/puzzles/p/:id" element={<PuzzlePlay />} />
           <Route path="/report" element={<ReportPage />} />
+          <Route path="/readiness" element={<ReadinessPage />} />
           <Route path="/stats" element={<StatsPage />} />
             <Route path="/notes" element={<NotesPage />} />
             <Route path="/search" element={<SearchPage />} />
