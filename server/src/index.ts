@@ -16,6 +16,7 @@ import { loadPractical, loadPrep, prep } from "./routes/prep.js";
 import { plan } from "./routes/plan.js";
 import { notify, startSchedulers } from "./routes/notify.js";
 import { accountability } from "./routes/accountability.js";
+import { history } from "./routes/history.js";
 
 seedContent();
 seedJava();
@@ -34,7 +35,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 app.use("/api", auth);
-app.use("/api", requireUser, account, study, insights, java, ai, puzzles, report, readiness, prep, plan, notify, accountability);
+app.use("/api", requireUser, account, study, insights, java, ai, puzzles, report, readiness, prep, plan, notify, accountability, history);
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found" });
 });

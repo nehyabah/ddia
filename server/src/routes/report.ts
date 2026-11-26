@@ -3,6 +3,8 @@ import { db } from "../db.js";
 import { levelInfo, localDay } from "../progress.js";
 import { HttpError, chapterLabel, str } from "../http.js";
 import { chapterLocks } from "./study.js";
+import { computeReadiness } from "./readiness.js";
+import { summary as commitSummary } from "./accountability.js";
 import { javaDueCount } from "./java.js";
 
 export const report = Router();
@@ -114,6 +116,36 @@ export function buildReport(u: number, weeksAgo = 0) {
   if (current) nextSteps.push(`Get ${chapterLabel(current)} (${current.title}) from ${mastery.get(current.id) ?? 0}% to 80% to unlock the next chapter.`);
   if (lowAi) nextSteps.push(`Rewrite ${lowAi} written answer${lowAi === 1 ? "" : "s"} that scored under 7/10.`);
   const goalDays = days.filter((d) => (xpByDay.get(d) ?? 0) >= user.daily_goal).length;
+
+  // Interview prep this week (tables live in other modules; tolerate their absence).
+  const safe = <T,>(f: () => T, d: T): T => { try { return f(); } catch { return d; } };
+  const grades = (kind: string) => safe(() => db.prepare("SELECT COUNT(*) AS n, AVG(score) AS avg FROM ai_grades WHERE user_id = ? AND kind = ? AND day BETWEEN ? AND ?").get(u, kind, from, to) as { n: number; avg: number | null }, { n: 0, avg: null });
+  const r1 = (x: number | null) => (x == null ? null : Math.round(x * 10) / 10);
+  const dg = grades("design"), sg = grades("story"), fg = grades("followup"), cg = grades("coding");
+  const startMs = new Date(from + "T00:00:00").getTime(), endMs = new Date(to + "T23:59:59").getTime();
+  const mocks = safe(() => db.prepare("SELECT COUNT(*) AS n, AVG(total) AS avg FROM mock_sessions WHERE user_id = ? AND finished_at BETWEEN ? AND ?").get(u, startMs, endMs) as { n: number; avg: number | null }, { n: 0, avg: null });
+  const prep = {
+    designSections: dg.n, designAvg: r1(dg.avg),
+    codingSolved: safe(() => sum("SELECT COUNT(*) AS v FROM coding_progress WHERE user_id = ? AND solved_day BETWEEN ? AND ?", u, from, to), 0), codeReviews: cg.n,
+    practicalSolved: safe(() => sum("SELECT COUNT(*) AS v FROM practical_progress WHERE user_id = ? AND solved_day BETWEEN ? AND ?", u, from, to), 0),
+    mongoSolved: safe(() => sum("SELECT COUNT(*) AS v FROM mongo_progress WHERE user_id = ? AND solved_day BETWEEN ? AND ?", u, from, to), 0),
+    storiesReviewed: sg.n, storyAvg: r1(sg.avg), followUps: fg.n, followUpAvg: r1(fg.avg),
+    mocks: mocks.n, mockAvg: mocks.avg == null ? null : Math.round(mocks.avg),
+  };
+  const ready = safe(() => {
+    const now = computeReadiness(u);
+    const prev = db.prepare("SELECT overall FROM readiness_snapshots WHERE user_id = ? AND day < ? ORDER BY day DESC LIMIT 1").get(u, from) as { overall: number } | undefined;
+    return { overall: now.overall, band: now.band, prev: prev?.overall ?? null, focus: now.focus.slice(0, 2).map((f) => f.label) };
+  }, null);
+  const commit = safe(() => {
+    const c = commitSummary(u);
+    if (!c.configured) return null;
+    const inWeek = c.days.filter((d) => d.day >= from && d.day <= to && d.planned && d.status !== "before");
+    return { kept: inWeek.filter((d) => d.status === "kept").length, planned: inWeek.length, targetMinutes: c.settings.weeklyMinutes, keptStreak: c.keptStreak };
+  }, null);
+  if (commit && commit.planned && commit.kept < commit.planned) nextSteps.push(`Keep all your planned study days (this week: ${commit.kept}/${commit.planned}).`);
+  if (ready?.focus.length) nextSteps.push(`Focus on ${ready.focus.join(" and ")}: your weakest interview areas.`);
+  if (!mocks.n) nextSteps.push("Do one timed mock interview.");
   if (goalDays < 5) nextSteps.push(`Hit your ${user.daily_goal} XP daily goal on at least 5 days (this week: ${goalDays}).`);
 
   return {
@@ -128,7 +160,7 @@ export function buildReport(u: number, weeksAgo = 0) {
       streak: user.streak, bestStreak: user.best_streak, level: levelInfo(user.xp).level, totalXp: user.xp,
     },
     days: days.map((d) => ({ day: d, minutes: Math.round((secByDay.get(d) ?? 0) / 60), xp: xpByDay.get(d) ?? 0 })),
-    chapters,
+    chapters, prep, readiness: ready, commitment: commit,
     needsWork: [...weakChapters, ...weakJava, ...missedQs.map((p) => `Keep missing: “${p}”`)].slice(0, 8),
     nextSteps,
   };
@@ -166,6 +198,7 @@ export function renderReportHtml(r: Report, appUrl: string) {
   </tr><tr>
     ${stat(String(t.cardsRead), "cards read")}${stat(t.aiAvg != null ? `${t.aiAvg}/10` : "–", `avg AI grade · ${t.aiPassed}/${t.aiGraded} passed`)}
   </tr></table>
+  ${renderPrepHtml(r)}
   <h2 style="font:700 16px system-ui,sans-serif;margin:22px 0 6px">Time on the platform</h2>
   <table role="presentation" style="width:100%;height:100px"><tr>${bars}</tr></table>
   ${r.chapters.length ? `<h2 style="font:700 16px system-ui,sans-serif;margin:22px 0 6px">Chapters you worked on</h2>
@@ -175,6 +208,23 @@ export function renderReportHtml(r: Report, appUrl: string) {
   <p style="margin:24px 0 0"><a href="${appUrl}" style="display:inline-block;background:#2457D6;color:#fff;text-decoration:none;font-weight:600;padding:11px 18px;border-radius:10px">Open DDIA</a></p>
   <p style="margin:18px 0 0;font-size:12px;color:#6E6B66">You get this every Sunday evening. Turn it off under You → Weekly email.</p>
 </div></body></html>`;
+}
+
+function renderPrepHtml(r: Report) {
+  const p = r.prep, rd = r.readiness, c = r.commitment;
+  const row = (l: string, v: string) => `<tr><td style="padding:6px 0;border-bottom:1px solid #E6E4E0">${l}</td><td style="padding:6px 0;border-bottom:1px solid #E6E4E0;text-align:right;white-space:nowrap"><b>${v}</b></td></tr>`;
+  const rows = [
+    rd ? row("Interview readiness", `${rd.overall}/100 · ${esc(rd.band)}${rd.prev != null ? ` (${rd.overall - rd.prev >= 0 ? "+" : ""}${rd.overall - rd.prev})` : ""}`) : "",
+    c ? row("Commitment", `${c.kept}/${c.planned} planned days kept`) : "",
+    p.designSections ? row("Design sections reviewed", `${p.designSections}${p.designAvg != null ? ` · avg ${p.designAvg}/10` : ""}`) : "",
+    p.codingSolved || p.codeReviews ? row("Coding", `${p.codingSolved} solved${p.codeReviews ? ` · ${p.codeReviews} code reviews` : ""}`) : "",
+    p.practicalSolved ? row("Practical rounds solved", String(p.practicalSolved)) : "",
+    p.mongoSolved ? row("MongoDB lab solved", String(p.mongoSolved)) : "",
+    p.storiesReviewed ? row("Behavioural stories reviewed", `${p.storiesReviewed}${p.storyAvg != null ? ` · avg ${p.storyAvg}/10` : ""}`) : "",
+    p.followUps ? row("Interviewer follow-ups", `${p.followUps}${p.followUpAvg != null ? ` · avg ${p.followUpAvg}/10` : ""}`) : "",
+    p.mocks ? row("Mock interviews", `${p.mocks}${p.mockAvg != null ? ` · avg ${p.mockAvg}/100` : ""}`) : "",
+  ].join("");
+  return rows ? `<h2 style="font:700 16px system-ui,sans-serif;margin:22px 0 6px">Interview prep</h2><table role="presentation" style="width:100%;border-collapse:collapse;font-size:14px">${rows}</table>` : "";
 }
 
 const appUrl = () => process.env.APP_URL ?? (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "http://localhost:5173");

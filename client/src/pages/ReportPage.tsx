@@ -52,6 +52,22 @@ export function ReportPage() {
         <div className="kpi"><div className="v">{t.streak}</div><div className="l">day streak · best {t.bestStreak}</div></div>
       </div>
 
+      {(r.readiness || r.commitment || r.prep) && (<>
+        <h3 className="section-h">Interview prep</h3>
+        <section className="panel prepweek">
+          {r.readiness && <div className="pw-row"><span>Interview readiness</span><b>{r.readiness.overall}/100 · {r.readiness.band}{r.readiness.prev != null && <em className={r.readiness.overall >= r.readiness.prev ? "up" : "down"}> {r.readiness.overall - r.readiness.prev >= 0 ? "+" : ""}{r.readiness.overall - r.readiness.prev}</em>}</b></div>}
+          {r.commitment && <div className="pw-row"><span>Commitment</span><b>{r.commitment.kept}/{r.commitment.planned} planned days kept</b></div>}
+          {r.prep && ([
+            ["Design sections reviewed", r.prep.designSections, r.prep.designAvg != null ? `avg ${r.prep.designAvg}/10` : ""],
+            ["Coding problems solved", r.prep.codingSolved, r.prep.codeReviews ? `${r.prep.codeReviews} code reviews` : ""],
+            ["Practical rounds solved", r.prep.practicalSolved, ""],
+            ["MongoDB lab solved", r.prep.mongoSolved, ""],
+            ["Behavioural stories reviewed", r.prep.storiesReviewed, r.prep.storyAvg != null ? `avg ${r.prep.storyAvg}/10` : ""],
+            ["Interviewer follow-ups", r.prep.followUps, r.prep.followUpAvg != null ? `avg ${r.prep.followUpAvg}/10` : ""],
+            ["Mock interviews", r.prep.mocks, r.prep.mockAvg != null ? `avg ${r.prep.mockAvg}/100` : ""],
+          ] as [string, number, string][]).map(([l, n, x]) => <div key={l} className={`pw-row ${n ? "" : "zero"}`}><span>{l}</span><b>{n}{x && <small> · {x}</small>}</b></div>)}
+        </section>
+      </>)}
       <h3 className="section-h">Time on the platform</h3>
       <div className="panel">
         <div className="cols">

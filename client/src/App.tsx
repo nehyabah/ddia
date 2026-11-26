@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { pendingDrafts } from "./api";
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useProfile } from "./state";
 import { Icon, SvgDefs, type IconName } from "./components/ui";
@@ -27,6 +29,7 @@ import { CompaniesPage, CompanyPage } from "./pages/Companies";
 import { MockPage, PrepHome } from "./pages/Prep";
 import { CommitmentPage } from "./pages/Commitment";
 import { PracticalList, PracticalPlay } from "./pages/Practical";
+import { HistoryPage } from "./pages/HistoryPage";
 
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
 
@@ -45,7 +48,7 @@ function Shell() {
     { to: "/stats", label: "Stats", icon: "chart", desktopOnly: true, match: ["/report", "/readiness"] },
     { to: "/notes", label: "Notes", icon: "notes", desktopOnly: true },
     { to: "/search", label: "Search", icon: "search", desktopOnly: true },
-    { to: "/settings", label: "You", icon: "user", match: ["/notes", "/search", "/stats", "/report", "/readiness"] },
+    { to: "/settings", label: "You", icon: "user", match: ["/notes", "/search", "/stats", "/report", "/readiness", "/history", "/commitment"] },
   ];
   // Treat nested routes (e.g. /chapter/3) as part of a tab on the bottom bar.
   const isActive = (i: NavItem, mobile: boolean) =>
@@ -78,6 +81,22 @@ function Shell() {
   );
 }
 
+function OfflineBar() {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [queued, setQueued] = useState(() => pendingDrafts());
+  useEffect(() => {
+    const on = () => setOnline(true), off = () => setOnline(false), q = () => setQueued(pendingDrafts());
+    window.addEventListener("online", on); window.addEventListener("offline", off); window.addEventListener("ddia:outbox", q);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); window.removeEventListener("ddia:outbox", q); };
+  }, []);
+  if (online && !queued) return null;
+  return (
+    <div className={`offlinebar ${online ? "syncing" : ""}`} role="status">
+      {online ? `Back online · saving ${queued} draft${queued === 1 ? "" : "s"}…` : `Offline · you can read and write drafts${queued ? ` (${queued} waiting to save)` : ""}. Reviews need a connection.`}
+    </div>
+  );
+}
+
 export function App() {
   const { profile, loading } = useProfile();
   const location = useLocation();
@@ -88,6 +107,7 @@ export function App() {
       <SvgDefs />
       <div className="ambient" aria-hidden="true"><i /><i /><i /></div>
       <Shell />
+      <OfflineBar />
       <div className="wrap">
         <main key={location.pathname} className="page">
           <Routes location={location}>
@@ -111,6 +131,7 @@ export function App() {
           <Route path="/readiness" element={<ReadinessPage />} />
           <Route path="/prep" element={<PrepHome />} />
           <Route path="/commitment" element={<CommitmentPage />} />
+          <Route path="/history" element={<HistoryPage />} />
           <Route path="/practical" element={<PracticalList />} />
           <Route path="/practical/:id" element={<PracticalPlay />} />
           <Route path="/design" element={<DesignList />} />

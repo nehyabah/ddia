@@ -4,13 +4,48 @@ export class ApiError extends Error {
   }
 }
 
+/* ---------- offline: drafts typed while offline are queued and sent when back online ---------- */
+const OUTBOX = "ddia-outbox";
+const DRAFT = /^\/(design\/[^/]+\/[^/]+|coding\/[^/]+\/code|practical\/[^/]+\/work)$/;
+type Queued = { method: string; path: string; body: unknown };
+function readOutbox(): Queued[] { try { return JSON.parse(localStorage.getItem(OUTBOX) ?? "[]"); } catch { return []; } }
+function writeOutbox(q: Queued[]) { try { localStorage.setItem(OUTBOX, JSON.stringify(q)); } catch { /* storage full or blocked */ } }
+function enqueue(item: Queued) {
+  // keep only the latest draft per path
+  writeOutbox([...readOutbox().filter((x) => x.path !== item.path), item]);
+}
+export function pendingDrafts() { return readOutbox().length; }
+export async function flushOutbox() {
+  const q = readOutbox();
+  if (!q.length || !navigator.onLine) return;
+  const left: Queued[] = [];
+  for (const item of q) {
+    try {
+      const r = await fetch(`/api${item.path}`, { method: item.method, credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(item.body) });
+      if (!r.ok && r.status >= 500) left.push(item);
+    } catch { left.push(item); }
+  }
+  writeOutbox(left);
+  window.dispatchEvent(new Event("ddia:outbox"));
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => { flushOutbox(); });
+  setTimeout(() => { flushOutbox(); }, 1500);
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    method,
-    credentials: "same-origin",
-    headers: body !== undefined ? { "content-type": "application/json" } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      credentials: "same-origin",
+      headers: body !== undefined ? { "content-type": "application/json" } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    if (method === "PUT" && DRAFT.test(path)) { enqueue({ method, path, body }); window.dispatchEvent(new Event("ddia:outbox")); return { ok: true, queued: true } as T; }
+    throw new ApiError(0, method === "GET" ? "You are offline." : "You are offline. This needs a connection; try again when you are back online.");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) window.dispatchEvent(new Event("ddia:unauthorized"));
@@ -141,4 +176,8 @@ export type WeeklyReport = {
   chapters: { label: string; title: string; answered: number; accuracy: number; mastery: number }[];
   needsWork: string[];
   nextSteps: string[];
+  prep?: { designSections: number; designAvg: number | null; codingSolved: number; codeReviews: number; practicalSolved: number; mongoSolved: number;
+    storiesReviewed: number; storyAvg: number | null; followUps: number; followUpAvg: number | null; mocks: number; mockAvg: number | null };
+  readiness?: { overall: number; band: string; prev: number | null; focus: string[] } | null;
+  commitment?: { kept: number; planned: number; targetMinutes: number; keptStreak: number } | null;
 };

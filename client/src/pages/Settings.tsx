@@ -67,6 +67,7 @@ export function Settings() {
 
   async function logout() {
     await api.post("/auth/logout");
+    navigator.serviceWorker?.controller?.postMessage("clear-api-cache");
     await refresh();
   }
 
@@ -78,6 +79,7 @@ export function Settings() {
         <Link to="/notes" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="notes" /></span><span className="tx"><h4>Notes & stars</h4><p style={{ margin: 0 }}>Your revision sheet</p></span><span className="go"><Icon name="arrow" /></span></Link>
         <Link to="/search" className="trackcard"><span className="ti java" style={{ width: 40, height: 40 }}><Icon name="search" /></span><span className="tx"><h4>Search</h4><p style={{ margin: 0 }}>Cards, terms, questions</p></span><span className="go"><Icon name="arrow" /></span></Link>
         <Link to="/stats" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="chart" /></span><span className="tx"><h4>Stats</h4><p style={{ margin: 0 }}>Progress, weekly report</p></span><span className="go"><Icon name="arrow" /></span></Link>
+        <Link to="/history" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="review" /></span><span className="tx"><h4>History</h4><p style={{ margin: 0 }}>Past answers and feedback</p></span><span className="go"><Icon name="arrow" /></span></Link>
         <Link to="/readiness" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="trophy" /></span><span className="tx"><h4>Readiness</h4><p style={{ margin: 0 }}>By area and company</p></span><span className="go"><Icon name="arrow" /></span></Link>
       </div>
 
