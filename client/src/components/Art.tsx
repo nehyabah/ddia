@@ -5,12 +5,12 @@
 type Motif = "orbits" | "stacks" | "grid" | "waves" | "nodes" | "blocks" | "threads" | "gauge" | "ring";
 
 const PALETTES = [
-  { bg: "#2457D6", a: "#8FB0FF", b: "#F4EFE6", c: "#0F2A73" },
-  { bg: "#0F2A73", a: "#2457D6", b: "#F0C9A2", c: "#8FB0FF" },
-  { bg: "#E9E4DA", a: "#2457D6", b: "#D9622B", c: "#1D1C1A" },
-  { bg: "#1E8A5F", a: "#BFE7D3", b: "#F4EFE6", c: "#0E4A33" },
-  { bg: "#D9622B", a: "#F7CDB3", b: "#1D1C1A", c: "#F4EFE6" },
-  { bg: "#1D1C1A", a: "#6E97F7", b: "#F0C9A2", c: "#3A3936" },
+  { bg: "#1F3E8F", a: "#3D63C9", b: "#DCE4F7", c: "#162C66" },
+  { bg: "#DCE2EE", a: "#8EA2CC", b: "#F7F8FB", c: "#2B3F73" },
+  { bg: "#2A2D35", a: "#4B5263", b: "#C9D3EA", c: "#1D2027" },
+  { bg: "#E7E5E0", a: "#B8B3A8", b: "#F7F6F3", c: "#3B4A6B" },
+  { bg: "#2E4A7A", a: "#5F7DB3", b: "#E8ECF4", c: "#22385E" },
+  { bg: "#3A3F4A", a: "#6B7385", b: "#E3E6EC", c: "#2A2E36" },
 ];
 
 const CHAPTER_MOTIF: Motif[] = ["orbits", "blocks", "grid", "stacks", "nodes", "grid", "threads", "waves", "ring", "stacks", "waves", "nodes"];

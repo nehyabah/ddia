@@ -74,6 +74,7 @@ function Shell() {
             ))}
           </nav>
           <div className="hudchips">
+            <Link to="/search" className="topsearch" aria-label="Search"><Icon name="search" /></Link>
             <ThemeToggle />
             <span className={`stat flame ${profile.studiedToday ? "" : "cold"}`} title={`${profile.streak}-day streak (best ${profile.bestStreak})`}>
               <Icon name="flame" />{profile.streak}

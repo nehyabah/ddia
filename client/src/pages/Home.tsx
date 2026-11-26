@@ -107,12 +107,12 @@ export function Home() {
           <span className="go"><Icon name="arrow" /></span>
         </a>
         <Link className="trackcard" to="/puzzles">
-          <span className="tc-art"><Art seed={5} motif="threads" palette={3} /></span>
+          <span className="tc-art"><Art seed={5} motif="threads" palette={2} /></span>
           <span className="tx"><h4>Systems puzzles</h4><p>Concurrency · rate limits &amp; retries · distributed</p></span>
           <span className="go"><Icon name="arrow" /></span>
         </Link>
         <Link className="trackcard" to="/java">
-          <span className="tc-art"><Art seed={8} motif="grid" palette={4} /></span>
+          <span className="tc-art"><Art seed={8} motif="grid" palette={1} /></span>
           <span className="tx"><h4>Java debugging</h4><p>{javaTotal || "…"} challenges · {javaPct}% mastered</p><span className="bar" style={{ display: "block" }}><i style={{ width: `${javaPct}%`, background: "var(--grad-warm)" }} /></span></span>
           <span className="go"><Icon name="arrow" /></span>
         </Link>

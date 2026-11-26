@@ -660,3 +660,21 @@ h3{letter-spacing:-.015em}
 .coach-model p{margin:6px 0 0;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,var(--surface) 60%,transparent);border:1px solid var(--glass-line)}
 @media (prefers-reduced-motion:reduce){.ambient i{animation:none}}
 @media (max-width:520px){.cluster{grid-template-columns:1fr 1fr;gap:10px}.node .node-art{height:60px}.node .num{font-size:1.5rem}.node .ttl{font-size:.84rem}.node .nh .ringwrap,.node .lockic{width:32px!important;height:32px!important}.node .nh .ringsvg{width:32px;height:32px}}
+
+/* ---------- app-like interaction: no hover movement, press feedback only ---------- */
+.primary:hover:not(:disabled),a.tile-stat:hover,.trackcard:hover,.node:hover,.mode:hover:not(:disabled),.browse a:hover,.topicbtn:hover,.ghost:hover:not(:disabled){transform:none;box-shadow:inset 0 1px 0 var(--glass-edge),var(--shadow-sm);filter:none}
+.node:hover,.mode:hover:not(:disabled),.browse a:hover,.topicbtn:hover,.ghost:hover:not(:disabled){border-color:var(--glass-line);color:inherit}
+.primary:hover:not(:disabled){box-shadow:0 6px 16px -6px color-mix(in srgb,var(--accent) 60%,transparent)}
+.node,.trackcard,a.tile-stat,.mode,.browse a,.primary,.ghost,.iconbtn,.topicbtn,.opt{transition:transform .12s ease,opacity .12s ease}
+.node:active:not(:disabled),.trackcard:active,a.tile-stat:active,.mode:active:not(:disabled),.browse a:active,.opt:active:not(:disabled),.ghost:active,.iconbtn:active,.topicbtn:active{transform:scale(.98);opacity:.85}
+
+/* ---------- calmer, more professional ---------- */
+.ambient i{opacity:.28;filter:blur(110px)}
+h2{font-weight:650}
+.node .num{color:var(--ink)}
+.hero-art{height:120px}
+@media (min-width:761px){.hero-art{height:150px}}
+.trackcard .tc-art{height:92px}
+.node .node-art{height:56px}
+.topsearch{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;color:var(--muted);background:var(--glass);border:1px solid var(--glass-line)}
+.topsearch svg{width:18px;height:18px}
