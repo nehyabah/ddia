@@ -1,0 +1,1633 @@
+[
+  {
+    "id": "mx-01",
+    "title": "Find pending orders",
+    "level": "easy",
+    "topic": "find",
+    "kind": "find",
+    "collection": "orders",
+    "prompt": "Return all documents from `orders` whose `status` is `\"pending\"`.",
+    "solution": {
+      "filter": {
+        "status": "pending"
+      },
+      "projection": null,
+      "sort": null,
+      "limit": null
+    },
+    "orderMatters": false,
+    "expected": [
+      {
+        "_id": "O1004",
+        "customerId": "C05",
+        "status": "pending",
+        "items": [
+          {
+            "sku": "SKU-MN1",
+            "qty": 1,
+            "price": 249
+          },
+          {
+            "sku": "SKU-NB1",
+            "qty": 3,
+            "price": 9.5
+          }
+        ],
+        "total": 277.5,
+        "createdAt": "2026-10-08T11:39:00Z",
+        "region": "EMEA"
+      },
+      {
+        "_id": "O1011",
+        "customerId": "C03",
+        "status": "pending",
+        "items": [
+          {
+            "sku": "SKU-BK1",
+            "qty": 3,
+            "price": 42
+          },
+          {
+            "sku": "SKU-BK2",
+            "qty": 3,
+            "price": 38.5
+          }
+        ],
+        "total": 241.5,
+        "createdAt": "2026-10-22T08:10:00Z",
+        "region": "EMEA"
+      },
+      {
+        "_id": "O1018",
+        "customerId": "C01",
+        "status": "pending",
+        "items": [
+          {
+            "sku": "SKU-MG1",
+            "qty": 3,
+            "price": 12
+          },
+          {
+            "sku": "SKU-LM1",
+            "qty": 3,
+            "price": 34
+          }
+        ],
+        "total": 138,
+        "createdAt": "2026-11-06T15:41:00Z",
+        "region": "APAC"
+      },
+      {
+        "_id": "O1025",
+        "customerId": "C16",
+        "status": "pending",
+        "items": [
+          {
+            "sku": "SKU-DS1",
+            "qty": 1,
+            "price": 399
+          },
+          {
+            "sku": "SKU-MN1",
+            "qty": 1,
+            "price": 249
+          },
+          {
+            "sku": "SKU-KB1",
+            "qty": 1,
+            "price": 89.99
+          }
+        ],
+        "total": 737.99,
+        "createdAt": "2026-11-13T12:12:00Z",
+        "region": "NA"
+      }
+    ],
+    "hints": [
+      "An equality filter is just `{ field: value }`."
+    ],
+    "explanation": "Implicit equality match on `status`. In MongoDB, an index on `{ status: 1 }` turns this into an IXSCAN instead of a COLLSCAN; status has low cardinality, so in practice combine it with other fields in a compound index."
+  },
+  {
+    "id": "mx-02",
+    "title": "Books: name and price only",
+    "level": "easy",
+    "topic": "projection",
+    "kind": "find",
+    "collection": "products",
+    "prompt": "From `products`, return the books (`category: \"books\"`) showing **only** `name` and `price` (no `_id`).",
+    "solution": {
+      "filter": {
+        "category": "books"
+      },
+      "projection": {
+        "_id": 0,
+        "name": 1,
+        "price": 1
+      },
+      "sort": null,
+      "limit": null
+    },
+    "orderMatters": false,
+    "expected": [
+      {
+        "name": "Database Internals",
+        "price": 38.5
+      },
+      {
+        "name": "Designing Data-Intensive Apps",
+        "price": 42
+      },
+      {
+        "name": "The Pragmatic Programmer",
+        "price": 35
+      }
+    ],
+    "hints": [
+      "Projection is the second argument to find().",
+      "`_id` is included by default; exclude it with `_id: 0`."
+    ],
+    "explanation": "Inclusion projection with `_id: 0`. An index on `{ category: 1, name: 1, price: 1 }` would make this a *covered query* (no FETCH stage) because `_id` is excluded."
+  },
+  {
+    "id": "mx-03",
+    "title": "Big orders",
+    "level": "easy",
+    "topic": "operators",
+    "kind": "find",
+    "collection": "orders",
+    "prompt": "Find orders with `total` of at least 200. Return `_id` and `total`, sorted by `total` descending.",
+    "solution": {
+      "filter": {
+        "total": {
+          "$gte": 200
+        }
+      },
+      "projection": {
+        "_id": 1,
+        "total": 1
+      },
+      "sort": {
+        "total": -1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "_id": "O1025",
+        "total": 737.99
+      },
+      {
+        "_id": "O1012",
+        "total": 420.97
+      },
+      {
+        "_id": "O1024",
+        "total": 307
+      },
+      {
+        "_id": "O1004",
+        "total": 277.5
+      },
+      {
+        "_id": "O1017",
+        "total": 267.5
+      },
+      {
+        "_id": "O1011",
+        "total": 241.5
+      },
+      {
+        "_id": "O1013",
+        "total": 232.99
+      },
+      {
+        "_id": "O1020",
+        "total": 219.99
+      },
+      {
+        "_id": "O1021",
+        "total": 213
+      }
+    ],
+    "hints": [
+      "Use `$gte`.",
+      "Sort with `{ total: -1 }`."
+    ],
+    "explanation": "Range predicate plus sort on the same field: an index on `{ total: 1 }` (walked backwards) serves both the filter and the sort with no in-memory SORT stage."
+  },
+  {
+    "id": "mx-04",
+    "title": "Top 3 most expensive products",
+    "level": "easy",
+    "topic": "find",
+    "kind": "find",
+    "collection": "products",
+    "prompt": "Return the 3 most expensive products, showing `sku` and `price` only (no `_id`), most expensive first.",
+    "solution": {
+      "filter": {},
+      "projection": {
+        "_id": 0,
+        "sku": 1,
+        "price": 1
+      },
+      "sort": {
+        "price": -1
+      },
+      "limit": 3
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "price": 399,
+        "sku": "SKU-DS1"
+      },
+      {
+        "price": 289,
+        "sku": "SKU-CH1"
+      },
+      {
+        "price": 249,
+        "sku": "SKU-MN1"
+      }
+    ],
+    "hints": [
+      "Empty filter `{}`, then sort and limit."
+    ],
+    "explanation": "sort + limit lets MongoDB do a top-k sort. With an index on `{ price: -1 }` it reads only 3 index keys."
+  },
+  {
+    "id": "mx-05",
+    "title": "Customers in Nigeria",
+    "level": "easy",
+    "topic": "find",
+    "kind": "find",
+    "collection": "customers",
+    "prompt": "Find customers whose `address.country` is `\"NG\"`. Return `name` and `address.city` (keep `_id`), sorted by `name` ascending.",
+    "solution": {
+      "filter": {
+        "address.country": "NG"
+      },
+      "projection": {
+        "name": 1,
+        "address.city": 1
+      },
+      "sort": {
+        "name": 1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "address": {
+          "city": "Lagos"
+        },
+        "name": "Ada Obi",
+        "_id": "C01"
+      },
+      {
+        "address": {
+          "city": "Abuja"
+        },
+        "name": "Hiro Tanaka",
+        "_id": "C08"
+      },
+      {
+        "address": {
+          "city": "Lagos"
+        },
+        "name": "Isla Brown",
+        "_id": "C09"
+      },
+      {
+        "address": {
+          "city": "Abuja"
+        },
+        "name": "Priya Shah",
+        "_id": "C16"
+      },
+      {
+        "address": {
+          "city": "Lagos"
+        },
+        "name": "Quinn Lee",
+        "_id": "C17"
+      }
+    ],
+    "hints": [
+      "Reach into embedded documents with quoted dot notation: `\"address.country\"`."
+    ],
+    "explanation": "Dot notation queries embedded fields. Index `{ \"address.country\": 1, name: 1 }` supports both the filter and the sort (equality, then sort)."
+  },
+  {
+    "id": "mx-06",
+    "title": "Shipped or pending in NA",
+    "level": "easy",
+    "topic": "operators",
+    "kind": "find",
+    "collection": "orders",
+    "prompt": "Find orders in region `\"NA\"` whose status is either `shipped` or `pending`. Return `_id`, `status`, `region`.",
+    "solution": {
+      "filter": {
+        "status": {
+          "$in": [
+            "shipped",
+            "pending"
+          ]
+        },
+        "region": "NA"
+      },
+      "projection": {
+        "status": 1,
+        "region": 1
+      },
+      "sort": null,
+      "limit": null
+    },
+    "orderMatters": false,
+    "expected": [
+      {
+        "region": "NA",
+        "status": "pending",
+        "_id": "O1025"
+      },
+      {
+        "region": "NA",
+        "status": "shipped",
+        "_id": "O1007"
+      },
+      {
+        "region": "NA",
+        "status": "shipped",
+        "_id": "O1010"
+      },
+      {
+        "region": "NA",
+        "status": "shipped",
+        "_id": "O1017"
+      }
+    ],
+    "hints": [
+      "`$in` takes an array of allowed values.",
+      "Multiple top-level fields are ANDed."
+    ],
+    "explanation": "`$in` behaves like several equality matches. An index `{ region: 1, status: 1 }` answers it with a few tight index bounds."
+  },
+  {
+    "id": "mx-07",
+    "title": "Out of stock or unrated",
+    "level": "medium",
+    "topic": "operators",
+    "kind": "find",
+    "collection": "products",
+    "prompt": "Find products that are out of stock (`stock` is 0) **or** have no ratings (empty `ratings` array). Return `sku`, `stock`, `ratings` without `_id`, sorted by `sku`.",
+    "solution": {
+      "filter": {
+        "$or": [
+          {
+            "stock": 0
+          },
+          {
+            "ratings": {
+              "$size": 0
+            }
+          }
+        ]
+      },
+      "projection": {
+        "_id": 0,
+        "sku": 1,
+        "stock": 1,
+        "ratings": 1
+      },
+      "sort": {
+        "sku": 1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "ratings": [
+          5
+        ],
+        "sku": "SKU-HD1",
+        "stock": 0
+      },
+      {
+        "ratings": [
+          2,
+          5,
+          5
+        ],
+        "sku": "SKU-HP1",
+        "stock": 0
+      },
+      {
+        "ratings": [
+          5,
+          2,
+          2
+        ],
+        "sku": "SKU-KT1",
+        "stock": 0
+      },
+      {
+        "ratings": [],
+        "sku": "SKU-PN1",
+        "stock": 127
+      }
+    ],
+    "hints": [
+      "Use `$or` with an array of sub-filters.",
+      "`$size: 0` matches empty arrays."
+    ],
+    "explanation": "`$or` can use a separate index per branch. `$size` cannot use an index; store a `ratingCount` field if this query is hot."
+  },
+  {
+    "id": "mx-08",
+    "title": "Customers tagged vip",
+    "level": "easy",
+    "topic": "arrays",
+    "kind": "find",
+    "collection": "customers",
+    "prompt": "Find customers whose `tags` array contains `\"vip\"`. Return `name` and `tags`, sorted by `_id`.",
+    "solution": {
+      "filter": {
+        "tags": "vip"
+      },
+      "projection": {
+        "name": 1,
+        "tags": 1
+      },
+      "sort": {
+        "_id": 1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "name": "Ben Carter",
+        "tags": [
+          "vip"
+        ],
+        "_id": "C02"
+      },
+      {
+        "name": "Chloe Martin",
+        "tags": [
+          "churn-risk",
+          "b2b",
+          "vip"
+        ],
+        "_id": "C03"
+      },
+      {
+        "name": "Eve Adams",
+        "tags": [
+          "vip"
+        ],
+        "_id": "C05"
+      },
+      {
+        "name": "Femi Bello",
+        "tags": [
+          "vip"
+        ],
+        "_id": "C06"
+      },
+      {
+        "name": "Hiro Tanaka",
+        "tags": [
+          "churn-risk",
+          "vip"
+        ],
+        "_id": "C08"
+      },
+      {
+        "name": "Isla Brown",
+        "tags": [
+          "vip",
+          "newsletter"
+        ],
+        "_id": "C09"
+      },
+      {
+        "name": "Liam Wong",
+        "tags": [
+          "vip",
+          "mobile"
+        ],
+        "_id": "C12"
+      },
+      {
+        "name": "Rosa Diaz",
+        "tags": [
+          "churn-risk",
+          "vip"
+        ],
+        "_id": "C18"
+      },
+      {
+        "name": "Tara Singh",
+        "tags": [
+          "vip"
+        ],
+        "_id": "C20"
+      }
+    ],
+    "hints": [
+      "Equality against an array field matches if ANY element is equal."
+    ],
+    "explanation": "Querying an array with a scalar matches any element. An index on `{ tags: 1 }` is a *multikey* index: one index entry per array element."
+  },
+  {
+    "id": "mx-09",
+    "title": "Orders containing a keyboard",
+    "level": "medium",
+    "topic": "arrays",
+    "kind": "find",
+    "collection": "orders",
+    "prompt": "Find orders that contain an item with `sku` `\"SKU-KB1\"`. Return `customerId` and `total` (keep `_id`), sorted by `_id`.",
+    "solution": {
+      "filter": {
+        "items.sku": "SKU-KB1"
+      },
+      "projection": {
+        "customerId": 1,
+        "total": 1
+      },
+      "sort": {
+        "_id": 1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "customerId": "C01",
+        "total": 89.99,
+        "_id": "O1001"
+      },
+      {
+        "customerId": "C17",
+        "total": 232.99,
+        "_id": "O1013"
+      },
+      {
+        "customerId": "C15",
+        "total": 219.99,
+        "_id": "O1020"
+      },
+      {
+        "customerId": "C16",
+        "total": 737.99,
+        "_id": "O1025"
+      }
+    ],
+    "hints": [
+      "Dot notation reaches through arrays of sub-documents: `\"items.sku\"`."
+    ],
+    "explanation": "`items.sku` matches if any array element has that sku. A multikey index on `{ \"items.sku\": 1 }` supports it."
+  },
+  {
+    "id": "mx-10",
+    "title": "Same item: bulk and pricey",
+    "level": "medium",
+    "topic": "arrays",
+    "kind": "find",
+    "collection": "orders",
+    "prompt": "Find orders where a **single** line item has `qty >= 2` **and** `price > 50`. Return `items` (keep `_id`), sorted by `_id`.\n\nCareful: `{\"items.qty\": {$gte: 2}, \"items.price\": {$gt: 50}}` could be satisfied by two *different* items.",
+    "solution": {
+      "filter": {
+        "items": {
+          "$elemMatch": {
+            "qty": {
+              "$gte": 2
+            },
+            "price": {
+              "$gt": 50
+            }
+          }
+        }
+      },
+      "projection": {
+        "items": 1
+      },
+      "sort": {
+        "_id": 1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "items": [
+          {
+            "sku": "SKU-WC1",
+            "qty": 2,
+            "price": 59
+          }
+        ],
+        "_id": "O1003"
+      },
+      {
+        "items": [
+          {
+            "sku": "SKU-WC1",
+            "qty": 1,
+            "price": 59
+          },
+          {
+            "sku": "SKU-BP1",
+            "qty": 2,
+            "price": 65
+          }
+        ],
+        "_id": "O1008"
+      },
+      {
+        "items": [
+          {
+            "sku": "SKU-KB1",
+            "qty": 1,
+            "price": 89.99
+          },
+          {
+            "sku": "SKU-BP1",
+            "qty": 2,
+            "price": 65
+          }
+        ],
+        "_id": "O1020"
+      },
+      {
+        "items": [
+          {
+            "sku": "SKU-BP1",
+            "qty": 3,
+            "price": 65
+          },
+          {
+            "sku": "SKU-PN1",
+            "qty": 3,
+            "price": 6
+          }
+        ],
+        "_id": "O1021"
+      }
+    ],
+    "hints": [
+      "`$elemMatch` applies all conditions to the same array element."
+    ],
+    "explanation": "Without `$elemMatch`, each condition can be satisfied by a different element. A compound multikey index `{ \"items.qty\": 1, \"items.price\": 1 }` can be used; bounds are only combined tightly under `$elemMatch`."
+  },
+  {
+    "id": "mx-11",
+    "title": "Data quality: missing fields",
+    "level": "medium",
+    "topic": "operators",
+    "kind": "find",
+    "collection": "customers",
+    "prompt": "Find customers that have **no** `address.city` field, **or** whose `email` is `null`. Return `name` (with `_id`), sorted by `_id`.",
+    "solution": {
+      "filter": {
+        "$or": [
+          {
+            "address.city": {
+              "$exists": false
+            }
+          },
+          {
+            "email": null
+          }
+        ]
+      },
+      "projection": {
+        "name": 1
+      },
+      "sort": {
+        "_id": 1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "name": "Liam Wong",
+        "_id": "C12"
+      },
+      {
+        "name": "Quinn Lee",
+        "_id": "C17"
+      }
+    ],
+    "hints": [
+      "`$exists: false` matches missing fields.",
+      "`{ email: null }` matches null *or* missing."
+    ],
+    "explanation": "`{field: null}` matches both null and missing values; `$exists` distinguishes them. Sparse and partial indexes skip documents missing the field, so they cannot answer `$exists: false`."
+  },
+  {
+    "id": "mx-12",
+    "title": "October orders",
+    "level": "medium",
+    "topic": "operators",
+    "kind": "find",
+    "collection": "orders",
+    "prompt": "Find non-cancelled orders created in October 2026. `createdAt` is an ISO-8601 string, so string range comparisons work. Return `createdAt` and `total` (with `_id`), oldest first.",
+    "solution": {
+      "filter": {
+        "createdAt": {
+          "$gte": "2026-10-01",
+          "$lt": "2026-11-01"
+        },
+        "status": {
+          "$ne": "cancelled"
+        }
+      },
+      "projection": {
+        "createdAt": 1,
+        "total": 1
+      },
+      "sort": {
+        "createdAt": 1
+      },
+      "limit": null
+    },
+    "orderMatters": true,
+    "expected": [
+      {
+        "createdAt": "2026-10-02T08:00:00Z",
+        "total": 89.99,
+        "_id": "O1001"
+      },
+      {
+        "createdAt": "2026-10-04T09:13:00Z",
+        "total": 134.5,
+        "_id": "O1002"
+      },
+      {
+        "createdAt": "2026-10-06T10:26:00Z",
+        "total": 118,
+        "_id": "O1003"
+      },
+      {
+        "createdAt": "2026-10-08T11:39:00Z",
+        "total": 277.5,
+        "_id": "O1004"
+      },
+      {
+        "createdAt": "2026-10-12T13:05:00Z",
+        "total": 45,
+        "_id": "O1006"
+      },
+      {
+        "createdAt": "2026-10-14T14:18:00Z",
+        "total": 183.99,
+        "_id": "O1007"
+      },
+      {
+        "createdAt": "2026-10-16T15:31:00Z",
+        "total": 189,
+        "_id": "O1008"
+      },
+      {
+        "createdAt": "2026-10-18T16:44:00Z",
+        "total": 101.98,
+        "_id": "O1009"
+      },
+      {
+        "createdAt": "2026-10-20T17:57:00Z",
+        "total": 115.5,
+        "_id": "O1010"
+      },
+      {
+        "createdAt": "2026-10-22T08:10:00Z",
+        "total": 241.5,
+        "_id": "O1011"
+      }
+    ],
+    "hints": [
+      "Use `$gte`/`$lt` on `createdAt` with string bounds.",
+      "`$ne` excludes a value."
+    ],
+    "explanation": "ISO strings sort lexicographically in time order (real apps should store BSON Dates). Index `{ createdAt: 1 }` handles the range and the sort; `$ne` is not selective, so it makes a poor leading index field."
+  },
+  {
+    "id": "mx-13",
+    "title": "Count orders per status",
+    "level": "easy",
+    "topic": "group",
+    "kind": "aggregate",
+    "collection": "orders",
+    "prompt": "Using an aggregation pipeline on `orders`, count orders per `status`. Output `{ _id: <status>, count }`, sorted by `_id` ascending.",
+    "solution": [
+      {
+        "$group": {
+          "_id": "$status",
+          "count": {
+            "$sum": 1
+          }
+        }
+      },
+      {
+        "$sort": {
+          "_id": 1
+        }
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "_id": "cancelled",
+        "count": 3
+      },
+      {
+        "_id": "delivered",
+        "count": 11
+      },
+      {
+        "_id": "pending",
+        "count": 4
+      },
+      {
+        "_id": "shipped",
+        "count": 7
+      }
+    ],
+    "hints": [
+      "`$group` with `_id: \"$status\"`.",
+      "`$sum: 1` counts documents."
+    ],
+    "explanation": "Classic group-and-count. `$group` must read every input document; an index on `{ status: 1 }` helps only once you add a `$match`, or for DISTINCT_SCAN-friendly shapes."
+  },
+  {
+    "id": "mx-14",
+    "title": "Revenue by region",
+    "level": "medium",
+    "topic": "aggregation",
+    "kind": "aggregate",
+    "collection": "orders",
+    "prompt": "Compute revenue per `region`, counting only `delivered` and `shipped` orders. Output `{ _id: region, revenue, orders }` sorted by `revenue` descending.",
+    "solution": [
+      {
+        "$match": {
+          "status": {
+            "$in": [
+              "delivered",
+              "shipped"
+            ]
+          }
+        }
+      },
+      {
+        "$group": {
+          "_id": "$region",
+          "revenue": {
+            "$sum": "$total"
+          },
+          "orders": {
+            "$sum": 1
+          }
+        }
+      },
+      {
+        "$sort": {
+          "revenue": -1
+        }
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "_id": "NA",
+        "revenue": 1023.48,
+        "orders": 7
+      },
+      {
+        "_id": "EMEA",
+        "revenue": 965.47,
+        "orders": 7
+      },
+      {
+        "_id": "APAC",
+        "revenue": 674.99,
+        "orders": 4
+      }
+    ],
+    "hints": [
+      "`$match` first, then `$group`.",
+      "`$sum: \"$total\"` adds up a field."
+    ],
+    "explanation": "Put `$match` first so it can use an index (`{ status: 1 }`) and shrink the data before `$group`."
+  },
+  {
+    "id": "mx-15",
+    "title": "Average rating per product",
+    "level": "medium",
+    "topic": "aggregation",
+    "kind": "aggregate",
+    "collection": "products",
+    "prompt": "For products with at least one rating, compute `avgRating` (rounded to 2 decimals). Output `{ sku, avgRating }`: the top 5 by `avgRating` desc, then `sku` asc.",
+    "solution": [
+      {
+        "$match": {
+          "ratings.0": {
+            "$exists": true
+          }
+        }
+      },
+      {
+        "$project": {
+          "_id": 0,
+          "sku": 1,
+          "avgRating": {
+            "$round": [
+              {
+                "$avg": "$ratings"
+              },
+              2
+            ]
+          }
+        }
+      },
+      {
+        "$sort": {
+          "avgRating": -1,
+          "sku": 1
+        }
+      },
+      {
+        "$limit": 5
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "avgRating": 5,
+        "sku": "SKU-CH1"
+      },
+      {
+        "avgRating": 5,
+        "sku": "SKU-DS1"
+      },
+      {
+        "avgRating": 5,
+        "sku": "SKU-HD1"
+      },
+      {
+        "avgRating": 4.5,
+        "sku": "SKU-MN1"
+      },
+      {
+        "avgRating": 4.33,
+        "sku": "SKU-MG1"
+      }
+    ],
+    "hints": [
+      "`\"ratings.0\": {$exists: true}` means the array is non-empty.",
+      "`$avg` on an array inside `$project` averages its elements; wrap it in `$round`."
+    ],
+    "explanation": "Array expressions work inside `$project`. A second sort key breaks ties so the output is deterministic. For hot reads, precompute `avgRating` on write."
+  },
+  {
+    "id": "mx-16",
+    "title": "Units sold per SKU",
+    "level": "medium",
+    "topic": "unwind",
+    "kind": "aggregate",
+    "collection": "orders",
+    "prompt": "Across non-cancelled orders, compute total units sold per SKU. Output `{ _id: sku, units }`: the top 5 by `units` desc, then `_id` asc.",
+    "solution": [
+      {
+        "$match": {
+          "status": {
+            "$ne": "cancelled"
+          }
+        }
+      },
+      {
+        "$unwind": "$items"
+      },
+      {
+        "$group": {
+          "_id": "$items.sku",
+          "units": {
+            "$sum": "$items.qty"
+          }
+        }
+      },
+      {
+        "$sort": {
+          "units": -1,
+          "_id": 1
+        }
+      },
+      {
+        "$limit": 5
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "_id": "SKU-BK2",
+        "units": 11
+      },
+      {
+        "_id": "SKU-BP1",
+        "units": 8
+      },
+      {
+        "_id": "SKU-HD1",
+        "units": 7
+      },
+      {
+        "_id": "SKU-NB1",
+        "units": 6
+      },
+      {
+        "_id": "SKU-PN1",
+        "units": 6
+      }
+    ],
+    "hints": [
+      "`$unwind: \"$items\"` produces one document per line item.",
+      "Group on `\"$items.sku\"`."
+    ],
+    "explanation": "`$unwind` flattens arrays so `$group` can aggregate per element. It multiplies the document count, so `$match` before it."
+  },
+  {
+    "id": "mx-17",
+    "title": "Revenue per product category",
+    "level": "hard",
+    "topic": "lookup",
+    "kind": "aggregate",
+    "collection": "orders",
+    "prompt": "Join order line items to `products` (on `items.sku` = `products.sku`) and compute revenue (`qty * price`) per product `category`, across all orders. Output `{ _id: category, revenue }` sorted by `revenue` desc.",
+    "solution": [
+      {
+        "$unwind": "$items"
+      },
+      {
+        "$lookup": {
+          "from": "products",
+          "localField": "items.sku",
+          "foreignField": "sku",
+          "as": "product"
+        }
+      },
+      {
+        "$unwind": "$product"
+      },
+      {
+        "$group": {
+          "_id": "$product.category",
+          "revenue": {
+            "$sum": {
+              "$multiply": [
+                "$items.qty",
+                "$items.price"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "$sort": {
+          "revenue": -1
+        }
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "_id": "electronics",
+        "revenue": 1629.46
+      },
+      {
+        "_id": "furniture",
+        "revenue": 1079
+      },
+      {
+        "_id": "books",
+        "revenue": 815.5
+      },
+      {
+        "_id": "accessories",
+        "revenue": 520
+      },
+      {
+        "_id": "kitchen",
+        "revenue": 419.94
+      },
+      {
+        "_id": "stationery",
+        "revenue": 152.5
+      }
+    ],
+    "hints": [
+      "`$unwind` the items first, then `$lookup` with `localField`/`foreignField`.",
+      "`$lookup` outputs an array; `$unwind` it to get a single product.",
+      "Put `$multiply` inside `$sum`."
+    ],
+    "explanation": "`$lookup` is a left outer join, run once per input document. In real MongoDB an index on `products.sku` is essential; otherwise every lookup scans the products collection."
+  },
+  {
+    "id": "mx-18",
+    "title": "Gold customers and order counts",
+    "level": "hard",
+    "topic": "lookup",
+    "kind": "aggregate",
+    "collection": "customers",
+    "prompt": "For `gold` tier customers, look up their orders and return `{ _id, name, orderCount }` sorted by `orderCount` desc, then `_id` asc. Customers with no orders must appear with 0.",
+    "solution": [
+      {
+        "$match": {
+          "tier": "gold"
+        }
+      },
+      {
+        "$lookup": {
+          "from": "orders",
+          "localField": "_id",
+          "foreignField": "customerId",
+          "as": "orders"
+        }
+      },
+      {
+        "$project": {
+          "name": 1,
+          "orderCount": {
+            "$size": "$orders"
+          }
+        }
+      },
+      {
+        "$sort": {
+          "orderCount": -1,
+          "_id": 1
+        }
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "name": "Ada Obi",
+        "orderCount": 2,
+        "_id": "C01"
+      },
+      {
+        "name": "Priya Shah",
+        "orderCount": 2,
+        "_id": "C16"
+      },
+      {
+        "name": "Femi Bello",
+        "orderCount": 1,
+        "_id": "C06"
+      },
+      {
+        "name": "Kemi Ade",
+        "orderCount": 1,
+        "_id": "C11"
+      }
+    ],
+    "hints": [
+      "`$lookup` from `orders`, matching `_id` to `customerId`.",
+      "Use `$size` on the joined array."
+    ],
+    "explanation": "`$lookup` is a left outer join, so customers with no orders get `[]` and a size of 0. Index `orders.customerId` so each lookup is an index seek."
+  },
+  {
+    "id": "mx-19",
+    "title": "Daily active users",
+    "level": "medium",
+    "topic": "aggregation",
+    "kind": "aggregate",
+    "collection": "events",
+    "prompt": "From `events`, compute daily active users: the number of distinct `userId`s per calendar day (the first 10 characters of `ts`). Output `{ day, dau }` sorted by `day`.",
+    "solution": [
+      {
+        "$group": {
+          "_id": {
+            "$substr": [
+              "$ts",
+              0,
+              10
+            ]
+          },
+          "users": {
+            "$addToSet": "$userId"
+          }
+        }
+      },
+      {
+        "$project": {
+          "_id": 0,
+          "day": "$_id",
+          "dau": {
+            "$size": "$users"
+          }
+        }
+      },
+      {
+        "$sort": {
+          "day": 1
+        }
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "dau": 4,
+        "day": "2026-11-10"
+      },
+      {
+        "dau": 4,
+        "day": "2026-11-11"
+      },
+      {
+        "dau": 4,
+        "day": "2026-11-12"
+      },
+      {
+        "dau": 4,
+        "day": "2026-11-13"
+      },
+      {
+        "dau": 4,
+        "day": "2026-11-14"
+      },
+      {
+        "dau": 4,
+        "day": "2026-11-15"
+      },
+      {
+        "dau": 4,
+        "day": "2026-11-16"
+      }
+    ],
+    "hints": [
+      "`$substr: [\"$ts\", 0, 10]` extracts the date.",
+      "`$addToSet` collects distinct values; `$size` counts them."
+    ],
+    "explanation": "`$addToSet` deduplicates. At scale, group twice (by day+user, then by day) to avoid huge in-memory sets. Index `{ ts: 1 }` helps once you add a time-range `$match`."
+  },
+  {
+    "id": "mx-20",
+    "title": "Conversion funnel",
+    "level": "hard",
+    "topic": "group",
+    "kind": "aggregate",
+    "collection": "events",
+    "prompt": "Compute a one-document funnel from `events`: counts of `page_view` (`views`), `add_to_cart` (`carts`) and `checkout` (`checkouts`), plus `checkoutRate = checkouts / views` rounded to 3 decimals. Output one document without `_id`.",
+    "solution": [
+      {
+        "$group": {
+          "_id": null,
+          "views": {
+            "$sum": {
+              "$cond": [
+                {
+                  "$eq": [
+                    "$type",
+                    "page_view"
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          "carts": {
+            "$sum": {
+              "$cond": [
+                {
+                  "$eq": [
+                    "$type",
+                    "add_to_cart"
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          "checkouts": {
+            "$sum": {
+              "$cond": [
+                {
+                  "$eq": [
+                    "$type",
+                    "checkout"
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      },
+      {
+        "$project": {
+          "_id": 0,
+          "views": 1,
+          "carts": 1,
+          "checkouts": 1,
+          "checkoutRate": {
+            "$round": [
+              {
+                "$divide": [
+                  "$checkouts",
+                  "$views"
+                ]
+              },
+              3
+            ]
+          }
+        }
+      }
+    ],
+    "orderMatters": false,
+    "expected": [
+      {
+        "carts": 4,
+        "checkoutRate": 0.2,
+        "checkouts": 3,
+        "views": 15
+      }
+    ],
+    "hints": [
+      "`$group` with `_id: null` aggregates everything into one group.",
+      "Conditional counting: `$sum: { $cond: [ { $eq: [\"$type\", \"page_view\"] }, 1, 0 ] }`."
+    ],
+    "explanation": "Conditional sums compute several metrics in a single pass, pivoting rows into columns."
+  },
+  {
+    "id": "mx-21",
+    "title": "Customer spend leaderboard",
+    "level": "hard",
+    "topic": "aggregation",
+    "kind": "aggregate",
+    "collection": "orders",
+    "prompt": "For non-cancelled orders, group by `customerId`, computing `spend` (sum of `total`), `orders` (count) and `lastOrder` (latest `createdAt`). Keep only customers with at least 2 orders and return the top 3 by `spend` (ties by `_id`).",
+    "solution": [
+      {
+        "$match": {
+          "status": {
+            "$ne": "cancelled"
+          }
+        }
+      },
+      {
+        "$group": {
+          "_id": "$customerId",
+          "spend": {
+            "$sum": "$total"
+          },
+          "orders": {
+            "$sum": 1
+          },
+          "lastOrder": {
+            "$max": "$createdAt"
+          }
+        }
+      },
+      {
+        "$match": {
+          "orders": {
+            "$gte": 2
+          }
+        }
+      },
+      {
+        "$sort": {
+          "spend": -1,
+          "_id": 1
+        }
+      },
+      {
+        "$limit": 3
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "_id": "C16",
+        "spend": 926.99,
+        "orders": 2,
+        "lastOrder": "2026-11-13T12:12:00Z"
+      },
+      {
+        "_id": "C09",
+        "spend": 490.99,
+        "orders": 2,
+        "lastOrder": "2026-11-12T11:59:00Z"
+      },
+      {
+        "_id": "C05",
+        "spend": 490.5,
+        "orders": 2,
+        "lastOrder": "2026-11-09T08:20:00Z"
+      }
+    ],
+    "hints": [
+      "A second `$match` after `$group` acts like SQL HAVING.",
+      "`$max` works on ISO strings."
+    ],
+    "explanation": "A `$match` after `$group` filters groups (HAVING). Only the leading `$match` can use an index."
+  },
+  {
+    "id": "mx-22",
+    "title": "Bucket orders by size",
+    "level": "hard",
+    "topic": "aggregation",
+    "kind": "aggregate",
+    "collection": "orders",
+    "prompt": "Build a histogram of `orders` by `total` with buckets `[0,50)`, `[50,150)`, `[150,300)`, `[300,1000)` and a `\"1000+\"` default bucket. For each bucket output `count` and `avgTotal` (rounded to 2 decimals).",
+    "solution": [
+      {
+        "$bucket": {
+          "groupBy": "$total",
+          "boundaries": [
+            0,
+            50,
+            150,
+            300,
+            1000
+          ],
+          "default": "1000+",
+          "output": {
+            "count": {
+              "$sum": 1
+            },
+            "avgTotal": {
+              "$avg": "$total"
+            }
+          }
+        }
+      },
+      {
+        "$project": {
+          "count": 1,
+          "avgTotal": {
+            "$round": [
+              "$avgTotal",
+              2
+            ]
+          }
+        }
+      }
+    ],
+    "orderMatters": true,
+    "expected": [
+      {
+        "avgTotal": 27.37,
+        "count": 4,
+        "_id": 0
+      },
+      {
+        "avgTotal": 112.94,
+        "count": 9,
+        "_id": 50
+      },
+      {
+        "avgTotal": 224.94,
+        "count": 9,
+        "_id": 150
+      },
+      {
+        "avgTotal": 488.65,
+        "count": 3,
+        "_id": 300
+      }
+    ],
+    "hints": [
+      "Use `$bucket` with `groupBy`, `boundaries`, `default` and `output`.",
+      "Round in a following `$project`."
+    ],
+    "explanation": "`$bucket` groups by ranges and emits buckets in boundary order (empty buckets are omitted). `$bucketAuto` chooses boundaries for you."
+  },
+  {
+    "id": "mx-23",
+    "title": "The ESR rule",
+    "level": "medium",
+    "topic": "indexes",
+    "kind": "choice",
+    "prompt": "Query: `db.orders.find({ status: \"shipped\", region: \"EMEA\", total: { $gt: 100 } }).sort({ createdAt: -1 })`.\n\nFollowing the **Equality, Sort, Range** (ESR) guideline, which index prefix is the best start (before appending `total`)?",
+    "options": [
+      "{ createdAt: 1, status: 1, region: 1 }",
+      "{ total: 1, status: 1, region: 1 }",
+      "{ status: 1, region: 1, createdAt: 1 }",
+      "{ region: 1, total: 1, createdAt: 1 }"
+    ],
+    "answer": 2,
+    "hints": [
+      "Equality fields first, then the sort field, then range fields."
+    ],
+    "explanation": "ESR: equality fields (`status`, `region`) first, then the sort key (`createdAt`) so results stream out already sorted, then range fields (`total`). Full index: `{ status: 1, region: 1, createdAt: -1, total: 1 }`."
+  },
+  {
+    "id": "mx-24",
+    "title": "Reading explain()",
+    "level": "medium",
+    "topic": "explain",
+    "kind": "choice",
+    "prompt": "Which `explain(\"executionStats\")` result most strongly suggests a **missing index**?",
+    "options": [
+      "IXSCAN with totalDocsExamined about equal to nReturned",
+      "COLLSCAN with totalDocsExamined far larger than nReturned",
+      "FETCH with totalKeysExamined equal to nReturned",
+      "PROJECTION_COVERED with totalDocsExamined = 0"
+    ],
+    "answer": 1,
+    "hints": [
+      "Compare how many documents were examined with how many were returned."
+    ],
+    "explanation": "A COLLSCAN that examines far more documents than it returns reads everything to find a few matches. With a good index, keys and docs examined stay close to nReturned."
+  },
+  {
+    "id": "mx-25",
+    "title": "Covered query",
+    "level": "medium",
+    "topic": "indexes",
+    "kind": "choice",
+    "prompt": "With the index `{ email: 1, tier: 1 }` on `customers`, which query is **covered** (answered entirely from the index, `totalDocsExamined: 0`)?",
+    "options": [
+      "db.customers.find({ email: \"a@x.com\" })",
+      "db.customers.find({ email: \"a@x.com\" }, { email: 1, tier: 1 })",
+      "db.customers.find({ email: \"a@x.com\" }, { _id: 0, email: 1, tier: 1 })",
+      "db.customers.find({ email: \"a@x.com\" }, { _id: 0, email: 1, name: 1 })"
+    ],
+    "answer": 2,
+    "hints": [
+      "Every filtered and returned field must be in the index.",
+      "`_id` is returned by default."
+    ],
+    "explanation": "A covered query filters and returns only indexed fields. `_id` is not in this index, so it must be excluded; `name` is not indexed either, so option 4 needs a FETCH."
+  },
+  {
+    "id": "mx-26",
+    "title": "Multikey index limits",
+    "level": "hard",
+    "topic": "indexes",
+    "kind": "choice",
+    "prompt": "Which compound index **cannot be built** in MongoDB?",
+    "options": [
+      "{ tags: 1, name: 1 } on customers",
+      "{ \"items.sku\": 1, status: 1 } on orders",
+      "{ tags: 1, \"address.city\": 1 } on customers",
+      "{ tags: 1, ratings: 1 } where both fields are arrays in the same documents"
+    ],
+    "answer": 3,
+    "hints": [
+      "Count the index entries a document would produce when two indexed fields are arrays."
+    ],
+    "explanation": "A compound multikey index allows at most one array-valued field per document. Indexing two parallel arrays would need the cartesian product of their elements, so MongoDB rejects it (\"cannot index parallel arrays\")."
+  },
+  {
+    "id": "mx-27",
+    "title": "Embed or reference?",
+    "level": "medium",
+    "topic": "schema",
+    "kind": "choice",
+    "prompt": "An e-commerce app shows the order page (an order and its line items) constantly, while a customer can accumulate thousands of orders over the years. Which schema is best?",
+    "options": [
+      "Embed all of a customer's orders inside the customer document",
+      "Embed line items inside each order; reference the customer by customerId",
+      "Put each line item in its own collection and reference everything",
+      "Embed the full product document (description, stock, ratings) in every line item"
+    ],
+    "answer": 1,
+    "hints": [
+      "Embed what is read together and bounded; reference what grows without bound.",
+      "Documents are limited to 16 MB."
+    ],
+    "explanation": "Line items are bounded and always read with their order, so embed them (snapshotting the price, as this dataset does). Orders per customer are unbounded, so reference them. Embedding mutable product data like stock forces you to update many documents."
+  },
+  {
+    "id": "mx-28",
+    "title": "Choosing a shard key",
+    "level": "hard",
+    "topic": "schema",
+    "kind": "choice",
+    "prompt": "`orders` is growing to billions of documents. Inserts are heavy and most reads are \"orders for customer X\". Which shard key is best?",
+    "options": [
+      "{ createdAt: 1 }",
+      "{ status: 1 }",
+      "{ customerId: \"hashed\" }",
+      "{ _id: 1 } where _id is an ObjectId"
+    ],
+    "answer": 2,
+    "hints": [
+      "Avoid monotonically increasing keys (one hot chunk) and low-cardinality keys.",
+      "Reads should target a single shard."
+    ],
+    "explanation": "A hashed `customerId` spreads writes evenly (high cardinality, not monotonic) and per-customer queries still go to one shard. `createdAt` and ObjectId increase monotonically, so all inserts hit one shard; `status` has too few values to split into chunks."
+  }
+]

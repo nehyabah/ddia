@@ -1,0 +1,610 @@
+[
+  {
+    "id": "ms-des-01",
+    "title": "Design a OneDrive-like file sync service",
+    "level": "advanced",
+    "brief": "Users install a sync client on several devices (Windows, Mac, mobile) and expect a folder to stay in sync with the cloud and with each other. Design the backend and sync protocol, including large files, offline edits and conflicts.",
+    "constraints": [
+      "500M users, average 3 devices each",
+      "Files from bytes to 50 GB; most under 1 MB",
+      "Changes visible on other online devices within ~10 s",
+      "Offline edits must sync on reconnect without data loss",
+      "Storage efficiency matters: dedupe identical blocks"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Scope what syncs, which consistency users see and how conflicts surface.",
+        "keyPoints": [
+          "Sync files and folders, renames, moves, deletes across devices",
+          "Durability: no acknowledged write is lost",
+          "Conflicts never silently drop data: keep both copies",
+          "Selective sync and files-on-demand placeholders",
+          "Sharing and versioning history (limited window)",
+          "Non-goals: real-time co-authoring of documents"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Define the client-facing API for uploads, downloads and change discovery.",
+        "keyPoints": [
+          "POST /uploadSession -> sessionId; PUT chunk ranges, resumable",
+          "Commit: POST /items/{id}/commit with block list and baseVersion (eTag)",
+          "GET /delta?cursor= returns changes since cursor plus new cursor",
+          "Long-poll or push (WebSocket/notification) to signal new changes",
+          "Conditional requests with If-Match eTag to detect conflicts"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Model files, versions, blocks and the change journal.",
+        "keyPoints": [
+          "Item(itemId, parentId, name, ownerId, currentVersion, eTag, deleted)",
+          "Version(itemId, version, blockList[], size, hash, modifiedBy)",
+          "Content-addressed blocks keyed by hash (e.g. 4 MB chunks) in blob storage with refcounts",
+          "Per-user/drive change journal ordered by sequence number; cursor = position",
+          "Metadata partitioned by driveId so one drive is one shard"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Lay out clients, metadata service, block store and notifications.",
+        "keyPoints": [
+          "Client: local watcher, local DB of synced state, chunker and hasher",
+          "Front door / API gateway with auth (OAuth tokens)",
+          "Metadata service on a partitioned transactional store",
+          "Block store on blob storage, uploads directly via SAS-style signed URLs",
+          "Notification service fans out \"drive changed\" pings; clients then call delta",
+          "Async workers: virus scan, thumbnails, indexing, garbage collection"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scaling",
+        "prompt": "Explain how this scales to hundreds of millions of drives.",
+        "keyPoints": [
+          "Shard metadata by driveId; hot shared folders get special handling",
+          "Block dedupe and delta sync: only upload changed chunks",
+          "CDN / edge caching for downloads of popular shared files",
+          "Notification fan-out via pub/sub; coalesce bursts of changes",
+          "Backpressure on clients: server-driven retry-after on throttling"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure handling",
+        "prompt": "Cover interrupted uploads, conflicts, regional outages and corruption.",
+        "keyPoints": [
+          "Resumable uploads; commit is atomic: version visible only after all blocks stored",
+          "Conflict on stale eTag: keep both, rename one as \"name-DEVICE\" copy",
+          "Geo-replicated blob storage; metadata replicated to paired region",
+          "Client-side hash verification on download; server scrubbing for bit rot",
+          "Idempotent commits with client request IDs to survive retries"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs",
+        "prompt": "Discuss the big design choices and their costs.",
+        "keyPoints": [
+          "Block size: small improves dedupe/delta, large reduces metadata overhead",
+          "Push notifications vs polling: freshness vs connection cost",
+          "Last-writer-wins vs keep-both conflicts: simplicity vs data safety",
+          "Strong per-drive consistency vs cross-region latency",
+          "Client complexity (local state DB) vs server-driven sync"
+        ]
+      }
+    ],
+    "modelSummary": "Split file content into content-addressed blocks in blob storage and keep metadata (items, versions, block lists) in a store partitioned by drive. Clients upload changed blocks through resumable sessions, then atomically commit a new version guarded by an eTag; a stale eTag means a conflict, resolved by keeping both copies. Other devices learn of changes through a lightweight push ping followed by a cursor-based delta call against an ordered change journal. Geo-replication, idempotent commits and hash verification protect durability.",
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-des-02",
+    "title": "Design a Teams-like presence service",
+    "level": "core",
+    "brief": "Show whether each user is Available, Busy, In a meeting, Away or Offline, across all their devices, and push changes to everyone who is looking at them (contact lists, chat headers, meeting rosters).",
+    "constraints": [
+      "300M monthly users, ~50M concurrently online",
+      "A user may be signed in on several devices",
+      "Presence changes propagated to watchers within ~2 s",
+      "Calendar-driven states (In a meeting) and manual overrides",
+      "Read-heavy: each user is watched by tens to hundreds of others"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Define states, aggregation rules and freshness expectations.",
+        "keyPoints": [
+          "States: Available, Busy, InACall, InAMeeting, DoNotDisturb, Away, Offline",
+          "Aggregate per-device presence into one user presence by priority",
+          "Manual status overrides with expiry; calendar-derived states",
+          "Away after inactivity timeout; Offline when all devices disconnect",
+          "Privacy: tenant boundaries and federation rules"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Specify publish, query and subscribe APIs.",
+        "keyPoints": [
+          "PUT /presence/me {deviceId, activity, availability} as heartbeat",
+          "GET /presence?users=a,b,c batch fetch",
+          "Subscribe(userIds[]) over persistent connection; server pushes deltas",
+          "Subscriptions with TTL renewed by clients",
+          "Rate limits on subscription size per client"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Store device presence, aggregated presence and subscriptions.",
+        "keyPoints": [
+          "DevicePresence(userId, deviceId, state, lastSeen) with TTL",
+          "UserPresence(userId, aggregatedState, version) computed on change",
+          "Subscriptions: watched userId -> set of connection/gateway ids",
+          "Mostly in-memory (distributed cache), not durable DB",
+          "Calendar state fed asynchronously from calendar service"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Describe the main components.",
+        "keyPoints": [
+          "Edge gateways hold client WebSocket connections",
+          "Presence service partitioned by userId owns aggregation",
+          "Pub/sub layer routes changes from owner partition to gateways with subscribers",
+          "Gateways fan out to local connections",
+          "Calendar/call integrations publish events into presence service"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scaling",
+        "prompt": "Explain how fan-out and heartbeat load scale.",
+        "keyPoints": [
+          "Partition by userId via consistent hashing",
+          "Gateway-level subscription aggregation: one upstream subscription per gateway, not per client",
+          "Coalesce rapid flaps; debounce Away transitions",
+          "Heartbeats at long intervals; connection drop detection at gateway",
+          "Large meetings: lazy load presence for visible roster only"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure handling",
+        "prompt": "Handle node loss, missed heartbeats and partitions.",
+        "keyPoints": [
+          "Presence is soft state: rebuild from client heartbeats after failover",
+          "Expire device entries via TTL so crashed clients go Offline",
+          "Gateways resubscribe on presence node failover",
+          "Degrade to \"unknown\" rather than wrong state when stale",
+          "Throttle reconnection storms with jittered backoff"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs",
+        "prompt": "Weigh push vs pull, accuracy vs cost.",
+        "keyPoints": [
+          "Push gives freshness but costs connections and fan-out",
+          "Eventual consistency acceptable; strict accuracy not worth the cost",
+          "In-memory soft state vs durable storage",
+          "Heartbeat interval: battery/network cost vs staleness",
+          "Per-gateway aggregation adds hop but cuts fan-out massively"
+        ]
+      }
+    ],
+    "modelSummary": "Treat presence as soft, in-memory state owned by a partition keyed on userId. Devices heartbeat their state and the owner aggregates them by priority into one user presence. Changes are published through pub/sub to the edge gateways that hold subscribers, and each gateway fans out to its local connections, so upstream subscriptions are aggregated per gateway. TTLs, debouncing and resubscription on failover keep the system cheap and self-healing, at the cost of eventual (seconds-level) accuracy.",
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-des-03",
+    "title": "Design a multi-tenant blob storage metadata service",
+    "level": "advanced",
+    "brief": "Design the metadata layer for an object store like Azure Blob Storage: accounts, containers and blobs, with list operations, strong consistency for a single blob and isolation between tenants.",
+    "constraints": [
+      "Millions of storage accounts; some with billions of blobs",
+      "Strong read-after-write consistency per blob",
+      "List by prefix with pagination must be efficient",
+      "Per-account throughput limits (noisy neighbour protection)",
+      "Data replicated across availability zones; optional geo-replication"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Define the namespace, operations and consistency guarantees.",
+        "keyPoints": [
+          "Hierarchy: account -> container -> blob name (flat names, \"/\" as virtual dir)",
+          "Put, Get, Delete, Head, List(prefix, delimiter, marker)",
+          "Strong consistency for single-blob operations; conditional ops via eTag",
+          "Per-account limits on requests/s and bandwidth",
+          "Redundancy options: zone-redundant, geo-redundant"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Specify the metadata API used by front ends.",
+        "keyPoints": [
+          "PutBlobMetadata(account, container, name, blockList, eTag-condition)",
+          "GetBlobMetadata -> location of data extents, size, eTag, properties",
+          "ListBlobs(account, container, prefix, marker, max) -> page + next marker",
+          "Lease/lock operations for exclusive writers",
+          "Internal: SplitPartition, MovePartition for load balancing"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Model metadata rows and partitioning.",
+        "keyPoints": [
+          "Row key = account|container|blobName, sorted lexicographically",
+          "Value: eTag, size, content-type, extent pointers, lastModified, snapshots",
+          "Range partitioning on the sorted key so prefix listing is a range scan",
+          "Partition map: key ranges -> partition server, held by a master",
+          "Write-ahead log plus checkpoints in replicated stream layer"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Describe the layers: front end, partition layer, stream/storage layer.",
+        "keyPoints": [
+          "Stateless front ends authenticate and route by partition map",
+          "Partition servers own key ranges, serve reads/writes from memory table + log",
+          "Replicated append-only stream layer (3 replicas across zones) for durability",
+          "Partition master assigns ranges and handles splits/merges",
+          "Data extents stored separately from metadata"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scaling",
+        "prompt": "Explain hot partitions, large accounts and load balancing.",
+        "keyPoints": [
+          "Split hot ranges dynamically; merge cold ones",
+          "Avoid sequential name hotspots: advise hashed prefixes",
+          "Per-account throttling with 503 + retry-after",
+          "Caching partition map at front ends with invalidation on move",
+          "Listing uses continuation markers; never unbounded scans"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure handling",
+        "prompt": "Cover server crash, zone loss and partial writes.",
+        "keyPoints": [
+          "Partition reassigned; new owner replays log from stream layer",
+          "Writes acknowledged only after quorum replication across zones",
+          "Geo-replication asynchronous: document RPO, failover is account-level",
+          "Idempotent writes with client request IDs",
+          "Orphaned data extents garbage collected via refcount/scan"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs",
+        "prompt": "Discuss key choices.",
+        "keyPoints": [
+          "Range vs hash partitioning: range enables listing, hash spreads load",
+          "Strong consistency in-region vs async geo-replication (RPO > 0)",
+          "Single owner per range simplifies consistency but needs fast failover",
+          "Separating metadata and data paths: complexity vs independent scaling",
+          "Throttling protects neighbours but surfaces errors to clients"
+        ]
+      }
+    ],
+    "modelSummary": "Use a layered architecture: stateless front ends, a partition layer that range-partitions metadata on account|container|blob so prefix listing is a range scan, and a replicated append-only stream layer that writes synchronously across availability zones. Each range has one owning partition server, which gives strong per-blob consistency; a master splits hot ranges and reassigns them on failure, and the new owner replays the log. Per-account throttling isolates tenants. Geo-replication is asynchronous, so cross-region failover has a non-zero RPO.",
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-des-04",
+    "title": "Design a distributed cache service",
+    "level": "core",
+    "brief": "Design a managed, Redis-like distributed cache that many internal services use to cut latency and database load. It should scale out, survive node loss and offer sensible eviction and consistency semantics.",
+    "constraints": [
+      "1M+ ops/s per large cluster, p99 < 2 ms",
+      "Datasets up to several TB in memory",
+      "Key/value with TTL; values up to 1 MB",
+      "Node failures must not cause a thundering herd on the backing DB",
+      "Multiple tenants (services) share the platform"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Clarify semantics: cache-aside vs write-through, TTL, eviction, consistency.",
+        "keyPoints": [
+          "Get/Set/Delete with TTL; optional atomic increment and compare-and-set",
+          "Cache is not source of truth: loss is tolerable, staleness bounded by TTL",
+          "Eviction policy: LRU / LFU approximations",
+          "Tenant isolation: quotas on memory and ops",
+          "Non-goals: durable storage, complex queries"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Define client and admin APIs.",
+        "keyPoints": [
+          "get(key) / set(key, value, ttl) / delete(key) / cas(key, expected, value)",
+          "Batch mget/mset to amortise round trips",
+          "Smart client library with cluster topology and consistent hashing",
+          "Admin: create cache, scale shards, set eviction policy",
+          "Metrics endpoint for hit rate, evictions, latency"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Describe memory layout and key distribution.",
+        "keyPoints": [
+          "Hash slots (e.g. 16384) mapped to shards",
+          "Per-shard hash table plus approximate LRU clock",
+          "Primary + replica per shard",
+          "Slot map versioned and gossiped / served by config service",
+          "Large values discouraged; compression optional"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Lay out clients, shards, replicas and control plane.",
+        "keyPoints": [
+          "Client-side routing via slot map; MOVED redirects on topology change",
+          "Shards with async replication to replicas in another zone",
+          "Control plane monitors health, promotes replicas, rebalances slots",
+          "Optional proxy tier for simple clients",
+          "Backing DB accessed by services on miss (cache-aside)"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scaling",
+        "prompt": "Scale throughput and handle hot keys.",
+        "keyPoints": [
+          "Add shards and migrate slots online",
+          "Hot keys: client-side near cache, key replication, or read from replicas",
+          "Connection pooling and pipelining",
+          "Request coalescing (single-flight) to stop stampedes on miss",
+          "Jittered TTLs to avoid synchronized expiry"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure handling",
+        "prompt": "Handle node failure, split brain and cold starts.",
+        "keyPoints": [
+          "Replica promotion on primary failure; some recent writes may be lost",
+          "Fencing via epoch numbers to avoid two primaries",
+          "Warm-up: gradual traffic shift, prefetch hot keys",
+          "Clients fall back to DB with circuit breaker and rate limit",
+          "Invalidate on write in source of truth to bound staleness"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs",
+        "prompt": "Discuss trade-offs.",
+        "keyPoints": [
+          "Async replication: low latency vs possible lost writes on failover",
+          "Client-side vs proxy routing: latency vs simplicity",
+          "LRU vs LFU: recency vs frequency workloads",
+          "Cache-aside vs write-through: simplicity vs freshness",
+          "Strong consistency is expensive; cache usually accepts staleness"
+        ]
+      }
+    ],
+    "modelSummary": "Shard keys into hash slots that map to primary/replica shard pairs, and have smart clients route requests with a versioned slot map. Replication to replicas in other zones is asynchronous, so failover is fast but may lose the last few writes; epochs fence off stale primaries. Hot keys are handled with near caches and replica reads, stampedes with single-flight loading and jittered TTLs, and tenants with quotas. The cache is never the source of truth, which is what makes those relaxed guarantees acceptable.",
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-des-05",
+    "title": "Design a telemetry ingestion pipeline at scale",
+    "level": "advanced",
+    "brief": "Every service and device across a cloud platform emits logs, metrics and traces. Design the ingestion pipeline that accepts this data, makes it queryable within a minute and feeds alerting.",
+    "constraints": [
+      "Tens of millions of events/s at peak, multiple PB/day",
+      "Ingest-to-query latency < 60 s; alerting on metrics < 30 s",
+      "Bursty producers; must not lose data during downstream outages",
+      "Schemas evolve independently per team",
+      "Retention tiers: hot 7-30 days, cold archive for longer"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Scope signal types, latency, durability and query needs.",
+        "keyPoints": [
+          "Logs, metrics (time series) and distributed traces",
+          "At-least-once delivery; dedupe where it matters",
+          "Hot query store for recent data; cheap cold archive",
+          "Alerting on metrics with low latency",
+          "Multi-tenant: per-team quotas, access control, PII handling"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Define the ingestion and query interfaces.",
+        "keyPoints": [
+          "Batch HTTP/gRPC ingest endpoint with compression; OpenTelemetry-style schema",
+          "Local agent buffers and batches on each host",
+          "Response codes for throttling with retry-after",
+          "Query API with time range, filters, aggregations",
+          "Alert rule API: query + threshold + window"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Model events, metrics and storage layout.",
+        "keyPoints": [
+          "Event: tenant, source, timestamp, schemaVersion, attributes, body",
+          "Metrics pre-aggregated into time buckets keyed by (metric, dimensions)",
+          "Columnar storage partitioned by tenant and time",
+          "Trace spans keyed by traceId for lookup",
+          "Schema registry for versions and field types"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Draw the pipeline end to end.",
+        "keyPoints": [
+          "Host agent -> regional ingestion front ends",
+          "Durable partitioned log (Event Hubs/Kafka-like) as buffer",
+          "Stream processors: parse, enrich, scrub PII, route by type",
+          "Sinks: columnar log store, time-series DB, trace store, cold blob archive",
+          "Alerting evaluates on stream or time-series DB"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scaling",
+        "prompt": "Explain scaling under bursts and growth.",
+        "keyPoints": [
+          "Partition the log by tenant+source; add partitions as volume grows",
+          "Agent-side batching, compression and sampling (traces, debug logs)",
+          "Autoscale stream processors on lag",
+          "Per-tenant quotas to stop one team flooding the pipeline",
+          "Downsample/rollup old metrics; tier to cheap storage"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure handling",
+        "prompt": "Handle outages and bad data.",
+        "keyPoints": [
+          "Durable log absorbs sink outages; replay from offsets",
+          "Agents spill to local disk when ingestion unavailable",
+          "Dead-letter queue for unparseable events",
+          "Monitor the monitor: independent health path for pipeline itself",
+          "Regional isolation so one region failure does not affect others"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs",
+        "prompt": "Discuss key trade-offs.",
+        "keyPoints": [
+          "Sampling cuts cost but loses rare events",
+          "At-least-once plus idempotent sinks vs exactly-once complexity",
+          "Schema-on-write (fast queries) vs schema-on-read (flexibility)",
+          "Pre-aggregation reduces cost but fixes dimensions",
+          "Regional pipelines vs global view: cross-region queries fan out"
+        ]
+      }
+    ],
+    "modelSummary": "Host agents batch, compress and spill to disk, and send to regional ingestion front ends that write to a durable partitioned log. That log decouples bursty producers from consumers. Stream processors parse, enrich and scrub the data and route it to specialised sinks: a columnar store for logs, a time-series database for metrics, a trace store and a cold blob archive. Alerting evaluates metrics in near real time. Quotas, sampling, rollups and replay from log offsets keep the pipeline affordable and resilient.",
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-des-06",
+    "title": "Design a global configuration and feature rollout service with safe deployment rings",
+    "level": "advanced",
+    "brief": "Thousands of services need dynamic configuration and feature flags. Changes must roll out progressively (rings: internal, canary region, broad regions) with health gates and fast rollback, because a bad config can take down a global service.",
+    "constraints": [
+      "50k services/instances groups, ~5M running processes reading config",
+      "Config reads must never be on the critical path to a remote call",
+      "Rollout across 60+ regions over hours to days, rollback in minutes",
+      "Full audit trail and approvals for production changes",
+      "Config service outage must not break running services"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Define what is configured, who changes it and the safety guarantees.",
+        "keyPoints": [
+          "Typed key/values and feature flags with targeting (region, tenant, % of users)",
+          "Progressive rollout through rings with bake time and health gates",
+          "Instant global kill switch for emergencies",
+          "Audit, approval and validation (schema, policy checks) before rollout",
+          "Clients keep working on last known good config"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Specify authoring, rollout and client APIs.",
+        "keyPoints": [
+          "Author: PUT /configs/{ns}/{key} creates new immutable version",
+          "Rollout: POST /rollouts {version, ringPlan, gates}; pause/resume/rollback",
+          "Client SDK: get(key) from local snapshot; onChange callbacks",
+          "Watch/stream endpoint or periodic poll with version eTag",
+          "Evaluation context for flags: tenant, region, user hash"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Model versions, rings and rollout state.",
+        "keyPoints": [
+          "ConfigVersion(namespace, version, content, author, approvals, hash)",
+          "Ring definitions: ordered sets of regions/scale units",
+          "Rollout(id, version, currentRing, state, gateResults, startedAt)",
+          "Per-target desired version vs observed version",
+          "Immutable history enables rollback by pointer flip"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Describe control plane and data plane.",
+        "keyPoints": [
+          "Control plane: authoring, validation, approvals, rollout orchestrator",
+          "Orchestrator advances rings after bake time and healthy signals",
+          "Data plane: regional config caches/CDN serving signed snapshots",
+          "Client SDK caches snapshot in memory and on disk",
+          "Health signals from telemetry pipeline feed gates"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scaling",
+        "prompt": "Explain how it scales to millions of readers.",
+        "keyPoints": [
+          "Clients read locally; only fetch on version change",
+          "Regional read replicas and CDN distribute snapshots",
+          "Delta or compressed snapshots per namespace",
+          "Jittered polling / push notification to avoid thundering herd",
+          "Namespacing limits blast radius and payload size"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure handling",
+        "prompt": "Handle bad configs, outages and partial rollouts.",
+        "keyPoints": [
+          "Automatic rollback when health gates fail (error rate, latency, crashes)",
+          "Last-known-good on disk if config service unreachable at startup",
+          "Signed snapshots so clients reject corrupt/tampered content",
+          "Validation and canary prevent malformed config reaching broad rings",
+          "Stuck rollouts alert owners; pausing is always safe"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs",
+        "prompt": "Discuss trade-offs.",
+        "keyPoints": [
+          "Speed of rollout vs safety (bake time per ring)",
+          "Push vs poll: propagation latency vs load and complexity",
+          "Central control plane vs regional autonomy",
+          "Emergency bypass of rings is needed but must be audited and rare",
+          "Flag debt: flags need lifecycle and cleanup"
+        ]
+      }
+    ],
+    "modelSummary": "Separate a control plane (authoring, validation, approvals and a rollout orchestrator) from a highly available data plane that serves signed, immutable config snapshots through regional caches. Client SDKs read from an in-memory snapshot that is also saved on disk, so a config service outage never breaks running services. The orchestrator moves each version through rings, from internal to canary region to broader waves, with bake times and health gates fed by telemetry, and rolls back automatically by pointing targets at the previous immutable version. An audited kill switch covers emergencies.",
+    "company": "microsoft"
+  }
+]

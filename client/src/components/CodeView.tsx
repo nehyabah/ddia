@@ -87,3 +87,21 @@ export function DiffView({ before, after }: { before: string; after: string }) {
     </div>
   );
 }
+
+/** Minimal markdown: ``` code blocks, paragraphs, "- " lists, **bold** and `code`. */
+export function Prose({ text }: { text: string }) {
+  const blocks = text.split(/```[a-z]*\n?/);
+  const inline = (s: string, k: string) => s.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
+    p.startsWith("**") && p.endsWith("**") && p.length > 4 ? <b key={k + i}>{p.slice(2, -2)}</b> : <Md key={k + i} text={p} />);
+  return (
+    <div className="prose">
+      {blocks.map((b, i) => i % 2 === 1
+        ? <pre key={i} className="code prosecode">{b.replace(/\n$/, "")}</pre>
+        : b.split(/\n{2,}/).filter((p) => p.trim()).map((p, j) => {
+            const lines = p.split("\n");
+            if (lines.every((l) => /^\s*[-*] /.test(l))) return <ul key={`${i}-${j}`} className="tidy">{lines.map((l, k) => <li key={k}>{inline(l.replace(/^\s*[-*] /, ""), `${i}-${j}-${k}`)}</li>)}</ul>;
+            return <p key={`${i}-${j}`}>{lines.map((l, k) => <span key={k}>{k > 0 && <br />}{inline(l, `${i}-${j}-${k}`)}</span>)}</p>;
+          }))}
+    </div>
+  );
+}

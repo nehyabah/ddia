@@ -1,0 +1,23 @@
+{
+  "id": "mongodb",
+  "name": "MongoDB",
+  "summary": "Senior engineering loops at MongoDB are commonly reported to lean on distributed systems and database fundamentals: replication, sharding, consistency, storage engines and concurrency, alongside coding, system design and behavioural rounds.",
+  "loop": [
+    { "round": "Recruiter and hiring manager screens", "what": "Background, motivation, the team's domain and your experience at scale.", "tips": ["Have a crisp two-minute story of your most relevant system.", "Know why a database company, specifically."] },
+    { "round": "Coding", "what": "Commonly reported as data-structure and algorithm problems with an emphasis on clean, correct code and edge cases.", "tips": ["Talk through complexity before coding.", "Test with edge cases out loud."] },
+    { "round": "Distributed systems / domain deep dive", "what": "Replication, consensus, sharding, consistency models and failure handling, often tied to how MongoDB works.", "tips": ["Know replica set elections, write concern and read concern.", "Be able to reason about shard key choice and hot spots."] },
+    { "round": "System design", "what": "Design a data-heavy service; expect questions on the data model, partitioning and failure modes.", "tips": ["Justify the data model and access patterns first.", "Cover failure modes explicitly."] },
+    { "round": "Behavioural / values", "what": "Ownership, collaboration and how you handle disagreement and failure.", "tips": ["Prepare STAR stories with measurable results.", "Show how you raised the bar beyond your own team."] }
+  ],
+  "values": [
+    { "name": "Think big, go far", "meaning": "Ambition and long-term thinking." },
+    { "name": "Build together", "meaning": "Collaboration across teams." },
+    { "name": "Make it matter", "meaning": "Focus on impact for customers." },
+    { "name": "Be intellectually honest", "meaning": "Candour and evidence over ego." },
+    { "name": "Own what you do", "meaning": "Accountability end to end." },
+    { "name": "Embrace the power of differences", "meaning": "Diverse perspectives make better outcomes." }
+  ],
+  "valuesNote": "Values are as publicly described by MongoDB at the time of writing; check the careers site for the current wording.",
+  "weights": { "concurrency": 1.2, "consistency": 1.2, "replication": 1.1, "sharding": 1.1, "resilience": 1.0, "distributed": 1.0, "storage": 1.0, "modeling": 0.9, "mongodb": 0.9, "java": 0.8, "design": 1.2, "coding": 1.0, "behavioral": 0.9 },
+  "focusTopics": ["Replica set elections and write concern", "Read concern and causal consistency", "Shard keys, chunks and balancing", "WiredTiger storage, indexes and query planning", "Multi-document transactions", "Change streams", "Concurrency and locking", "Retryable writes and idempotency"]
+}

@@ -1,0 +1,611 @@
+[
+  {
+    "id": "stripe-des-01",
+    "title": "Design a payments API with idempotent charges",
+    "level": "core",
+    "brief": "Design the public API and backend for creating payments (charges) on behalf of merchants. Merchants call the API from their servers, often with retries on timeouts. A charge must never be executed twice, and the merchant must always be able to learn the final outcome, even when the downstream card network call times out.",
+    "constraints": [
+      "5k payment creations/s peak, 100M merchants' customers",
+      "p99 API latency < 500ms excluding the card network call",
+      "Card network/processor calls can take 1-10s and occasionally time out with unknown outcome",
+      "Zero tolerance for double charges; every state change must be auditable",
+      "Merchants retry aggressively on 5xx and network errors"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Define what the API guarantees to merchants about retries, outcomes and consistency.",
+        "keyPoints": [
+          "Create, retrieve, capture, cancel and refund a payment",
+          "Safe retries: the same request with the same Idempotency-Key yields the same result",
+          "Explicit payment state machine visible to merchants",
+          "Unknown outcomes from processors must be resolved, never guessed",
+          "Non-goals: fraud scoring and payouts (separate systems)"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Sketch the endpoints, idempotency semantics and error model.",
+        "keyPoints": [
+          "POST /v1/payment_intents with Idempotency-Key header; amount in minor units + currency",
+          "GET /v1/payment_intents/{id}; POST .../confirm, .../capture, .../cancel; POST /v1/refunds",
+          "Same key + different params returns an error rather than a replay",
+          "Typed errors (card_error, invalid_request_error, api_error) with codes; 409 for a concurrent request with the same key",
+          "Date-based API versioning pinned per merchant account",
+          "Webhooks (payment_intent.succeeded etc.) for asynchronous outcomes"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Model payments, attempts and idempotency records.",
+        "keyPoints": [
+          "payments(id, merchant_id, amount, currency, status, version, created_at)",
+          "payment_attempts(id, payment_id, processor_ref, status, request/response) - one row per processor call",
+          "idempotency_keys(merchant_id, key, request_hash, status locked|done, response, expires_at) with unique (merchant_id, key)",
+          "Append-only event/audit log of every state transition",
+          "Ledger entries written by a separate ledger service from payment events"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Describe the request path for a create-and-confirm call.",
+        "keyPoints": [
+          "API gateway: auth, rate limiting, versioning transforms",
+          "Idempotency layer: insert key row atomically (locked); if exists and done, replay stored response; if locked, 409",
+          "Payment service persists intent and attempt (status=pending) before calling the processor",
+          "Processor adapter with timeouts; result recorded, state machine advanced in a transaction",
+          "Outbox table to emit events to webhooks and ledger reliably",
+          "Store the final response under the idempotency key, including deterministic errors"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scale & performance",
+        "prompt": "How do you scale to peak and keep latency down?",
+        "keyPoints": [
+          "Shard payments and idempotency keys by merchant_id",
+          "Stateless API tier scaled horizontally",
+          "Idempotency key lookup is a primary-key read on the same shard as the payment",
+          "Async processing for slow methods (bank debits) with webhooks",
+          "Connection pooling and bulkheads per processor"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure modes & recovery",
+        "prompt": "Walk through timeouts and partial failures.",
+        "keyPoints": [
+          "Processor timeout: mark attempt unknown, query processor status / reconcile later; never blind-retry a charge without processor-side idempotency",
+          "Pass our attempt id as the processor's idempotency reference",
+          "Crash after processor success but before DB commit: recovered by reconciliation against processor reports",
+          "Idempotency key stuck in locked state: lease with expiry and recovery job",
+          "Daily reconciliation of payments vs processor settlement files vs ledger"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs & alternatives",
+        "prompt": "Discuss alternatives and their costs.",
+        "keyPoints": [
+          "Synchronous confirm (simple for merchants) vs async (resilient to slow rails)",
+          "Storing full responses for replay costs storage but guarantees identical retries",
+          "Strong consistency per merchant shard vs global consistency",
+          "Key TTL (e.g. 24h) bounds storage but limits how late retries are safe",
+          "Client-generated keys put responsibility on merchants; SDKs generate them automatically"
+        ]
+      }
+    ],
+    "modelSummary": "Accept payments through a resource-oriented API where every mutating request carries an idempotency key stored atomically with a request fingerprint and final response. Persist intent and attempt before calling the processor, pass attempt ids as processor idempotency references, and model payments as an explicit state machine. Unknown outcomes are resolved by status queries and reconciliation, events leave via an outbox to webhooks and the ledger, and data is sharded by merchant.",
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-des-02",
+    "title": "Design a webhook delivery system",
+    "level": "core",
+    "brief": "Merchants register HTTPS endpoints to receive events (payment succeeded, dispute created, ...). Design the system that delivers every event to every subscribed endpoint reliably, securely and without letting slow or broken merchant endpoints hurt everyone else.",
+    "constraints": [
+      "20k events/s generated, average fan-out 1.5 endpoints",
+      "Merchant endpoints have wildly varying latency; many are down at any time",
+      "At-least-once delivery; retries for up to ~3 days",
+      "Payloads must be verifiable as coming from us",
+      "Merchants want to see delivery history and replay events"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Pin down delivery guarantees and merchant-facing features.",
+        "keyPoints": [
+          "At-least-once delivery per (event, endpoint); no ordering guarantee, documented",
+          "Retries with exponential backoff over days; then mark failed and alert merchant",
+          "Signed payloads with timestamp to prevent spoofing and replay",
+          "Dashboard: delivery attempts, response codes, manual resend",
+          "Endpoint subscribes to selected event types"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Define the merchant-facing configuration API and payload contract.",
+        "keyPoints": [
+          "POST /v1/webhook_endpoints {url, enabled_events}; returns a signing secret",
+          "Event payload: {id, type, created, api_version, data.object}",
+          "Header with timestamp and HMAC-SHA256 signature over timestamp.payload; support secret rotation with multiple signatures",
+          "GET /v1/events and resend endpoint for recovery",
+          "Receivers must return 2xx quickly and dedupe on event id"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "What do you store?",
+        "keyPoints": [
+          "events(id, account_id, type, payload, created) - immutable",
+          "endpoints(id, account_id, url, secret, events, status)",
+          "deliveries(event_id, endpoint_id, attempt, next_attempt_at, status, last_response_code)",
+          "Index on next_attempt_at for the scheduler",
+          "Retention policy on events (e.g. 30 days)"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Describe the pipeline from event creation to HTTP POST.",
+        "keyPoints": [
+          "Producers write events via outbox to a durable log (e.g. Kafka) partitioned by account",
+          "Fan-out service resolves subscribed endpoints and creates delivery tasks",
+          "Delivery workers make HTTP calls with short timeouts, sign payloads, record results",
+          "Failed deliveries go to a delay scheduler (timer wheel / delay queues per backoff tier)",
+          "Per-endpoint concurrency limits and circuit breakers",
+          "Egress through fixed IP proxies; SSRF protection blocking internal addresses"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scale & performance",
+        "prompt": "How do you handle volume and noisy endpoints?",
+        "keyPoints": [
+          "Partition work by endpoint so slow endpoints don't block others",
+          "Separate queues for healthy vs struggling endpoints",
+          "Adaptive concurrency per endpoint based on latency/error rate",
+          "Batch DB writes of delivery attempts",
+          "Horizontal worker scaling on queue lag"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure modes & recovery",
+        "prompt": "What goes wrong and how do you recover?",
+        "keyPoints": [
+          "Endpoint down for days: backoff with jitter, then disable endpoint and email merchant",
+          "Worker crash mid-delivery: task re-leased, causing a duplicate - acceptable under at-least-once",
+          "Mass outage on our side: backlog drains with rate limits to avoid thundering herd",
+          "Merchant secret leaked: rotation with overlapping secrets",
+          "Malicious URL targets internal network: SSRF filtering and DNS rebinding checks"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs & alternatives",
+        "prompt": "Compare design options.",
+        "keyPoints": [
+          "At-least-once + idempotent receivers vs exactly-once (impossible across an HTTP boundary)",
+          "Ordering per object would require serial delivery and head-of-line blocking; instead include timestamps and let merchants fetch latest state",
+          "Push webhooks vs pull (events API): offer both",
+          "Thin events (ids only) vs full payloads: thin avoids stale data but costs an extra API call",
+          "DB-backed scheduler is simpler; dedicated delay queue scales better"
+        ]
+      }
+    ],
+    "modelSummary": "Events are written once via an outbox to a durable log, fanned out into per-endpoint delivery tasks, and delivered by workers that sign payloads (HMAC over timestamp and body) and enforce short timeouts. Failures are rescheduled with exponential backoff and jitter for days, isolated per endpoint with concurrency limits and circuit breakers. Delivery is at-least-once with no ordering guarantee, so receivers dedupe on event id; an events API and resend tooling cover recovery.",
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-des-03",
+    "title": "Design a double-entry ledger",
+    "level": "advanced",
+    "brief": "Design the internal ledger that records every movement of money across Stripe-like balances: customer charges, fees, refunds, disputes and payouts to merchants. Finance and other services must be able to trust balances, reconstruct history at any point in time and reconcile against banks.",
+    "constraints": [
+      "Billions of entries per year; 50k entries/s peak",
+      "Balances must be correct and never silently drift",
+      "Immutable history; corrections are new entries",
+      "Multi-currency",
+      "Read balance for a merchant in < 50ms"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "What must the ledger guarantee?",
+        "keyPoints": [
+          "Every transaction is a set of entries summing to zero per currency",
+          "Append-only and immutable, with point-in-time balance queries",
+          "Idempotent posting from upstream services",
+          "Reconciliation with external bank and processor statements",
+          "Auditability: link each entry to its source event"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Define posting and query interfaces.",
+        "keyPoints": [
+          "postTransaction(idempotency_key, entries[{account, amount, currency, direction}], metadata)",
+          "Reject if entries don't balance per currency",
+          "getBalance(account, currency, as_of?)",
+          "listEntries(account, from, to, cursor)",
+          "Async event stream of posted transactions for downstream consumers"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Model accounts, transactions and entries.",
+        "keyPoints": [
+          "accounts(id, owner, type: asset/liability/revenue/expense, currency)",
+          "transactions(id, idempotency_key unique, source_ref, posted_at)",
+          "entries(id, transaction_id, account_id, amount signed minor units, currency)",
+          "balance snapshots(account, currency, as_of_seq, balance) for fast reads",
+          "Sequence number per account for ordering and optimistic concurrency"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "How are postings written and balances served?",
+        "keyPoints": [
+          "Ledger service validates balance-to-zero and writes transaction + entries atomically",
+          "Partition by account; cross-partition transactions via a single-writer per transaction log or 2-phase posting",
+          "Balance = latest snapshot + entries since snapshot; or maintained running balance updated in same transaction",
+          "Consumers of upstream events (payments, refunds) translate into postings using rule tables",
+          "Reconciliation jobs compare ledger to bank/processor files and flag breaks"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scale & performance",
+        "prompt": "How do you scale writes and hot accounts?",
+        "keyPoints": [
+          "Hot accounts (e.g. Stripe's fee revenue) get sharded sub-accounts summed on read",
+          "Batch postings for high-volume flows",
+          "Log-structured design: write to an ordered log, materialise balances asynchronously",
+          "Archive old entries to cold storage with snapshots",
+          "Read replicas for history queries"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure modes & recovery",
+        "prompt": "How do you detect and fix errors?",
+        "keyPoints": [
+          "Continuous invariant checks: sum of all entries per currency = 0",
+          "Upstream duplicate events are absorbed by idempotency keys",
+          "Wrong posting: fix with reversing entries, never update/delete",
+          "Reconciliation breaks trigger alerts and manual investigation workflows",
+          "Replay ability: rebuild balances from the entry log"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs & alternatives",
+        "prompt": "Discuss design alternatives.",
+        "keyPoints": [
+          "Running balances (fast reads, write contention) vs computed on read (slow) vs snapshots (hybrid)",
+          "Strict synchronous balance checks vs eventual consistency for non-overdraft accounts",
+          "Relational DB with transactions vs event log + materialised views",
+          "Single global ledger vs per-domain ledgers aggregated",
+          "Granularity of accounts: per merchant per currency per balance type"
+        ]
+      }
+    ],
+    "modelSummary": "An append-only, double-entry ledger where each idempotent transaction consists of entries that sum to zero per currency. Entries are immutable; corrections are reversing entries. Balances are served from snapshots plus recent entries (or running balances), hot accounts are split into sub-accounts, and continuous invariant checks plus reconciliation against external statements detect drift.",
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-des-04",
+    "title": "Design a rate limiter for an API platform",
+    "level": "core",
+    "brief": "Design rate limiting and load shedding for a public API used by millions of businesses. It must protect the platform from abusive or buggy clients and from overload, while ensuring critical traffic (like payment creation) keeps working during incidents.",
+    "constraints": [
+      "~100k requests/s across a global fleet",
+      "Per-account limits (e.g. 100 req/s in live mode, lower in test mode)",
+      "p99 overhead < 2ms",
+      "Critical endpoints must be prioritised during overload",
+      "Limiter failures must not take down the API"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "What kinds of limits and shedding are needed?",
+        "keyPoints": [
+          "Per-account request rate limiter (token bucket)",
+          "Concurrency limiter for expensive endpoints",
+          "Fleet-level load shedder that sheds low-priority traffic first",
+          "Clear 429 responses with retry guidance",
+          "Fail open if the limiter store is unavailable"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "How do limits surface to callers and operators?",
+        "keyPoints": [
+          "429 Too Many Requests with error code rate_limit and Retry-After",
+          "Internal check(account, endpoint, cost) -> allow/deny + remaining",
+          "Admin config: per-account overrides and per-endpoint costs",
+          "Client SDKs retry with exponential backoff and jitter",
+          "Metrics per account for support and dashboards"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "What state do you keep?",
+        "keyPoints": [
+          "Token bucket per (account, limit) in Redis: tokens + last refill",
+          "Concurrency counters with TTL leases",
+          "Config cached locally in gateways",
+          "Priority classification table for endpoints",
+          "Counters for observability"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Where does enforcement happen?",
+        "keyPoints": [
+          "Middleware in API gateway calls Redis with atomic Lua script",
+          "Local in-memory pre-check to shed obvious abuse",
+          "Load shedder uses fleet utilisation signals to drop non-critical traffic (e.g. reads/test mode) before critical",
+          "Redis cluster sharded by account key",
+          "Dark-launch new limits and observe before enforcing"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scale & performance",
+        "prompt": "How do you keep latency and store load low?",
+        "keyPoints": [
+          "Single round trip per check via Lua script",
+          "Local token leasing for very high-volume accounts",
+          "Shard keys across Redis nodes; replicas for failover",
+          "Avoid hot keys by splitting very large accounts' buckets",
+          "Pipeline multiple limit checks per request"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure modes & recovery",
+        "prompt": "What happens when parts fail?",
+        "keyPoints": [
+          "Redis down: fail open with local approximate limits",
+          "Retry storms after incidents: jittered backoff in SDKs",
+          "Misconfigured limit: dark launch, gradual rollout, quick override",
+          "Clock skew: compute refill in Redis using server time",
+          "Overload: shed by priority instead of uniformly"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs & alternatives",
+        "prompt": "Compare approaches.",
+        "keyPoints": [
+          "Token bucket (bursty, cheap) vs sliding window (smoother, more state)",
+          "Centralised store (accurate) vs local (fast, approximate)",
+          "Fail open (availability) vs fail closed (protection)",
+          "Request rate vs concurrency limits - both needed for slow endpoints",
+          "Uniform shedding vs priority shedding"
+        ]
+      }
+    ],
+    "modelSummary": "Layered protection: per-account token buckets in a sharded Redis via atomic scripts, concurrency limiters for expensive endpoints, and a fleet-level load shedder that drops low-priority traffic first so payment creation survives incidents. Limits return 429 with retry guidance, SDKs back off with jitter, the limiter fails open, and new limits are dark-launched before enforcement.",
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-des-05",
+    "title": "Design a subscription billing engine",
+    "level": "advanced",
+    "brief": "Design a system that lets merchants define plans and bill customers on recurring schedules: monthly/annual cycles, trials, upgrades and downgrades with proration, usage-based components, invoices, and automatic retries of failed payments (dunning).",
+    "constraints": [
+      "50M active subscriptions; many renew at midnight UTC on the 1st",
+      "Invoices must be correct to the minor unit and reproducible",
+      "Plan changes mid-cycle with proration",
+      "Usage events: 200k/s ingested",
+      "Merchants in many time zones and currencies"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Define the scope of billing.",
+        "keyPoints": [
+          "Plans/prices with interval, currency, flat or per-unit or tiered",
+          "Subscription lifecycle: trialing, active, past_due, canceled",
+          "Proration on plan changes; billing anchors",
+          "Invoice generation, finalisation, payment and dunning retries",
+          "Usage-based billing with aggregation per period"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "Sketch the key resources and calls.",
+        "keyPoints": [
+          "POST /v1/subscriptions {customer, items[price, quantity], trial_end}",
+          "POST /v1/subscriptions/{id} to change items with proration_behavior",
+          "POST /v1/usage_records (idempotent) for metered prices",
+          "Invoices: draft -> open -> paid/uncollectible/void",
+          "Webhooks: invoice.created, invoice.payment_failed, customer.subscription.updated"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "Model the core entities.",
+        "keyPoints": [
+          "products, prices(amount, currency, interval, tiers)",
+          "subscriptions(id, customer, status, current_period_start/end, anchor)",
+          "subscription_items(price, quantity)",
+          "invoices + invoice_line_items (including proration lines), immutable once finalised",
+          "usage aggregates per (subscription_item, period)"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "How does renewal and invoicing run?",
+        "keyPoints": [
+          "Scheduler indexes subscriptions by next_billing_at; workers claim due ones with leases",
+          "Invoice builder computes lines deterministically from subscription state at period boundary",
+          "Draft period (e.g. ~1h) allows merchant edits before finalisation",
+          "Payment via payments API with idempotency key derived from invoice id",
+          "Dunning service retries failed payments on a schedule, updates status"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scale & performance",
+        "prompt": "How do you deal with the midnight-on-the-1st spike?",
+        "keyPoints": [
+          "Spread work: pre-compute drafts ahead of time, process within window",
+          "Partition scheduler by subscription id hash",
+          "Rate-limit payment attempts per processor",
+          "Usage ingestion via stream with pre-aggregation",
+          "Backpressure without missing billing deadlines"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure modes & recovery",
+        "prompt": "What can go wrong?",
+        "keyPoints": [
+          "Worker crash mid-invoice: idempotent invoice creation per (subscription, period)",
+          "Double billing prevented via unique constraint on period",
+          "Late usage events: cutoff policy, add to next invoice",
+          "Payment failure: dunning, then cancel or mark unpaid per merchant settings",
+          "Bug in proration: invoices are immutable; issue credit notes"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs & alternatives",
+        "prompt": "Discuss alternatives.",
+        "keyPoints": [
+          "Batch nightly billing vs continuous scheduler",
+          "Proration exactness (to the second) vs simplicity (by day)",
+          "Real-time usage totals vs periodic aggregation",
+          "Merchant-specific time zones vs UTC anchors",
+          "Rounding: round per line vs per invoice - define and document"
+        ]
+      }
+    ],
+    "modelSummary": "Subscriptions reference prices and are renewed by a partitioned scheduler that claims due subscriptions with leases and builds invoices deterministically per (subscription, period), guarded by uniqueness constraints. Proration produces explicit line items, invoices become immutable on finalisation with credit notes for corrections, payments use idempotency keys derived from invoice ids, and dunning retries failures. Usage is ingested via a stream and pre-aggregated per period.",
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-des-06",
+    "title": "Design a fraud-check and payout pipeline",
+    "level": "advanced",
+    "brief": "Design the pipeline that (a) scores every payment for fraud risk inline before authorisation and (b) pays out merchants' available balances to their bank accounts on a schedule, holding funds when risk is detected.",
+    "constraints": [
+      "Inline fraud decision budget: < 100ms p99",
+      "10k payments/s peak",
+      "Daily payouts to millions of merchant bank accounts via batch bank rails",
+      "False positives cost merchants revenue; false negatives cost money",
+      "Payouts must never be sent twice"
+    ],
+    "sections": [
+      {
+        "key": "requirements",
+        "title": "Requirements & scope",
+        "prompt": "Define scoring and payout scope.",
+        "keyPoints": [
+          "Real-time risk score per payment with allow / review / block decisions",
+          "Merchant-configurable rules on top of ML scores",
+          "Payouts: compute available balance, create payout, submit to bank, track status",
+          "Holds and reserves for risky merchants",
+          "Audit trail for every decision"
+        ]
+      },
+      {
+        "key": "api",
+        "title": "API",
+        "prompt": "What interfaces exist?",
+        "keyPoints": [
+          "Internal score(payment features) -> {score, decision, reasons}",
+          "Rules API for merchants (e.g. block if CVC fails)",
+          "POST /v1/payouts (manual) and automatic schedule settings",
+          "Payout statuses: pending, in_transit, paid, failed, canceled",
+          "Webhooks: payout.paid, payout.failed, review.opened"
+        ]
+      },
+      {
+        "key": "data",
+        "title": "Data model",
+        "prompt": "What data supports both?",
+        "keyPoints": [
+          "Feature store: velocity counters (card, IP, device, email) with low-latency reads",
+          "Decisions log with model version and features",
+          "Balances from the ledger (available vs pending)",
+          "payouts(id, merchant, amount, currency, status, bank_ref, idempotency key)",
+          "Bank files submitted and returned"
+        ]
+      },
+      {
+        "key": "architecture",
+        "title": "High-level architecture",
+        "prompt": "Describe both paths.",
+        "keyPoints": [
+          "Inline: payment service -> scoring service (features + model + rules) with strict timeout and fallback decision",
+          "Async: events stream updates velocity features and trains models offline",
+          "Payout scheduler reads available balance from ledger, reserves funds by posting ledger entries, creates payout",
+          "Bank adapter batches payouts into rail-specific files/API calls, tracks acknowledgements",
+          "Return/failure files reverse ledger entries and notify merchant"
+        ]
+      },
+      {
+        "key": "scale",
+        "title": "Scale & performance",
+        "prompt": "How do you meet latency and volume?",
+        "keyPoints": [
+          "Precomputed features in an in-memory store; model served in-process",
+          "Shadow-mode new models before enforcing",
+          "Payouts partitioned by merchant and rail cut-off times",
+          "Batching per bank rail",
+          "Backfills and replays of feature pipelines"
+        ]
+      },
+      {
+        "key": "failures",
+        "title": "Failure modes & recovery",
+        "prompt": "What fails and how do you recover?",
+        "keyPoints": [
+          "Scoring timeout: fall back to rules-only or default allow under threshold",
+          "Feature store stale: degrade gracefully, alert",
+          "Duplicate payout risk: unique payout per (merchant, schedule date) and bank-side reference dedupe",
+          "Bank returns funds days later: reverse ledger, mark failed, re-attempt after bank details fix",
+          "Model drift: monitor approval and dispute rates"
+        ]
+      },
+      {
+        "key": "tradeoffs",
+        "title": "Trade-offs & alternatives",
+        "prompt": "Discuss trade-offs.",
+        "keyPoints": [
+          "Fail-open vs fail-closed on scoring outage (revenue vs loss)",
+          "Inline ML (precision) vs simple rules (latency, explainability)",
+          "Rolling reserves vs delayed payouts for risky merchants",
+          "Instant payouts (cost, risk) vs batch",
+          "Per-merchant thresholds vs global model"
+        ]
+      }
+    ],
+    "modelSummary": "Inline fraud scoring combines low-latency precomputed velocity features, an in-process model and merchant rules under a strict timeout with a defined fallback, logging every decision. Payouts are driven by a scheduler that reads available balance from the ledger, reserves funds with ledger entries, creates uniquely keyed payouts and submits them in batches per bank rail; bank returns reverse the entries. Holds and reserves connect risk to payouts.",
+    "company": "stripe"
+  }
+]

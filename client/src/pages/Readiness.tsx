@@ -12,7 +12,7 @@ type AreaR = {
 export type Readiness = {
   overall: number; uncapped: number; band: string; capped: boolean; confidence: "low" | "medium" | "high";
   strongest: string[]; focus: { id: string; label: string; score: number; action: { label: string; to: string } }[];
-  weights: Record<keyof Signals, number>; areas: AreaR[];
+  weights: Record<keyof Signals, number>; areas: AreaR[]; targets?: string[]; perCompany?: { id: string; name: string; overall: number; band: string }[];
 };
 
 const COLS: { k: keyof Signals; label: string; short: string; help: string }[] = [
@@ -73,6 +73,19 @@ export function ReadinessPage() {
         </div>
       </section>
 
+      {data.perCompany && data.perCompany.length > 0 && (
+        <div className="cogrid">
+          {data.perCompany.map((c) => (
+            <Link key={c.id} to={`/companies/${c.id}`} className="panel cobox">
+              <Ring value={c.overall} size={52} stroke={5} color={tone(c.overall)}>{c.overall}</Ring>
+              <span><b>{c.name}</b><small>{c.band}</small></span>
+            </Link>
+          ))}
+        </div>
+      )}
+      {(!data.targets || data.targets.length === 0) && <Link to="/companies" className="listrow" style={{ marginBottom: 12 }}><span className="lr-t"><b>Choose your target companies</b><small>Weights the score by what MongoDB, Microsoft or Stripe emphasise</small></span><Icon name="arrow" /></Link>}
+      <Trend />
+
       <h3 className="section-h">Focus next</h3>
       <div className="focuslist">
         {data.focus.map((f, i) => (
@@ -123,5 +136,26 @@ export function ReadinessPage() {
         </ul>
       </details>
     </>
+  );
+}
+
+type Point = { day: string; overall: number };
+function Trend() {
+  const { data } = useLoad(() => api.get<Point[]>("/readiness/history"), []);
+  if (!data || data.length < 2) return <p className="small muted">Your trend line appears after a second day of activity.</p>;
+  const W = 320, H = 90, P = 6;
+  const xs = (i: number) => P + (i / (data.length - 1)) * (W - 2 * P);
+  const ys = (v: number) => H - P - (v / 100) * (H - 2 * P);
+  const d = data.map((p, i) => `${i ? "L" : "M"}${xs(i).toFixed(1)} ${ys(p.overall).toFixed(1)}`).join(" ");
+  const first = data[0].overall, last = data[data.length - 1].overall;
+  return (
+    <section className="panel trendbox">
+      <div className="steplabel" style={{ marginTop: 0 }}><span>Trend · {data.length} days</span><span className="n">{last - first >= 0 ? "+" : ""}{last - first} points</span></div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="trend-svg" role="img" aria-label={`Readiness from ${first} to ${last}`}>
+        {[25, 50, 75].map((g) => <line key={g} x1={0} x2={W} y1={ys(g)} y2={ys(g)} className="grid" />)}
+        <path d={d} className="line" />
+        <circle cx={xs(data.length - 1)} cy={ys(last)} r={3.5} className="dot" />
+      </svg>
+    </section>
   );
 }

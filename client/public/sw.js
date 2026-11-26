@@ -2,7 +2,7 @@
 // - /api/*: always the network (progress must be live; never cached).
 // - /assets/*: content-hashed build files, cache-first.
 // - page navigations: network-first, falling back to the cached app shell when offline.
-const CACHE = "ddia-quest-v1";
+const CACHE = "ddia-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
@@ -48,4 +48,19 @@ self.addEventListener("fetch", (e) => {
       }),
     ),
   );
+});
+
+// Push reminders
+self.addEventListener("push", (e) => {
+  let d = { title: "DDIA", body: "Time to study.", url: "/" };
+  try { d = { ...d, ...e.data.json() }; } catch {}
+  e.waitUntil(self.registration.showNotification(d.title, { body: d.body, icon: "/icon-192.png", badge: "/icon-192.png", data: { url: d.url } }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "/";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => {
+    for (const c of cs) { if ("focus" in c) { c.navigate(url); return c.focus(); } }
+    return self.clients.openWindow(url);
+  }));
 });

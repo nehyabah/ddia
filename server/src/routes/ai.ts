@@ -52,6 +52,13 @@ or off-topic, score 0 and say so.`;
 
 /** Reference material is always loaded server-side so the client can't alter what it's graded against. */
 let userIdForLock: number | null = null;
+type RefFn = (id: string, userId: number) => { question: string; reference: string };
+const EXTRA_REFS = new Map<string, RefFn>();
+/** Other modules register how to build the question + reference for their own kinds. */
+export function registerReference(kind: string, fn: RefFn) { EXTRA_REFS.set(kind, fn); }
+type GradedHook = (userId: number, id: string, score: number) => void;
+const ON_GRADED = new Map<string, GradedHook>();
+export function onGraded(kind: string, fn: GradedHook) { ON_GRADED.set(kind, fn); }
 function reference(kind: string, id: string): { question: string; reference: string } {
   if (kind === "card") {
     const r = db.prepare("SELECT k.title, k.bullets, c.title AS chapter FROM cards k JOIN chapters c ON c.id = k.chapter_id WHERE k.id = ?")
@@ -82,7 +89,9 @@ function reference(kind: string, id: string): { question: string; reference: str
     if (p.kind !== "theory") throw new HttpError(400, "Only theory puzzles are graded in writing");
     return { question: `${p.prompt}\n${p.question}`, reference: "Key points a strong answer covers:\n" + (p.keyPoints ?? []).map((k) => `- ${k}`).join("\n") + `\n\nModel answer: ${p.modelAnswer}` };
   }
-  throw new HttpError(400, "kind must be card, drill, java or puzzle");
+  const ext = EXTRA_REFS.get(kind);
+  if (ext) return ext(id, userIdForLock ?? 0);
+  throw new HttpError(400, "Unknown kind");
 }
 
 ai.get("/ai/status", (req, res) => {
@@ -93,9 +102,9 @@ ai.get("/ai/status", (req, res) => {
 ai.post("/ai/grade", async (req, res) => {
   if (!enabled()) throw new HttpError(503, "AI grading isn't configured: set ANTHROPIC_API_KEY on the server");
   const u = req.userId;
-  const kind = str(req.body?.kind, "kind", 1, 10);
+  const kind = str(req.body?.kind, "kind", 1, 12);
   const id = String(req.body?.id ?? "");
-  const answer = str(req.body?.answer, "answer", 1, 6000).trim();
+  const answer = str(req.body?.answer, "answer", 1, 12000).trim();
   if (answer.length < 15) throw new HttpError(400, "Write a bit more before asking for a grade");
   const used = (db.prepare("SELECT COUNT(*) AS n FROM ai_grades WHERE user_id = ? AND day = ?").get(u, localDay()) as { n: number }).n;
   if (used >= DAILY_LIMIT) throw new HttpError(429, `Daily AI grading limit reached (${DAILY_LIMIT}). It resets tomorrow.`);
@@ -135,6 +144,7 @@ ai.post("/ai/grade", async (req, res) => {
   let xp = result.score * 2;
   const badges = addXP(u, xp, `ai:${kind}`);
   const passed = result.score >= PASS_SCORE;
+  ON_GRADED.get(kind)?.(u, id, result.score);
   if (kind === "puzzle" && passed) {
     const prior = (db.prepare("SELECT COUNT(*) AS n FROM ai_grades WHERE user_id = ? AND kind = 'puzzle' AND ref_id = ?").get(u, id) as { n: number }).n;
     const r = markSolved(u, getPuzzle(id), prior <= 1, result.score);

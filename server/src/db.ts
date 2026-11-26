@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(here, "../..");
 // On Railway, RAILWAY_VOLUME_MOUNT_PATH is set when a volume is attached, so the DB survives redeploys.
-const DB_PATH = process.env.DB_PATH
+export const DB_PATH = process.env.DB_PATH
   ?? (process.env.RAILWAY_VOLUME_MOUNT_PATH
     ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, "ddia.sqlite")
     : path.join(ROOT, "data", "ddia.sqlite"));

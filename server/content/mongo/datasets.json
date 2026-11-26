@@ -1,0 +1,1270 @@
+{
+  "orders": [
+    {
+      "_id": "O1001",
+      "customerId": "C01",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-KB1",
+          "qty": 1,
+          "price": 89.99
+        }
+      ],
+      "total": 89.99,
+      "createdAt": "2026-10-02T08:00:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1002",
+      "customerId": "C08",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-BK2",
+          "qty": 3,
+          "price": 38.5
+        },
+        {
+          "sku": "SKU-NB1",
+          "qty": 2,
+          "price": 9.5
+        }
+      ],
+      "total": 134.5,
+      "createdAt": "2026-10-04T09:13:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1003",
+      "customerId": "C15",
+      "status": "shipped",
+      "items": [
+        {
+          "sku": "SKU-WC1",
+          "qty": 2,
+          "price": 59
+        }
+      ],
+      "total": 118,
+      "createdAt": "2026-10-06T10:26:00Z",
+      "region": "APAC"
+    },
+    {
+      "_id": "O1004",
+      "customerId": "C05",
+      "status": "pending",
+      "items": [
+        {
+          "sku": "SKU-MN1",
+          "qty": 1,
+          "price": 249
+        },
+        {
+          "sku": "SKU-NB1",
+          "qty": 3,
+          "price": 9.5
+        }
+      ],
+      "total": 277.5,
+      "createdAt": "2026-10-08T11:39:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1005",
+      "customerId": "C12",
+      "status": "cancelled",
+      "items": [
+        {
+          "sku": "SKU-NB1",
+          "qty": 2,
+          "price": 9.5
+        },
+        {
+          "sku": "SKU-PN1",
+          "qty": 2,
+          "price": 6
+        }
+      ],
+      "total": 31,
+      "createdAt": "2026-10-10T12:52:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1006",
+      "customerId": "C02",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-KT1",
+          "qty": 1,
+          "price": 45
+        }
+      ],
+      "total": 45,
+      "createdAt": "2026-10-12T13:05:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1007",
+      "customerId": "C09",
+      "status": "shipped",
+      "items": [
+        {
+          "sku": "SKU-BK3",
+          "qty": 3,
+          "price": 35
+        },
+        {
+          "sku": "SKU-FP1",
+          "qty": 1,
+          "price": 29.99
+        },
+        {
+          "sku": "SKU-MS1",
+          "qty": 2,
+          "price": 24.5
+        }
+      ],
+      "total": 183.99,
+      "createdAt": "2026-10-14T14:18:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1008",
+      "customerId": "C16",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-WC1",
+          "qty": 1,
+          "price": 59
+        },
+        {
+          "sku": "SKU-BP1",
+          "qty": 2,
+          "price": 65
+        }
+      ],
+      "total": 189,
+      "createdAt": "2026-10-16T15:31:00Z",
+      "region": "APAC"
+    },
+    {
+      "_id": "O1009",
+      "customerId": "C06",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-FP1",
+          "qty": 2,
+          "price": 29.99
+        },
+        {
+          "sku": "SKU-BK1",
+          "qty": 1,
+          "price": 42
+        }
+      ],
+      "total": 101.98,
+      "createdAt": "2026-10-18T16:44:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1010",
+      "customerId": "C13",
+      "status": "shipped",
+      "items": [
+        {
+          "sku": "SKU-BK2",
+          "qty": 3,
+          "price": 38.5
+        }
+      ],
+      "total": 115.5,
+      "createdAt": "2026-10-20T17:57:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1011",
+      "customerId": "C03",
+      "status": "pending",
+      "items": [
+        {
+          "sku": "SKU-BK1",
+          "qty": 3,
+          "price": 42
+        },
+        {
+          "sku": "SKU-BK2",
+          "qty": 3,
+          "price": 38.5
+        }
+      ],
+      "total": 241.5,
+      "createdAt": "2026-10-22T08:10:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1012",
+      "customerId": "C10",
+      "status": "cancelled",
+      "items": [
+        {
+          "sku": "SKU-BK1",
+          "qty": 1,
+          "price": 42
+        },
+        {
+          "sku": "SKU-FP1",
+          "qty": 3,
+          "price": 29.99
+        },
+        {
+          "sku": "SKU-CH1",
+          "qty": 1,
+          "price": 289
+        }
+      ],
+      "total": 420.97,
+      "createdAt": "2026-10-24T09:23:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1013",
+      "customerId": "C17",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-BP1",
+          "qty": 1,
+          "price": 65
+        },
+        {
+          "sku": "SKU-KB1",
+          "qty": 1,
+          "price": 89.99
+        },
+        {
+          "sku": "SKU-HD1",
+          "qty": 2,
+          "price": 39
+        }
+      ],
+      "total": 232.99,
+      "createdAt": "2026-11-01T10:36:00Z",
+      "region": "APAC"
+    },
+    {
+      "_id": "O1014",
+      "customerId": "C07",
+      "status": "shipped",
+      "items": [
+        {
+          "sku": "SKU-HP1",
+          "qty": 1,
+          "price": 199
+        }
+      ],
+      "total": 199,
+      "createdAt": "2026-11-02T11:49:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1015",
+      "customerId": "C14",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-HD1",
+          "qty": 2,
+          "price": 39
+        }
+      ],
+      "total": 78,
+      "createdAt": "2026-11-03T12:02:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1016",
+      "customerId": "C04",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-NB1",
+          "qty": 1,
+          "price": 9.5
+        }
+      ],
+      "total": 9.5,
+      "createdAt": "2026-11-04T13:15:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1017",
+      "customerId": "C11",
+      "status": "shipped",
+      "items": [
+        {
+          "sku": "SKU-MS1",
+          "qty": 3,
+          "price": 24.5
+        },
+        {
+          "sku": "SKU-HD1",
+          "qty": 3,
+          "price": 39
+        },
+        {
+          "sku": "SKU-BK2",
+          "qty": 2,
+          "price": 38.5
+        }
+      ],
+      "total": 267.5,
+      "createdAt": "2026-11-05T14:28:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1018",
+      "customerId": "C01",
+      "status": "pending",
+      "items": [
+        {
+          "sku": "SKU-MG1",
+          "qty": 3,
+          "price": 12
+        },
+        {
+          "sku": "SKU-LM1",
+          "qty": 3,
+          "price": 34
+        }
+      ],
+      "total": 138,
+      "createdAt": "2026-11-06T15:41:00Z",
+      "region": "APAC"
+    },
+    {
+      "_id": "O1019",
+      "customerId": "C08",
+      "status": "cancelled",
+      "items": [
+        {
+          "sku": "SKU-BK2",
+          "qty": 2,
+          "price": 38.5
+        },
+        {
+          "sku": "SKU-NB1",
+          "qty": 3,
+          "price": 9.5
+        }
+      ],
+      "total": 105.5,
+      "createdAt": "2026-11-07T16:54:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1020",
+      "customerId": "C15",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-KB1",
+          "qty": 1,
+          "price": 89.99
+        },
+        {
+          "sku": "SKU-BP1",
+          "qty": 2,
+          "price": 65
+        }
+      ],
+      "total": 219.99,
+      "createdAt": "2026-11-08T17:07:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1021",
+      "customerId": "C05",
+      "status": "shipped",
+      "items": [
+        {
+          "sku": "SKU-BP1",
+          "qty": 3,
+          "price": 65
+        },
+        {
+          "sku": "SKU-PN1",
+          "qty": 3,
+          "price": 6
+        }
+      ],
+      "total": 213,
+      "createdAt": "2026-11-09T08:20:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1022",
+      "customerId": "C12",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-MG1",
+          "qty": 2,
+          "price": 12
+        }
+      ],
+      "total": 24,
+      "createdAt": "2026-11-10T09:33:00Z",
+      "region": "NA"
+    },
+    {
+      "_id": "O1023",
+      "customerId": "C02",
+      "status": "delivered",
+      "items": [
+        {
+          "sku": "SKU-KT1",
+          "qty": 3,
+          "price": 45
+        }
+      ],
+      "total": 135,
+      "createdAt": "2026-11-11T10:46:00Z",
+      "region": "APAC"
+    },
+    {
+      "_id": "O1024",
+      "customerId": "C09",
+      "status": "shipped",
+      "items": [
+        {
+          "sku": "SKU-PN1",
+          "qty": 3,
+          "price": 6
+        },
+        {
+          "sku": "SKU-CH1",
+          "qty": 1,
+          "price": 289
+        }
+      ],
+      "total": 307,
+      "createdAt": "2026-11-12T11:59:00Z",
+      "region": "EMEA"
+    },
+    {
+      "_id": "O1025",
+      "customerId": "C16",
+      "status": "pending",
+      "items": [
+        {
+          "sku": "SKU-DS1",
+          "qty": 1,
+          "price": 399
+        },
+        {
+          "sku": "SKU-MN1",
+          "qty": 1,
+          "price": 249
+        },
+        {
+          "sku": "SKU-KB1",
+          "qty": 1,
+          "price": 89.99
+        }
+      ],
+      "total": 737.99,
+      "createdAt": "2026-11-13T12:12:00Z",
+      "region": "NA"
+    }
+  ],
+  "customers": [
+    {
+      "_id": "C01",
+      "name": "Ada Obi",
+      "email": "ada.obi@example.com",
+      "tier": "gold",
+      "tags": [],
+      "address": {
+        "city": "Lagos",
+        "country": "NG"
+      },
+      "signupAt": "2023-01-03T10:00:00Z"
+    },
+    {
+      "_id": "C02",
+      "name": "Ben Carter",
+      "email": "ben.carter@example.com",
+      "tier": "silver",
+      "tags": [
+        "vip"
+      ],
+      "address": {
+        "city": "Berlin",
+        "country": "DE"
+      },
+      "signupAt": "2024-06-10T10:00:00Z"
+    },
+    {
+      "_id": "C03",
+      "name": "Chloe Martin",
+      "email": "chloe.martin@example.com",
+      "tier": "bronze",
+      "tags": [
+        "churn-risk",
+        "b2b",
+        "vip"
+      ],
+      "address": {
+        "city": "Austin",
+        "country": "US"
+      },
+      "signupAt": "2025-11-17T10:00:00Z"
+    },
+    {
+      "_id": "C04",
+      "name": "Dmitri Ivanov",
+      "email": "dmitri.ivanov@example.com",
+      "tier": "silver",
+      "tags": [],
+      "address": {
+        "city": "Seattle",
+        "country": "US"
+      },
+      "signupAt": "2023-04-24T10:00:00Z"
+    },
+    {
+      "_id": "C05",
+      "name": "Eve Adams",
+      "email": "eve.adams@example.com",
+      "tier": "bronze",
+      "tags": [
+        "vip"
+      ],
+      "address": {
+        "city": "Toronto",
+        "country": "CA"
+      },
+      "signupAt": "2024-09-06T10:00:00Z"
+    },
+    {
+      "_id": "C06",
+      "name": "Femi Bello",
+      "email": "femi.bello@example.com",
+      "tier": "gold",
+      "tags": [
+        "vip"
+      ],
+      "address": {
+        "city": "London",
+        "country": "GB"
+      },
+      "signupAt": "2025-02-13T10:00:00Z"
+    },
+    {
+      "_id": "C07",
+      "name": "Grace Kim",
+      "email": "grace.kim@example.com",
+      "tier": "silver",
+      "tags": [],
+      "address": {
+        "city": "Paris",
+        "country": "FR"
+      },
+      "signupAt": "2023-07-20T10:00:00Z"
+    },
+    {
+      "_id": "C08",
+      "name": "Hiro Tanaka",
+      "email": "hiro.tanaka@example.com",
+      "tier": "bronze",
+      "tags": [
+        "churn-risk",
+        "vip"
+      ],
+      "address": {
+        "city": "Abuja",
+        "country": "NG"
+      },
+      "signupAt": "2024-12-27T10:00:00Z"
+    },
+    {
+      "_id": "C09",
+      "name": "Isla Brown",
+      "email": "isla.brown@example.com",
+      "tier": "silver",
+      "tags": [
+        "vip",
+        "newsletter"
+      ],
+      "address": {
+        "city": "Lagos",
+        "country": "NG"
+      },
+      "signupAt": "2025-05-09T10:00:00Z"
+    },
+    {
+      "_id": "C10",
+      "name": "Jon Snow",
+      "email": "jon.snow@example.com",
+      "tier": "bronze",
+      "tags": [],
+      "address": {
+        "city": "Berlin",
+        "country": "DE"
+      },
+      "signupAt": "2023-10-16T10:00:00Z"
+    },
+    {
+      "_id": "C11",
+      "name": "Kemi Ade",
+      "email": "kemi.ade@example.com",
+      "tier": "gold",
+      "tags": [
+        "mobile"
+      ],
+      "address": {
+        "city": "Austin",
+        "country": "US"
+      },
+      "signupAt": "2024-03-23T10:00:00Z"
+    },
+    {
+      "_id": "C12",
+      "name": "Liam Wong",
+      "email": "liam.wong@example.com",
+      "tier": "silver",
+      "tags": [
+        "vip",
+        "mobile"
+      ],
+      "address": {
+        "country": "US"
+      },
+      "signupAt": "2025-08-05T10:00:00Z"
+    },
+    {
+      "_id": "C13",
+      "name": "Mia Rossi",
+      "email": "mia.rossi@example.com",
+      "tier": "bronze",
+      "tags": [],
+      "address": {
+        "city": "Toronto",
+        "country": "CA"
+      },
+      "signupAt": "2023-01-12T10:00:00Z"
+    },
+    {
+      "_id": "C14",
+      "name": "Noah Fischer",
+      "email": "noah.fischer@example.com",
+      "tier": "silver",
+      "tags": [
+        "beta"
+      ],
+      "address": {
+        "city": "London",
+        "country": "GB"
+      },
+      "signupAt": "2024-06-19T10:00:00Z"
+    },
+    {
+      "_id": "C15",
+      "name": "Olu Danjuma",
+      "email": "olu.danjuma@example.com",
+      "tier": "bronze",
+      "tags": [
+        "mobile",
+        "churn-risk"
+      ],
+      "address": {
+        "city": "Paris",
+        "country": "FR"
+      },
+      "signupAt": "2025-11-26T10:00:00Z"
+    },
+    {
+      "_id": "C16",
+      "name": "Priya Shah",
+      "email": "priya.shah@example.com",
+      "tier": "gold",
+      "tags": [],
+      "address": {
+        "city": "Abuja",
+        "country": "NG"
+      },
+      "signupAt": "2023-04-08T10:00:00Z"
+    },
+    {
+      "_id": "C17",
+      "name": "Quinn Lee",
+      "email": null,
+      "tier": "silver",
+      "tags": [
+        "mobile"
+      ],
+      "address": {
+        "city": "Lagos",
+        "country": "NG"
+      },
+      "signupAt": "2024-09-15T10:00:00Z"
+    },
+    {
+      "_id": "C18",
+      "name": "Rosa Diaz",
+      "email": "rosa.diaz@example.com",
+      "tier": "bronze",
+      "tags": [
+        "churn-risk",
+        "vip"
+      ],
+      "address": {
+        "city": "Berlin",
+        "country": "DE"
+      },
+      "signupAt": "2025-02-22T10:00:00Z"
+    },
+    {
+      "_id": "C19",
+      "name": "Sam Okafor",
+      "email": "sam.okafor@example.com",
+      "tier": "silver",
+      "tags": [],
+      "address": {
+        "city": "Austin",
+        "country": "US"
+      },
+      "signupAt": "2023-07-04T10:00:00Z"
+    },
+    {
+      "_id": "C20",
+      "name": "Tara Singh",
+      "email": "tara.singh@example.com",
+      "tier": "bronze",
+      "tags": [
+        "vip"
+      ],
+      "address": {
+        "city": "Seattle",
+        "country": "US"
+      },
+      "signupAt": "2024-12-11T10:00:00Z"
+    }
+  ],
+  "products": [
+    {
+      "_id": "P01",
+      "sku": "SKU-KB1",
+      "name": "Mech Keyboard",
+      "category": "electronics",
+      "price": 89.99,
+      "stock": 71,
+      "ratings": [
+        5,
+        5,
+        2
+      ]
+    },
+    {
+      "_id": "P02",
+      "sku": "SKU-MS1",
+      "name": "Wireless Mouse",
+      "category": "electronics",
+      "price": 24.5,
+      "stock": 92,
+      "ratings": [
+        4,
+        3,
+        4
+      ]
+    },
+    {
+      "_id": "P03",
+      "sku": "SKU-MN1",
+      "name": "27in Monitor",
+      "category": "electronics",
+      "price": 249,
+      "stock": 44,
+      "ratings": [
+        5,
+        5,
+        4,
+        4
+      ]
+    },
+    {
+      "_id": "P04",
+      "sku": "SKU-HD1",
+      "name": "USB-C Hub",
+      "category": "electronics",
+      "price": 39,
+      "stock": 0,
+      "ratings": [
+        5
+      ]
+    },
+    {
+      "_id": "P05",
+      "sku": "SKU-BK1",
+      "name": "Designing Data-Intensive Apps",
+      "category": "books",
+      "price": 42,
+      "stock": 103,
+      "ratings": [
+        5,
+        4,
+        2,
+        3
+      ]
+    },
+    {
+      "_id": "P06",
+      "sku": "SKU-BK2",
+      "name": "Database Internals",
+      "category": "books",
+      "price": 38.5,
+      "stock": 101,
+      "ratings": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "_id": "P07",
+      "sku": "SKU-BK3",
+      "name": "The Pragmatic Programmer",
+      "category": "books",
+      "price": 35,
+      "stock": 16,
+      "ratings": [
+        5,
+        2
+      ]
+    },
+    {
+      "_id": "P08",
+      "sku": "SKU-MG1",
+      "name": "Coffee Mug",
+      "category": "kitchen",
+      "price": 12,
+      "stock": 42,
+      "ratings": [
+        3,
+        5,
+        5
+      ]
+    },
+    {
+      "_id": "P09",
+      "sku": "SKU-KT1",
+      "name": "Electric Kettle",
+      "category": "kitchen",
+      "price": 45,
+      "stock": 0,
+      "ratings": [
+        5,
+        2,
+        2
+      ]
+    },
+    {
+      "_id": "P10",
+      "sku": "SKU-FP1",
+      "name": "French Press",
+      "category": "kitchen",
+      "price": 29.99,
+      "stock": 37,
+      "ratings": [
+        4,
+        5,
+        3,
+        2
+      ]
+    },
+    {
+      "_id": "P11",
+      "sku": "SKU-DS1",
+      "name": "Standing Desk",
+      "category": "furniture",
+      "price": 399,
+      "stock": 44,
+      "ratings": [
+        5
+      ]
+    },
+    {
+      "_id": "P12",
+      "sku": "SKU-CH1",
+      "name": "Ergonomic Chair",
+      "category": "furniture",
+      "price": 289,
+      "stock": 13,
+      "ratings": [
+        5
+      ]
+    },
+    {
+      "_id": "P13",
+      "sku": "SKU-LM1",
+      "name": "Desk Lamp",
+      "category": "furniture",
+      "price": 34,
+      "stock": 30,
+      "ratings": [
+        5,
+        2
+      ]
+    },
+    {
+      "_id": "P14",
+      "sku": "SKU-HP1",
+      "name": "Noise-cancel Headphones",
+      "category": "electronics",
+      "price": 199,
+      "stock": 0,
+      "ratings": [
+        2,
+        5,
+        5
+      ]
+    },
+    {
+      "_id": "P15",
+      "sku": "SKU-NB1",
+      "name": "Dotted Notebook",
+      "category": "stationery",
+      "price": 9.5,
+      "stock": 20,
+      "ratings": [
+        3,
+        5
+      ]
+    },
+    {
+      "_id": "P16",
+      "sku": "SKU-PN1",
+      "name": "Gel Pen 5-pack",
+      "category": "stationery",
+      "price": 6,
+      "stock": 127,
+      "ratings": []
+    },
+    {
+      "_id": "P17",
+      "sku": "SKU-BP1",
+      "name": "Laptop Backpack",
+      "category": "accessories",
+      "price": 65,
+      "stock": 99,
+      "ratings": [
+        4
+      ]
+    },
+    {
+      "_id": "P18",
+      "sku": "SKU-WC1",
+      "name": "Webcam 1080p",
+      "category": "electronics",
+      "price": 59,
+      "stock": 18,
+      "ratings": [
+        4
+      ]
+    }
+  ],
+  "events": [
+    {
+      "_id": "E001",
+      "userId": "C01",
+      "type": "page_view",
+      "ts": "2026-11-10T09:00:00Z",
+      "props": {
+        "path": "/cart",
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E002",
+      "userId": "C04",
+      "type": "page_view",
+      "ts": "2026-11-10T12:17:00Z",
+      "props": {
+        "path": "/",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E003",
+      "userId": "C07",
+      "type": "add_to_cart",
+      "ts": "2026-11-10T15:34:00Z",
+      "props": {
+        "sku": "SKU-MN1",
+        "qty": 1,
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E004",
+      "userId": "C10",
+      "type": "page_view",
+      "ts": "2026-11-10T18:51:00Z",
+      "props": {
+        "path": "/",
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E005",
+      "userId": "C03",
+      "type": "checkout",
+      "ts": "2026-11-11T09:08:00Z",
+      "props": {
+        "orderId": "O1005",
+        "amount": 31,
+        "device": "tablet"
+      }
+    },
+    {
+      "_id": "E006",
+      "userId": "C06",
+      "type": "login",
+      "ts": "2026-11-11T12:25:00Z",
+      "props": {
+        "method": "sso",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E007",
+      "userId": "C09",
+      "type": "page_view",
+      "ts": "2026-11-11T15:42:00Z",
+      "props": {
+        "path": "/products",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E008",
+      "userId": "C02",
+      "type": "search",
+      "ts": "2026-11-11T18:59:00Z",
+      "props": {
+        "query": "desk",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E009",
+      "userId": "C05",
+      "type": "page_view",
+      "ts": "2026-11-12T09:16:00Z",
+      "props": {
+        "path": "/blog",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E010",
+      "userId": "C08",
+      "type": "page_view",
+      "ts": "2026-11-12T12:33:00Z",
+      "props": {
+        "path": "/products/SKU-KB1",
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E011",
+      "userId": "C01",
+      "type": "add_to_cart",
+      "ts": "2026-11-12T15:50:00Z",
+      "props": {
+        "sku": "SKU-KB1",
+        "qty": 1,
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E012",
+      "userId": "C04",
+      "type": "page_view",
+      "ts": "2026-11-12T18:07:00Z",
+      "props": {
+        "path": "/products",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E013",
+      "userId": "C07",
+      "type": "checkout",
+      "ts": "2026-11-13T09:24:00Z",
+      "props": {
+        "orderId": "O1013",
+        "amount": 232.99,
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E014",
+      "userId": "C10",
+      "type": "login",
+      "ts": "2026-11-13T12:41:00Z",
+      "props": {
+        "method": "sso",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E015",
+      "userId": "C03",
+      "type": "page_view",
+      "ts": "2026-11-13T15:58:00Z",
+      "props": {
+        "path": "/products",
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E016",
+      "userId": "C06",
+      "type": "search",
+      "ts": "2026-11-13T18:15:00Z",
+      "props": {
+        "query": "desk",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E017",
+      "userId": "C09",
+      "type": "page_view",
+      "ts": "2026-11-14T09:32:00Z",
+      "props": {
+        "path": "/cart",
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E018",
+      "userId": "C02",
+      "type": "page_view",
+      "ts": "2026-11-14T12:49:00Z",
+      "props": {
+        "path": "/cart",
+        "device": "tablet"
+      }
+    },
+    {
+      "_id": "E019",
+      "userId": "C05",
+      "type": "add_to_cart",
+      "ts": "2026-11-14T15:06:00Z",
+      "props": {
+        "sku": "SKU-MG1",
+        "qty": 1,
+        "device": "tablet"
+      }
+    },
+    {
+      "_id": "E020",
+      "userId": "C08",
+      "type": "page_view",
+      "ts": "2026-11-14T18:23:00Z",
+      "props": {
+        "path": "/",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E021",
+      "userId": "C01",
+      "type": "checkout",
+      "ts": "2026-11-15T09:40:00Z",
+      "props": {
+        "orderId": "O1021",
+        "amount": 213,
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E022",
+      "userId": "C04",
+      "type": "login",
+      "ts": "2026-11-15T12:57:00Z",
+      "props": {
+        "method": "sso",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E023",
+      "userId": "C07",
+      "type": "page_view",
+      "ts": "2026-11-15T15:14:00Z",
+      "props": {
+        "path": "/cart",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E024",
+      "userId": "C10",
+      "type": "search",
+      "ts": "2026-11-15T18:31:00Z",
+      "props": {
+        "query": "mug",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E025",
+      "userId": "C03",
+      "type": "page_view",
+      "ts": "2026-11-16T09:48:00Z",
+      "props": {
+        "path": "/blog",
+        "device": "mobile"
+      }
+    },
+    {
+      "_id": "E026",
+      "userId": "C06",
+      "type": "page_view",
+      "ts": "2026-11-16T12:05:00Z",
+      "props": {
+        "path": "/",
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E027",
+      "userId": "C09",
+      "type": "add_to_cart",
+      "ts": "2026-11-16T15:22:00Z",
+      "props": {
+        "sku": "SKU-BK2",
+        "qty": 1,
+        "device": "desktop"
+      }
+    },
+    {
+      "_id": "E028",
+      "userId": "C02",
+      "type": "page_view",
+      "ts": "2026-11-16T18:39:00Z",
+      "props": {
+        "path": "/",
+        "device": "desktop"
+      }
+    }
+  ]
+}

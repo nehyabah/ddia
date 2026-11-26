@@ -1,0 +1,607 @@
+[
+  {
+    "id": "ms-code-01",
+    "title": "Lowest Common Ancestor of a Binary Tree",
+    "level": "medium",
+    "topic": "Trees",
+    "prompt": "Given the `root` of a binary tree (not necessarily a BST) and two values `p` and `q` that both exist in the tree (values are unique), return the **value** of their lowest common ancestor. A node can be an ancestor of itself.\n\nThe helpers `TreeNode` and `build(levelOrderArray)` are provided; tests call e.g. `lowestCommonAncestor(build([3,5,1,6,2,0,8,null,null,7,4]), 5, 1)`.\n\n**Example:** p=5, q=1 -> `3`; p=5, q=4 -> `5`.",
+    "fn": "lowestCommonAncestor",
+    "starter": {
+      "js": "function TreeNode(v, l, r) { this.val = v; this.left = l || null; this.right = r || null; }\n// build a tree from level-order array (null = missing)\nfunction build(arr) {\n  if (!arr.length || arr[0] === null) return null;\n  const root = new TreeNode(arr[0]); const q = [root]; let i = 1;\n  while (q.length && i < arr.length) {\n    const n = q.shift();\n    if (i < arr.length && arr[i] !== null) { n.left = new TreeNode(arr[i]); q.push(n.left); } i++;\n    if (i < arr.length && arr[i] !== null) { n.right = new TreeNode(arr[i]); q.push(n.right); } i++;\n  }\n  return root;\n}\n// tree back to level-order array (trailing nulls trimmed)\nfunction toArr(root) {\n  const out = []; const q = [root];\n  while (q.length) { const n = q.shift(); if (!n) { out.push(null); continue; } out.push(n.val); q.push(n.left, n.right); }\n  while (out.length && out[out.length - 1] === null) out.pop();\n  return out;\n}\n\nfunction lowestCommonAncestor(root, p, q) {\n  // your code: return the LCA's value\n}\n",
+      "java": "class Solution {\n  public int lowestCommonAncestor(TreeNode root, int p, int q) {\n    // your code\n    return -1;\n  }\n}\n\nclass TreeNode {\n  int val; TreeNode left, right;\n  TreeNode(int v) { val = v; }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "root is LCA",
+        "call": "lowestCommonAncestor(build([3,5,1,6,2,0,8,null,null,7,4]), 5, 1)",
+        "expected": 3
+      },
+      {
+        "name": "node is its own ancestor",
+        "call": "lowestCommonAncestor(build([3,5,1,6,2,0,8,null,null,7,4]), 5, 4)",
+        "expected": 5
+      },
+      {
+        "name": "deep pair",
+        "call": "lowestCommonAncestor(build([3,5,1,6,2,0,8,null,null,7,4]), 7, 4)",
+        "expected": 2
+      },
+      {
+        "name": "cross subtrees deep",
+        "call": "lowestCommonAncestor(build([3,5,1,6,2,0,8,null,null,7,4]), 6, 8)",
+        "expected": 3
+      },
+      {
+        "name": "two nodes",
+        "call": "lowestCommonAncestor(build([1,2]), 1, 2)",
+        "expected": 1
+      },
+      {
+        "name": "same node",
+        "call": "lowestCommonAncestor(build([1,2,3]), 3, 3)",
+        "expected": 3
+      }
+    ],
+    "solution": {
+      "js": "function TreeNode(v, l, r) { this.val = v; this.left = l || null; this.right = r || null; }\n// build a tree from level-order array (null = missing)\nfunction build(arr) {\n  if (!arr.length || arr[0] === null) return null;\n  const root = new TreeNode(arr[0]); const q = [root]; let i = 1;\n  while (q.length && i < arr.length) {\n    const n = q.shift();\n    if (i < arr.length && arr[i] !== null) { n.left = new TreeNode(arr[i]); q.push(n.left); } i++;\n    if (i < arr.length && arr[i] !== null) { n.right = new TreeNode(arr[i]); q.push(n.right); } i++;\n  }\n  return root;\n}\n// tree back to level-order array (trailing nulls trimmed)\nfunction toArr(root) {\n  const out = []; const q = [root];\n  while (q.length) { const n = q.shift(); if (!n) { out.push(null); continue; } out.push(n.val); q.push(n.left, n.right); }\n  while (out.length && out[out.length - 1] === null) out.pop();\n  return out;\n}\n\nfunction lowestCommonAncestor(root, p, q) {\n  function go(n) {\n    if (!n || n.val === p || n.val === q) return n;\n    const l = go(n.left), r = go(n.right);\n    if (l && r) return n;\n    return l || r;\n  }\n  const res = go(root);\n  return res ? res.val : null;\n}\n",
+      "java": "class Solution {\n  public int lowestCommonAncestor(TreeNode root, int p, int q) {\n    TreeNode r = go(root, p, q);\n    return r == null ? -1 : r.val;\n  }\n  private TreeNode go(TreeNode n, int p, int q) {\n    if (n == null || n.val == p || n.val == q) return n;\n    TreeNode l = go(n.left, p, q), r = go(n.right, p, q);\n    if (l != null && r != null) return n;\n    return l != null ? l : r;\n  }\n}\n\nclass TreeNode {\n  int val; TreeNode left, right;\n  TreeNode(int v) { val = v; }\n}\n"
+    },
+    "complexity": "Time O(n), space O(h) recursion stack",
+    "hints": [
+      "Recurse: what should a subtree report back to its parent?",
+      "Return the node if it matches p or q, otherwise whatever non-null result the children produced.",
+      "If both children return non-null, the current node is the split point: the LCA."
+    ],
+    "keyPoints": [
+      "Post-order recursion returning the found node or null",
+      "Split point where left and right both non-null is the LCA",
+      "Handles a node being its own ancestor by returning early on match",
+      "Mention BST variant (walk by value) and parent-pointer variant (ancestor set)",
+      "Discuss recursion depth on skewed trees; iterative with parent map if needed"
+    ],
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-code-02",
+    "title": "Serialize and Deserialize a Binary Tree",
+    "level": "hard",
+    "topic": "Trees",
+    "prompt": "Implement `serialize(root)` that turns a binary tree into a string and `deserialize(str)` that rebuilds the identical tree. The format is up to you, but it must round-trip any tree, including empty trees, negative values and skewed shapes.\n\nHelpers `TreeNode`, `build(arr)` and `toArr(root)` are provided; tests check `toArr(deserialize(serialize(build([...]))))` equals the original level-order array.",
+    "fn": "serialize",
+    "starter": {
+      "js": "function TreeNode(v, l, r) { this.val = v; this.left = l || null; this.right = r || null; }\n// build a tree from level-order array (null = missing)\nfunction build(arr) {\n  if (!arr.length || arr[0] === null) return null;\n  const root = new TreeNode(arr[0]); const q = [root]; let i = 1;\n  while (q.length && i < arr.length) {\n    const n = q.shift();\n    if (i < arr.length && arr[i] !== null) { n.left = new TreeNode(arr[i]); q.push(n.left); } i++;\n    if (i < arr.length && arr[i] !== null) { n.right = new TreeNode(arr[i]); q.push(n.right); } i++;\n  }\n  return root;\n}\n// tree back to level-order array (trailing nulls trimmed)\nfunction toArr(root) {\n  const out = []; const q = [root];\n  while (q.length) { const n = q.shift(); if (!n) { out.push(null); continue; } out.push(n.val); q.push(n.left, n.right); }\n  while (out.length && out[out.length - 1] === null) out.pop();\n  return out;\n}\n\nfunction serialize(root) {\n  // your code: return a string\n}\n\nfunction deserialize(data) {\n  // your code: return a TreeNode (or null)\n}\n",
+      "java": "class Solution {\n  public String serialize(TreeNode root) {\n    // your code\n    return \"\";\n  }\n  public TreeNode deserialize(String data) {\n    // your code\n    return null;\n  }\n}\n\nclass TreeNode {\n  int val; TreeNode left, right;\n  TreeNode(int v) { val = v; }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "toArr(deserialize(serialize(build([1,2,3,null,null,4,5]))))",
+        "expected": [
+          1,
+          2,
+          3,
+          null,
+          null,
+          4,
+          5
+        ]
+      },
+      {
+        "name": "empty",
+        "call": "toArr(deserialize(serialize(null)))",
+        "expected": []
+      },
+      {
+        "name": "single",
+        "call": "toArr(deserialize(serialize(build([7]))))",
+        "expected": [
+          7
+        ]
+      },
+      {
+        "name": "negatives",
+        "call": "toArr(deserialize(serialize(build([-1,-20,300]))))",
+        "expected": [
+          -1,
+          -20,
+          300
+        ]
+      },
+      {
+        "name": "left skewed",
+        "call": "toArr(deserialize(serialize(build([1,2,null,3,null,4]))))",
+        "expected": [
+          1,
+          2,
+          null,
+          3,
+          null,
+          4
+        ]
+      },
+      {
+        "name": "returns string",
+        "call": "typeof serialize(build([1,2]))",
+        "expected": "string"
+      }
+    ],
+    "solution": {
+      "js": "function TreeNode(v, l, r) { this.val = v; this.left = l || null; this.right = r || null; }\n// build a tree from level-order array (null = missing)\nfunction build(arr) {\n  if (!arr.length || arr[0] === null) return null;\n  const root = new TreeNode(arr[0]); const q = [root]; let i = 1;\n  while (q.length && i < arr.length) {\n    const n = q.shift();\n    if (i < arr.length && arr[i] !== null) { n.left = new TreeNode(arr[i]); q.push(n.left); } i++;\n    if (i < arr.length && arr[i] !== null) { n.right = new TreeNode(arr[i]); q.push(n.right); } i++;\n  }\n  return root;\n}\n// tree back to level-order array (trailing nulls trimmed)\nfunction toArr(root) {\n  const out = []; const q = [root];\n  while (q.length) { const n = q.shift(); if (!n) { out.push(null); continue; } out.push(n.val); q.push(n.left, n.right); }\n  while (out.length && out[out.length - 1] === null) out.pop();\n  return out;\n}\n\nfunction serialize(root) {\n  const out = [];\n  (function pre(n) {\n    if (!n) { out.push('#'); return; }\n    out.push(String(n.val)); pre(n.left); pre(n.right);\n  })(root);\n  return out.join(',');\n}\n\nfunction deserialize(data) {\n  const tok = data.split(','); let i = 0;\n  function read() {\n    const s = tok[i++];\n    if (s === '#' || s === undefined) return null;\n    const n = new TreeNode(Number(s));\n    n.left = read(); n.right = read();\n    return n;\n  }\n  return read();\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public String serialize(TreeNode root) {\n    StringBuilder sb = new StringBuilder();\n    pre(root, sb);\n    return sb.toString();\n  }\n  private void pre(TreeNode n, StringBuilder sb) {\n    if (sb.length() > 0) sb.append(',');\n    if (n == null) { sb.append('#'); return; }\n    sb.append(n.val);\n    pre(n.left, sb); pre(n.right, sb);\n  }\n  public TreeNode deserialize(String data) {\n    Deque<String> q = new ArrayDeque<>(Arrays.asList(data.split(\",\")));\n    return read(q);\n  }\n  private TreeNode read(Deque<String> q) {\n    String s = q.poll();\n    if (s == null || s.equals(\"#\")) return null;\n    TreeNode n = new TreeNode(Integer.parseInt(s));\n    n.left = read(q); n.right = read(q);\n    return n;\n  }\n}\n\nclass TreeNode {\n  int val; TreeNode left, right;\n  TreeNode(int v) { val = v; }\n}\n"
+    },
+    "complexity": "Time O(n), space O(n) for both operations",
+    "hints": [
+      "Preorder alone is ambiguous; what extra token makes it unambiguous?",
+      "Emit a sentinel (e.g. '#') for every null child.",
+      "Deserialize by consuming tokens recursively in the same preorder sequence."
+    ],
+    "keyPoints": [
+      "Preorder with null markers uniquely encodes a tree",
+      "Delimiter choice must handle negative and multi-digit values",
+      "Recursive or iterative token consumption with a shared index/queue",
+      "Alternative BFS level-order encoding; trim trailing nulls",
+      "Discuss recursion depth limits for very deep trees and versioning the wire format"
+    ],
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-code-03",
+    "title": "Shortest Path in a Binary Matrix",
+    "level": "medium",
+    "topic": "Graphs / BFS",
+    "prompt": "Given an `n x n` grid of 0s (open) and 1s (blocked), return the length (number of cells) of the shortest clear path from the top-left to the bottom-right cell, moving in any of **8 directions**. Return `-1` if no path exists (including when start or end is blocked).\n\n**Example:** `shortestPathBinaryMatrix([[0,1],[1,0]])` -> `2`",
+    "fn": "shortestPathBinaryMatrix",
+    "starter": {
+      "js": "function shortestPathBinaryMatrix(grid) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int shortestPathBinaryMatrix(int[][] grid) {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "diagonal",
+        "call": "shortestPathBinaryMatrix([[0,1],[1,0]])",
+        "expected": 2
+      },
+      {
+        "name": "3x3",
+        "call": "shortestPathBinaryMatrix([[0,0,0],[1,1,0],[1,1,0]])",
+        "expected": 4
+      },
+      {
+        "name": "start blocked",
+        "call": "shortestPathBinaryMatrix([[1,0,0],[1,1,0],[1,1,0]])",
+        "expected": -1
+      },
+      {
+        "name": "single cell",
+        "call": "shortestPathBinaryMatrix([[0]])",
+        "expected": 1
+      },
+      {
+        "name": "no path",
+        "call": "shortestPathBinaryMatrix([[0,1,1],[1,1,1],[1,1,0]])",
+        "expected": -1
+      },
+      {
+        "name": "winding diagonal",
+        "call": "shortestPathBinaryMatrix([[0,0,0,0],[1,1,1,0],[0,0,0,1],[0,1,1,0]])",
+        "expected": 6
+      },
+      {
+        "name": "open 3x3",
+        "call": "shortestPathBinaryMatrix([[0,0,0],[0,0,0],[0,0,0]])",
+        "expected": 3
+      }
+    ],
+    "solution": {
+      "js": "function shortestPathBinaryMatrix(grid) {\n  const n = grid.length;\n  if (grid[0][0] || grid[n - 1][n - 1]) return -1;\n  const seen = grid.map(r => r.map(() => false));\n  let q = [[0, 0]]; seen[0][0] = true; let dist = 1;\n  while (q.length) {\n    const next = [];\n    for (const [r, c] of q) {\n      if (r === n - 1 && c === n - 1) return dist;\n      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {\n        const nr = r + dr, nc = c + dc;\n        if (nr < 0 || nc < 0 || nr >= n || nc >= n || seen[nr][nc] || grid[nr][nc]) continue;\n        seen[nr][nc] = true; next.push([nr, nc]);\n      }\n    }\n    q = next; dist++;\n  }\n  return -1;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int shortestPathBinaryMatrix(int[][] grid) {\n    int n = grid.length;\n    if (grid[0][0] == 1 || grid[n - 1][n - 1] == 1) return -1;\n    boolean[][] seen = new boolean[n][n];\n    Deque<int[]> q = new ArrayDeque<>();\n    q.add(new int[]{0, 0}); seen[0][0] = true;\n    int dist = 1;\n    while (!q.isEmpty()) {\n      for (int k = q.size(); k > 0; k--) {\n        int[] cur = q.poll();\n        if (cur[0] == n - 1 && cur[1] == n - 1) return dist;\n        for (int dr = -1; dr <= 1; dr++) for (int dc = -1; dc <= 1; dc++) {\n          int r = cur[0] + dr, c = cur[1] + dc;\n          if (r < 0 || c < 0 || r >= n || c >= n || seen[r][c] || grid[r][c] == 1) continue;\n          seen[r][c] = true; q.add(new int[]{r, c});\n        }\n      }\n      dist++;\n    }\n    return -1;\n  }\n}\n"
+    },
+    "complexity": "Time O(n^2), space O(n^2)",
+    "hints": [
+      "Unweighted shortest path suggests BFS, not DFS.",
+      "Process level by level; each level is one more cell in the path.",
+      "Mark cells visited when you enqueue them, not when you dequeue, to avoid duplicates."
+    ],
+    "keyPoints": [
+      "BFS gives shortest path in an unweighted graph",
+      "Check blocked start/end up front",
+      "Mark visited on enqueue",
+      "8-directional neighbours",
+      "Mention A* with Chebyshev heuristic as an optimisation"
+    ],
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-code-04",
+    "title": "Edit Distance",
+    "level": "medium",
+    "topic": "Dynamic programming",
+    "prompt": "Given strings `a` and `b`, return the minimum number of single-character insertions, deletions or substitutions needed to turn `a` into `b`.\n\n**Example:** `minDistance(\"horse\", \"ros\")` -> `3`",
+    "fn": "minDistance",
+    "starter": {
+      "js": "function minDistance(a, b) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int minDistance(String a, String b) {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "horse",
+        "call": "minDistance(\"horse\", \"ros\")",
+        "expected": 3
+      },
+      {
+        "name": "intention",
+        "call": "minDistance(\"intention\", \"execution\")",
+        "expected": 5
+      },
+      {
+        "name": "empty a",
+        "call": "minDistance(\"\", \"abc\")",
+        "expected": 3
+      },
+      {
+        "name": "empty b",
+        "call": "minDistance(\"abc\", \"\")",
+        "expected": 3
+      },
+      {
+        "name": "equal",
+        "call": "minDistance(\"same\", \"same\")",
+        "expected": 0
+      },
+      {
+        "name": "both empty",
+        "call": "minDistance(\"\", \"\")",
+        "expected": 0
+      }
+    ],
+    "solution": {
+      "js": "function minDistance(a, b) {\n  const m = a.length, n = b.length;\n  let prev = Array.from({ length: n + 1 }, (_, j) => j);\n  for (let i = 1; i <= m; i++) {\n    const cur = [i];\n    for (let j = 1; j <= n; j++) {\n      cur[j] = a[i - 1] === b[j - 1]\n        ? prev[j - 1]\n        : 1 + Math.min(prev[j - 1], prev[j], cur[j - 1]);\n    }\n    prev = cur;\n  }\n  return prev[n];\n}\n",
+      "java": "class Solution {\n  public int minDistance(String a, String b) {\n    int m = a.length(), n = b.length();\n    int[] prev = new int[n + 1];\n    for (int j = 0; j <= n; j++) prev[j] = j;\n    for (int i = 1; i <= m; i++) {\n      int[] cur = new int[n + 1];\n      cur[0] = i;\n      for (int j = 1; j <= n; j++) {\n        if (a.charAt(i - 1) == b.charAt(j - 1)) cur[j] = prev[j - 1];\n        else cur[j] = 1 + Math.min(prev[j - 1], Math.min(prev[j], cur[j - 1]));\n      }\n      prev = cur;\n    }\n    return prev[n];\n  }\n}\n"
+    },
+    "complexity": "Time O(m*n), space O(n) with rolling rows",
+    "hints": [
+      "Define dp[i][j] = cost to convert the first i chars of a into the first j chars of b.",
+      "If the chars match, dp[i][j] = dp[i-1][j-1]; otherwise 1 + min of replace, delete, insert.",
+      "Base cases: converting to/from an empty prefix costs its length. Only the previous row is needed."
+    ],
+    "keyPoints": [
+      "Clear state definition over prefixes",
+      "Three transitions: substitute, delete, insert",
+      "Base row/column initialised to indices",
+      "Space optimisation to O(min(m,n))",
+      "Can reconstruct the edit script by backtracking a full table"
+    ],
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-code-05",
+    "title": "Coin Change (Fewest Coins)",
+    "level": "medium",
+    "topic": "Dynamic programming",
+    "prompt": "Given coin denominations `coins` (unlimited supply of each) and an `amount`, return the fewest coins needed to make that amount, or `-1` if impossible.\n\n**Example:** `coinChange([1,2,5], 11)` -> `3` (5+5+1)",
+    "fn": "coinChange",
+    "starter": {
+      "js": "function coinChange(coins, amount) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int coinChange(int[] coins, int amount) {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "coinChange([1,2,5], 11)",
+        "expected": 3
+      },
+      {
+        "name": "impossible",
+        "call": "coinChange([2], 3)",
+        "expected": -1
+      },
+      {
+        "name": "zero",
+        "call": "coinChange([1], 0)",
+        "expected": 0
+      },
+      {
+        "name": "greedy fails",
+        "call": "coinChange([1,3,4], 6)",
+        "expected": 2
+      },
+      {
+        "name": "larger",
+        "call": "coinChange([186,419,83,408], 6249)",
+        "expected": 20
+      },
+      {
+        "name": "single coin exact",
+        "call": "coinChange([7], 21)",
+        "expected": 3
+      }
+    ],
+    "solution": {
+      "js": "function coinChange(coins, amount) {\n  const dp = new Array(amount + 1).fill(Infinity);\n  dp[0] = 0;\n  for (let x = 1; x <= amount; x++) {\n    for (const c of coins) if (c <= x && dp[x - c] + 1 < dp[x]) dp[x] = dp[x - c] + 1;\n  }\n  return dp[amount] === Infinity ? -1 : dp[amount];\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int coinChange(int[] coins, int amount) {\n    int[] dp = new int[amount + 1];\n    Arrays.fill(dp, Integer.MAX_VALUE);\n    dp[0] = 0;\n    for (int x = 1; x <= amount; x++) {\n      for (int c : coins) {\n        if (c <= x && dp[x - c] != Integer.MAX_VALUE) dp[x] = Math.min(dp[x], dp[x - c] + 1);\n      }\n    }\n    return dp[amount] == Integer.MAX_VALUE ? -1 : dp[amount];\n  }\n}\n"
+    },
+    "complexity": "Time O(amount * coins), space O(amount)",
+    "hints": [
+      "Greedy (largest coin first) fails for coins like [1,3,4] and amount 6.",
+      "dp[x] = fewest coins to make x; dp[0] = 0.",
+      "dp[x] = min over coins c <= x of dp[x - c] + 1; unreachable stays Infinity."
+    ],
+    "keyPoints": [
+      "Show a counterexample to greedy",
+      "Bottom-up unbounded knapsack recurrence",
+      "Sentinel for unreachable amounts, guard against overflow in Java",
+      "Amount 0 returns 0",
+      "BFS over amounts is an equivalent alternative"
+    ],
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-code-06",
+    "title": "String to Integer (atoi)",
+    "level": "medium",
+    "topic": "Strings / edge cases",
+    "prompt": "Implement `myAtoi(s)`:\n\n1. Skip leading spaces.\n2. Read an optional `+` or `-`.\n3. Read digits until a non-digit or end of string; ignore the rest.\n4. If no digits were read, return `0`.\n5. Clamp to the 32-bit signed range `[-2^31, 2^31 - 1]`.\n\n**Example:** `myAtoi(\"   -42abc\")` -> `-42`",
+    "fn": "myAtoi",
+    "starter": {
+      "js": "function myAtoi(s) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int myAtoi(String s) {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "plain",
+        "call": "myAtoi(\"42\")",
+        "expected": 42
+      },
+      {
+        "name": "spaces and sign",
+        "call": "myAtoi(\"   -42\")",
+        "expected": -42
+      },
+      {
+        "name": "trailing words",
+        "call": "myAtoi(\"4193 with words\")",
+        "expected": 4193
+      },
+      {
+        "name": "leading words",
+        "call": "myAtoi(\"words and 987\")",
+        "expected": 0
+      },
+      {
+        "name": "overflow low",
+        "call": "myAtoi(\"-91283472332\")",
+        "expected": -2147483648
+      },
+      {
+        "name": "overflow high",
+        "call": "myAtoi(\"2147483648\")",
+        "expected": 2147483647
+      },
+      {
+        "name": "double sign",
+        "call": "myAtoi(\"+-12\")",
+        "expected": 0
+      },
+      {
+        "name": "leading zeros",
+        "call": "myAtoi(\"  +0000123x\")",
+        "expected": 123
+      },
+      {
+        "name": "empty",
+        "call": "myAtoi(\"\")",
+        "expected": 0
+      }
+    ],
+    "solution": {
+      "js": "function myAtoi(s) {\n  const MAX = 2147483647, MIN = -2147483648;\n  let i = 0, sign = 1, n = 0;\n  while (i < s.length && s[i] === ' ') i++;\n  if (s[i] === '+' || s[i] === '-') { if (s[i] === '-') sign = -1; i++; }\n  while (i < s.length && s[i] >= '0' && s[i] <= '9') {\n    n = n * 10 + (s.charCodeAt(i) - 48);\n    if (sign * n > MAX) return MAX;\n    if (sign * n < MIN) return MIN;\n    i++;\n  }\n  return sign * n || 0;\n}\n",
+      "java": "class Solution {\n  public int myAtoi(String s) {\n    int i = 0, n = s.length(), sign = 1;\n    long v = 0;\n    while (i < n && s.charAt(i) == ' ') i++;\n    if (i < n && (s.charAt(i) == '+' || s.charAt(i) == '-')) {\n      if (s.charAt(i) == '-') sign = -1;\n      i++;\n    }\n    while (i < n && Character.isDigit(s.charAt(i))) {\n      v = v * 10 + (s.charAt(i) - '0');\n      if (sign * v > Integer.MAX_VALUE) return Integer.MAX_VALUE;\n      if (sign * v < Integer.MIN_VALUE) return Integer.MIN_VALUE;\n      i++;\n    }\n    return (int) (sign * v);\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "Write the steps as a tiny state machine: spaces, sign, digits.",
+      "Stop at the first non-digit after the optional sign.",
+      "Check overflow as you accumulate, before the value grows unbounded."
+    ],
+    "keyPoints": [
+      "Clarify the spec and enumerate edge cases before coding",
+      "Only one sign character allowed",
+      "Clamp on overflow, detected during accumulation",
+      "Avoid returning -0 in JS",
+      "In Java use long or pre-check MAX/10 to avoid overflow"
+    ],
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-code-07",
+    "title": "Reverse Nodes in k-Group",
+    "level": "hard",
+    "topic": "Linked lists",
+    "prompt": "Given the head of a singly linked list, reverse the nodes `k` at a time and return the new head. If the number of remaining nodes is less than `k`, leave them as they are. Rewire nodes; do not just swap values.\n\nHelpers `ListNode`, `fromList(arr)` and `toList(head)` are provided.\n\n**Example:** `toList(reverseKGroup(fromList([1,2,3,4,5]), 2))` -> `[2,1,4,3,5]`",
+    "fn": "reverseKGroup",
+    "starter": {
+      "js": "function ListNode(v, next) { this.val = v; this.next = next || null; }\nfunction fromList(arr) { let h = null; for (let i = arr.length - 1; i >= 0; i--) h = new ListNode(arr[i], h); return h; }\nfunction toList(h) { const out = []; while (h) { out.push(h.val); h = h.next; } return out; }\n\nfunction reverseKGroup(head, k) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public ListNode reverseKGroup(ListNode head, int k) {\n    // your code\n    return head;\n  }\n}\n\nclass ListNode {\n  int val; ListNode next;\n  ListNode(int v) { val = v; }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "k=2",
+        "call": "toList(reverseKGroup(fromList([1,2,3,4,5]), 2))",
+        "expected": [
+          2,
+          1,
+          4,
+          3,
+          5
+        ]
+      },
+      {
+        "name": "k=3",
+        "call": "toList(reverseKGroup(fromList([1,2,3,4,5]), 3))",
+        "expected": [
+          3,
+          2,
+          1,
+          4,
+          5
+        ]
+      },
+      {
+        "name": "k=1",
+        "call": "toList(reverseKGroup(fromList([1,2,3]), 1))",
+        "expected": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "name": "exact multiple",
+        "call": "toList(reverseKGroup(fromList([1,2,3,4,5,6]), 3))",
+        "expected": [
+          3,
+          2,
+          1,
+          6,
+          5,
+          4
+        ]
+      },
+      {
+        "name": "k = length",
+        "call": "toList(reverseKGroup(fromList([1,2,3,4]), 4))",
+        "expected": [
+          4,
+          3,
+          2,
+          1
+        ]
+      },
+      {
+        "name": "empty",
+        "call": "toList(reverseKGroup(fromList([]), 2))",
+        "expected": []
+      }
+    ],
+    "solution": {
+      "js": "function ListNode(v, next) { this.val = v; this.next = next || null; }\nfunction fromList(arr) { let h = null; for (let i = arr.length - 1; i >= 0; i--) h = new ListNode(arr[i], h); return h; }\nfunction toList(h) { const out = []; while (h) { out.push(h.val); h = h.next; } return out; }\n\nfunction reverseKGroup(head, k) {\n  const dummy = new ListNode(0, head);\n  let groupPrev = dummy;\n  while (true) {\n    let kth = groupPrev;\n    for (let i = 0; i < k && kth; i++) kth = kth.next;\n    if (!kth) break;\n    const groupNext = kth.next;\n    let prev = groupNext, cur = groupPrev.next;\n    while (cur !== groupNext) { const nx = cur.next; cur.next = prev; prev = cur; cur = nx; }\n    const first = groupPrev.next;\n    groupPrev.next = kth;\n    groupPrev = first;\n  }\n  return dummy.next;\n}\n",
+      "java": "class Solution {\n  public ListNode reverseKGroup(ListNode head, int k) {\n    ListNode dummy = new ListNode(0);\n    dummy.next = head;\n    ListNode groupPrev = dummy;\n    while (true) {\n      ListNode kth = groupPrev;\n      for (int i = 0; i < k && kth != null; i++) kth = kth.next;\n      if (kth == null) break;\n      ListNode groupNext = kth.next;\n      ListNode prev = groupNext, cur = groupPrev.next;\n      while (cur != groupNext) { ListNode nx = cur.next; cur.next = prev; prev = cur; cur = nx; }\n      ListNode first = groupPrev.next;\n      groupPrev.next = kth;\n      groupPrev = first;\n    }\n    return dummy.next;\n  }\n}\n\nclass ListNode {\n  int val; ListNode next;\n  ListNode(int v) { val = v; }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "A dummy head removes the special case for the first group.",
+      "Before reversing, walk k steps to confirm a full group exists.",
+      "Reverse the group pointing its tail at the next group's head, then reconnect the previous group."
+    ],
+    "keyPoints": [
+      "Dummy node and groupPrev pointer",
+      "Check a full group exists before mutating",
+      "In-place reversal with prev initialised to groupNext",
+      "Reconnect: groupPrev.next = kth, advance groupPrev to old first",
+      "O(1) extra space; recursive version uses O(n/k) stack"
+    ],
+    "company": "microsoft"
+  },
+  {
+    "id": "ms-code-08",
+    "title": "Spiral Matrix",
+    "level": "medium",
+    "topic": "Arrays / matrices",
+    "prompt": "Given an `m x n` matrix, return all elements in clockwise spiral order starting from the top-left.\n\n**Example:** `spiralOrder([[1,2,3],[4,5,6],[7,8,9]])` -> `[1,2,3,6,9,8,7,4,5]`",
+    "fn": "spiralOrder",
+    "starter": {
+      "js": "function spiralOrder(matrix) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<Integer> spiralOrder(int[][] matrix) {\n    // your code\n    return new ArrayList<>();\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "3x3",
+        "call": "spiralOrder([[1,2,3],[4,5,6],[7,8,9]])",
+        "expected": [
+          1,
+          2,
+          3,
+          6,
+          9,
+          8,
+          7,
+          4,
+          5
+        ]
+      },
+      {
+        "name": "3x4",
+        "call": "spiralOrder([[1,2,3,4],[5,6,7,8],[9,10,11,12]])",
+        "expected": [
+          1,
+          2,
+          3,
+          4,
+          8,
+          12,
+          11,
+          10,
+          9,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "name": "single row",
+        "call": "spiralOrder([[1,2,3]])",
+        "expected": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "name": "single column",
+        "call": "spiralOrder([[1],[2],[3]])",
+        "expected": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "name": "empty",
+        "call": "spiralOrder([])",
+        "expected": []
+      },
+      {
+        "name": "4x2",
+        "call": "spiralOrder([[1,2],[3,4],[5,6],[7,8]])",
+        "expected": [
+          1,
+          2,
+          4,
+          6,
+          8,
+          7,
+          5,
+          3
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function spiralOrder(matrix) {\n  const out = [];\n  if (!matrix.length) return out;\n  let top = 0, bottom = matrix.length - 1, left = 0, right = matrix[0].length - 1;\n  while (top <= bottom && left <= right) {\n    for (let c = left; c <= right; c++) out.push(matrix[top][c]);\n    top++;\n    for (let r = top; r <= bottom; r++) out.push(matrix[r][right]);\n    right--;\n    if (top <= bottom) { for (let c = right; c >= left; c--) out.push(matrix[bottom][c]); bottom--; }\n    if (left <= right) { for (let r = bottom; r >= top; r--) out.push(matrix[r][left]); left++; }\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<Integer> spiralOrder(int[][] matrix) {\n    List<Integer> out = new ArrayList<>();\n    if (matrix.length == 0) return out;\n    int top = 0, bottom = matrix.length - 1, left = 0, right = matrix[0].length - 1;\n    while (top <= bottom && left <= right) {\n      for (int c = left; c <= right; c++) out.add(matrix[top][c]);\n      top++;\n      for (int r = top; r <= bottom; r++) out.add(matrix[r][right]);\n      right--;\n      if (top <= bottom) { for (int c = right; c >= left; c--) out.add(matrix[bottom][c]); bottom--; }\n      if (left <= right) { for (int r = bottom; r >= top; r--) out.add(matrix[r][left]); left++; }\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(m*n), space O(1) besides output",
+    "hints": [
+      "Track four boundaries: top, bottom, left, right.",
+      "Traverse one edge, then shrink that boundary.",
+      "Guard the bottom and left passes so single rows/columns are not visited twice."
+    ],
+    "keyPoints": [
+      "Boundary-shrinking simulation",
+      "Guards for non-square and single row/column cases",
+      "Handle empty input",
+      "Alternative: direction vector with visited markers",
+      "Each element visited exactly once"
+    ],
+    "company": "microsoft"
+  }
+]

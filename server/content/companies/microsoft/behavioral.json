@@ -1,0 +1,122 @@
+[
+  {
+    "id": "ms-beh-01",
+    "text": "Tell me about a time you failed or made a significant mistake. What did you learn, and what did you change afterwards?",
+    "themes": ["failure", "ownership"],
+    "level": "core",
+    "assesses": "Growth mindset: owning mistakes, reflecting honestly and turning lessons into lasting changes.",
+    "strongSignals": ["Picks a real failure with real consequences", "Takes clear personal ownership without blaming others", "Explains the root cause, not just the symptom", "Describes concrete changes (process, tests, habits) that stuck"],
+    "redFlags": ["A 'failure' that is really a disguised strength", "Blames teammates or circumstances", "No learning or change afterwards"],
+    "followUps": ["What would you do differently on day one?", "How did you tell stakeholders?", "Has that lesson helped you since?"],
+    "company": "microsoft",
+    "value": "Growth mindset"
+  },
+  {
+    "id": "ms-beh-02",
+    "text": "Describe a time you had to learn a new technology or domain quickly to deliver something important.",
+    "themes": ["ambiguity", "delivery"],
+    "level": "core",
+    "assesses": "Learn-it-all attitude, how you get up to speed and how you manage risk while learning.",
+    "strongSignals": ["Structured learning plan (docs, experts, prototypes)", "Asked for help early", "Managed delivery risk while still learning", "Shared what they learned with the team"],
+    "redFlags": ["Pretended to know already", "Learned in isolation and delivered late", "Cannot name what was hard"],
+    "followUps": ["Who did you learn from?", "What shortcuts did you avoid and why?", "What would you teach a newcomer now?"],
+    "company": "microsoft",
+    "value": "Growth mindset"
+  },
+  {
+    "id": "ms-beh-03",
+    "text": "Tell me about a time you received critical feedback. How did you respond?",
+    "themes": ["failure", "collaboration"],
+    "level": "core",
+    "assesses": "Openness to feedback and the ability to change behaviour as a result.",
+    "strongSignals": ["Specific feedback, quoted honestly", "Listened and asked clarifying questions instead of defending", "Visible behaviour change with evidence", "Now seeks feedback proactively"],
+    "redFlags": ["Dismisses the feedback-giver", "Cannot recall any critical feedback", "Changed nothing"],
+    "followUps": ["How did you check you had improved?", "How do you ask for feedback now?", "Have you given similar feedback to others?"],
+    "company": "microsoft",
+    "value": "Growth mindset"
+  },
+  {
+    "id": "ms-beh-04",
+    "text": "Tell me about a time you went beyond the stated requirements to solve a customer's real problem.",
+    "themes": ["customer-impact", "ownership"],
+    "level": "core",
+    "assesses": "Customer obsession: understanding the underlying need and measuring success by customer outcomes.",
+    "strongSignals": ["Talked to customers or used data to find the real need", "Balanced customer value against cost and scope", "Measured impact after release", "Closed the loop with the customer"],
+    "redFlags": ["Gold-plating without customer evidence", "Customer is abstract or absent from the story", "No measure of outcome"],
+    "followUps": ["How did you know it was the real problem?", "What did you say no to?", "What did the metrics show?"],
+    "company": "microsoft",
+    "value": "Customer obsessed"
+  },
+  {
+    "id": "ms-beh-05",
+    "text": "Describe a live-site incident or outage you were involved in. What was your role, and what happened afterwards?",
+    "themes": ["customer-impact", "ownership", "delivery"],
+    "level": "senior",
+    "assesses": "Operational ownership of cloud services: calm mitigation, communication and blameless follow-up.",
+    "strongSignals": ["Mitigated first, root-caused later", "Clear communication to customers and stakeholders", "Blameless postmortem with tracked repair items", "Systemic fixes (safe deployment, alerts, automation)"],
+    "redFlags": ["Hero narrative with no systemic fix", "Blame on individuals", "Did not think about customer impact or communication"],
+    "followUps": ["How long until mitigation, and what slowed it?", "What repair items did you own?", "How did you stop it recurring?"],
+    "company": "microsoft",
+    "value": "Customer obsessed"
+  },
+  {
+    "id": "ms-beh-06",
+    "text": "Tell me about a project where you needed another team, over which you had no authority, to change their plans to make your project succeed.",
+    "themes": ["influence", "collaboration"],
+    "level": "senior",
+    "assesses": "Working across boundaries as One Microsoft: influence without authority and finding shared goals.",
+    "strongSignals": ["Understood the other team's priorities and constraints", "Framed the ask around shared outcomes and data", "Offered help or compromise", "Escalated transparently only when needed"],
+    "redFlags": ["Escalated immediately or went around people", "Treats other teams as obstacles", "No awareness of the other team's incentives"],
+    "followUps": ["What did you give up?", "How is the relationship now?", "What if they had said no?"],
+    "company": "microsoft",
+    "value": "One Microsoft"
+  },
+  {
+    "id": "ms-beh-07",
+    "text": "Describe a significant technical disagreement with a peer or senior engineer. How was it resolved?",
+    "themes": ["conflict", "technical-leadership"],
+    "level": "senior",
+    "assesses": "Handling conflict constructively, deciding with data and committing to the outcome.",
+    "strongSignals": ["Steelmanned the other view", "Used prototypes, data or design reviews to decide", "Separated people from the problem", "Committed fully once a decision was made"],
+    "redFlags": ["Needed to win", "Kept relitigating the decision", "Personal attacks or passive resistance"],
+    "followUps": ["What if you had been wrong?", "What did you learn from their view?", "How would you handle it differently?"],
+    "company": "microsoft",
+    "value": "Diverse and inclusive"
+  },
+  {
+    "id": "ms-beh-08",
+    "text": "How have you helped include quieter voices or people with different backgrounds in technical decisions on your team?",
+    "themes": ["mentoring", "collaboration"],
+    "level": "core",
+    "assesses": "Building an inclusive environment where everyone can contribute fully.",
+    "strongSignals": ["Concrete practices (written design reviews, round-robins, async input)", "Recognised a specific contribution that would otherwise be missed", "Changed team norms, not just one meeting", "Reflects on own biases"],
+    "redFlags": ["Generic statements without examples", "Thinks inclusion is someone else's job", "Dismisses the question"],
+    "followUps": ["What changed as a result?", "How did you measure it?", "What still needs improving?"],
+    "company": "microsoft",
+    "value": "Diverse and inclusive"
+  },
+  {
+    "id": "ms-beh-09",
+    "text": "Tell me about a time you mentored or grew another engineer. What was the outcome for them?",
+    "themes": ["mentoring", "technical-leadership"],
+    "level": "senior",
+    "assesses": "Senior-level multiplier impact through developing others.",
+    "strongSignals": ["Tailored approach to the person's goals", "Delegated stretch work with support, not just tasks", "Gave candid feedback", "Mentee's growth is visible (promotion, ownership, confidence)"],
+    "redFlags": ["Mentoring means doing the work for them", "No observable outcome", "Takes credit for the mentee's work"],
+    "followUps": ["What did you learn from mentoring them?", "How did you handle it when they struggled?", "How do you scale mentoring?"],
+    "company": "microsoft",
+    "value": "Making a difference"
+  },
+  {
+    "id": "ms-beh-10",
+    "text": "Tell me about a time you led a project with an ambiguous goal and turned it into a clear technical plan that shipped.",
+    "themes": ["ambiguity", "technical-leadership", "delivery"],
+    "level": "senior",
+    "assesses": "Turning ambiguity into direction: framing the problem, aligning people and delivering impact.",
+    "strongSignals": ["Clarified the problem and success metrics with stakeholders", "Broke the work into milestones that reduced risk", "Made and wrote down decisions with explicit trade-offs", "Shipped and measured impact"],
+    "redFlags": ["Waited for someone else to define it", "Over-planned without shipping", "Cannot state what success meant"],
+    "followUps": ["What was the hardest decision?", "What did you descope?", "How did you keep stakeholders aligned?"],
+    "company": "microsoft",
+    "value": "Making a difference"
+  }
+]

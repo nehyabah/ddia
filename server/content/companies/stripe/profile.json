@@ -1,0 +1,95 @@
+{
+  "id": "stripe",
+  "name": "Stripe",
+  "summary": "Stripe interviews are commonly reported to favour practical, real-world engineering over algorithm puzzles: candidates write working, well-structured code against realistic, multi-part specs, debug unfamiliar codebases, and design APIs and systems where correctness with money matters. Interviewers are reported to weigh code quality, testing, clear communication and attention to edge cases (idempotency, failure handling, rounding) heavily, along with alignment to Stripe's operating principles.",
+  "loop": [
+    {
+      "round": "Practical coding",
+      "what": "Commonly reported as a 45-60 minute exercise built from a realistic problem (parsing records, aggregating transactions, simulating a small service) delivered in progressive parts, where each part extends the previous one. You usually run your own code in your own environment or a shared editor.",
+      "tips": [
+        "Get a correct, readable version of part 1 working quickly - progress through the parts matters more than cleverness",
+        "Structure code so the next requirement is a small change (small functions, clear data model)",
+        "Test as you go with your own example inputs and say out loud which edge cases you are covering",
+        "Ask clarifying questions about malformed input and ambiguous rules before coding"
+      ]
+    },
+    {
+      "round": "Bug squash / debugging",
+      "what": "Commonly reported: you are given an existing, unfamiliar codebase (often an open-source library) with failing behaviour or tests and asked to locate and fix one or more bugs.",
+      "tips": [
+        "Reproduce first: run the failing test, read the error, then narrow down",
+        "Navigate deliberately - read tests and entry points, use grep and the debugger rather than reading everything",
+        "Narrate your hypotheses and how you are eliminating them",
+        "Practise in your chosen language's tooling (test runner, debugger, stack traces) before the day"
+      ]
+    },
+    {
+      "round": "Integration / API exercise",
+      "what": "Commonly reported: build a small feature that integrates with an HTTP API or library (reading docs, making requests, handling pagination and errors), testing your ability to work with real tools and documentation.",
+      "tips": [
+        "Make sure your laptop, language runtime and HTTP client library are set up and familiar",
+        "Read the provided docs carefully; reported evaluations reward following the spec precisely",
+        "Handle errors, retries and pagination explicitly rather than assuming the happy path",
+        "Keep the code clean enough that an interviewer could review it as a pull request"
+      ]
+    },
+    {
+      "round": "System design / API design",
+      "what": "Commonly reported to be Stripe-flavoured: design a payments-adjacent system or public API (e.g. idempotent charges, webhooks, ledgers, rate limiting), with emphasis on API shape, data correctness, failure modes and operability.",
+      "tips": [
+        "Start from the API and the developer experience - resources, idempotency, errors, versioning",
+        "Be explicit about correctness: exactly-once effects via idempotency, double-entry accounting, reconciliation",
+        "Walk through failure scenarios (timeouts, partial failure, retries, duplicate events) before scaling",
+        "State trade-offs and what you would monitor and alert on"
+      ]
+    },
+    {
+      "round": "Behavioural / values",
+      "what": "Commonly reported as a conversation with a manager about past projects, ownership, collaboration and how you handle mistakes, mapped to Stripe's operating principles. Some loops reportedly include a deep dive into a past project.",
+      "tips": [
+        "Prepare 6-8 concrete stories with measurable outcomes and your specific role",
+        "Show user focus: tie technical decisions to the impact on users or customers",
+        "Have a genuine failure story with what you changed afterwards",
+        "Expect follow-up probing for detail - pick stories you know deeply"
+      ]
+    }
+  ],
+  "values": [
+    { "name": "Users first", "meaning": "Decisions start from what genuinely serves users and their businesses, even when that is harder for Stripe." },
+    { "name": "Move with urgency and focus", "meaning": "Prioritise ruthlessly and ship quickly, concentrating effort on what matters most." },
+    { "name": "Be meticulous in your craft", "meaning": "Sweat the details and hold a high bar for quality, because small errors with money and APIs have large consequences." },
+    { "name": "Create with an owner's mindset", "meaning": "Take responsibility for outcomes end to end, including problems you did not create, and think long term." },
+    { "name": "Collaborate egoless-ly", "meaning": "Optimise for the team and company outcome over personal credit; seek and give candid feedback." },
+    { "name": "Obsess over talent", "meaning": "Raise the bar through hiring, mentoring and helping colleagues grow." },
+    { "name": "Stay curious and humble", "meaning": "Keep learning, admit what you don't know, and change your mind in the face of evidence." },
+    { "name": "Optimise for the long term", "meaning": "Prefer durable solutions and trust that compound over quick wins that create future debt." }
+  ],
+  "valuesNote": "These reflect Stripe's publicly shared operating principles as best known; the exact wording, number and grouping have changed over time and may differ from Stripe's current published list (for example 'Collaborate egolessly', 'Obsess over talent' and 'Optimise for the long term' are paraphrased). Check stripe.com/jobs/culture before the interview.",
+  "weights": {
+    "concurrency": 0.9,
+    "consistency": 1.3,
+    "replication": 0.7,
+    "sharding": 0.8,
+    "resilience": 1.4,
+    "distributed": 1.1,
+    "storage": 0.8,
+    "modeling": 1.2,
+    "mongodb": 0.2,
+    "java": 0.8,
+    "design": 1.4,
+    "coding": 1.4,
+    "behavioral": 1.0
+  },
+  "focusTopics": [
+    "Idempotency keys: storage, request fingerprinting, concurrent in-flight requests, TTL",
+    "API design and versioning: resource modelling, error shapes, pagination, backwards compatibility, date-based versions",
+    "Webhooks: at-least-once delivery, retries with exponential backoff and jitter, signature verification (HMAC + timestamp), ordering",
+    "Double-entry ledgers: append-only entries, balance invariants, reconciliation",
+    "Exactly-once illusions: at-least-once delivery plus idempotent consumers, outbox pattern, sagas for multi-step payments",
+    "Rate limiting and load shedding: token bucket / GCRA, per-key limits, prioritising critical traffic",
+    "Money handling: integer minor units, currency exponents, rounding and allocation of remainders, FX",
+    "State machines for payments (requires_action, processing, succeeded, failed, refunded) and handling unknown outcomes from external processors",
+    "Practical coding fluency: parsing input, clean modular code, writing tests quickly in your chosen language",
+    "Debugging unfamiliar codebases: reproducing, reading tests, using a debugger"
+  ]
+}

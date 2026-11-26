@@ -21,6 +21,12 @@ import { JavaBrowse } from "./pages/JavaBrowse";
 import { PuzzlePlay, PuzzlesHome } from "./pages/Puzzles";
 import { ReportPage } from "./pages/ReportPage";
 import { ReadinessPage } from "./pages/Readiness";
+import { DesignList, DesignPlay } from "./pages/Design";
+import { CodingList, CodingPlay } from "./pages/Coding";
+import { MongoList, MongoPlay } from "./pages/Mongo";
+import { BehavioralPage } from "./pages/Behavioral";
+import { CompaniesPage, CompanyPage } from "./pages/Companies";
+import { MockPage, PrepHome } from "./pages/Prep";
 
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
 
@@ -49,12 +55,13 @@ function Shell() {
   const items: NavItem[] = [
     { to: "/", label: "Home", icon: "home", end: true, match: ["/chapter"] },
     { to: "/review", label: "Review", icon: "review", badge: profile.dueCount },
+    { to: "/prep", label: "Prep", icon: "brief", match: ["/design", "/coding", "/mongo", "/behavioral", "/mock", "/companies"] },
     { to: "/java", label: "Java", icon: "code", badge: profile.javaDue },
     { to: "/puzzles", label: "Puzzles", icon: "puzzle" },
-    { to: "/stats", label: "Stats", icon: "chart" },
+    { to: "/stats", label: "Stats", icon: "chart", desktopOnly: true, match: ["/report", "/readiness"] },
     { to: "/notes", label: "Notes", icon: "notes", desktopOnly: true },
     { to: "/search", label: "Search", icon: "search", desktopOnly: true },
-    { to: "/settings", label: "You", icon: "user", match: ["/notes", "/search"] },
+    { to: "/settings", label: "You", icon: "user", match: ["/notes", "/search", "/stats", "/report", "/readiness"] },
   ];
   // Treat nested routes (e.g. /chapter/3) as part of a tab on the bottom bar.
   const isActive = (i: NavItem, mobile: boolean) =>
@@ -130,6 +137,17 @@ export function App() {
           <Route path="/puzzles/p/:id" element={<PuzzlePlay />} />
           <Route path="/report" element={<ReportPage />} />
           <Route path="/readiness" element={<ReadinessPage />} />
+          <Route path="/prep" element={<PrepHome />} />
+          <Route path="/design" element={<DesignList />} />
+          <Route path="/design/:id" element={<DesignPlay />} />
+          <Route path="/coding" element={<CodingList />} />
+          <Route path="/coding/:id" element={<CodingPlay />} />
+          <Route path="/mongo" element={<MongoList />} />
+          <Route path="/mongo/:id" element={<MongoPlay />} />
+          <Route path="/behavioral" element={<BehavioralPage />} />
+          <Route path="/mock" element={<MockPage />} />
+          <Route path="/companies" element={<CompaniesPage />} />
+          <Route path="/companies/:id" element={<CompanyPage />} />
           <Route path="/stats" element={<StatsPage />} />
             <Route path="/notes" element={<NotesPage />} />
             <Route path="/search" element={<SearchPage />} />

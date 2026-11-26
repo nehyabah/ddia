@@ -1,0 +1,98 @@
+{
+  "id": "microsoft",
+  "name": "Microsoft",
+  "summary": "Microsoft senior engineering loops are commonly reported to weigh solid data-structures-and-algorithms coding heavily, usually written and talked through live, alongside system design for large-scale cloud services such as Azure workloads. Behavioural questions tend to be woven into most rounds instead of sitting in one dedicated interview, and they often probe growth mindset: how you learn from failure, work across teams and keep the customer in view.",
+  "loop": [
+    {
+      "round": "Recruiter / phone or online screen",
+      "what": "Commonly reported as a 45-60 minute call with one or two coding problems (arrays, strings, trees, hash maps) in a shared editor, sometimes with short questions about your background. Some teams use an online assessment instead.",
+      "tips": [
+        "Clarify inputs and edge cases before coding",
+        "Talk through a brute-force approach, then optimise",
+        "Test your code by hand with a small example and an edge case"
+      ]
+    },
+    {
+      "round": "Onsite coding round(s)",
+      "what": "Usually one or two rounds of medium (sometimes hard) DS&A problems: trees, graphs, linked lists, DP, string parsing. Interviewers are often reported to care about clean, working code and how you handle edge cases.",
+      "tips": [
+        "Write production-quality code: clear names, null checks, helper functions",
+        "State time and space complexity without being asked",
+        "Expect follow-ups that change constraints (streaming input, memory limits)",
+        "Expect a short behavioural question at the start or end"
+      ]
+    },
+    {
+      "round": "System design (senior)",
+      "what": "A design round for a cloud-scale service, for example storage, messaging, telemetry or configuration. Reported to focus on requirements, APIs, data partitioning, availability across regions and zones, and operational concerns.",
+      "tips": [
+        "Pin down scale, SLAs and tenancy model early",
+        "Cover multi-region / availability-zone failure explicitly",
+        "Discuss safe deployment, monitoring and on-call operability",
+        "Name your trade-offs and when you would revisit them"
+      ]
+    },
+    {
+      "round": "Object-oriented / low-level design or second design round",
+      "what": "Some loops are reported to include a class-design problem (parking lot, LRU cache, file system API) or a deeper dive into a past project's architecture.",
+      "tips": [
+        "Start from use cases, then classes and responsibilities",
+        "Keep interfaces small and extensible",
+        "Be ready to defend design decisions from your own projects"
+      ]
+    },
+    {
+      "round": "Behavioural / collaboration (woven in)",
+      "what": "Questions about conflict, failure, learning, mentoring and customer impact, often asked in the first or last minutes of technical rounds rather than as a standalone interview.",
+      "tips": [
+        "Prepare 6-8 STAR stories with measurable outcomes",
+        "Show what you learned and changed afterwards (growth mindset)",
+        "Highlight cross-team work and how you brought people along"
+      ]
+    },
+    {
+      "round": "\"As appropriate\" (AA) final round",
+      "what": "Widely reported as a final conversation with a senior leader or hiring manager, mixing technical depth, design and culture fit. Not every loop includes it, and accounts of its format vary.",
+      "tips": [
+        "Expect broad questions about your judgement and career direction",
+        "Connect your experience to the team's product and customers",
+        "Have thoughtful questions ready about the team and its challenges"
+      ]
+    }
+  ],
+  "values": [
+    { "name": "Growth mindset", "meaning": "Being a learn-it-all rather than a know-it-all: seeking feedback, learning from failure and staying curious." },
+    { "name": "Customer obsessed", "meaning": "Understanding customers' needs deeply and judging work by the difference it makes for them." },
+    { "name": "Diverse and inclusive", "meaning": "Seeking out different perspectives and making sure everyone can contribute fully." },
+    { "name": "One Microsoft", "meaning": "Working across team and organisational boundaries as one company towards shared goals." },
+    { "name": "Making a difference", "meaning": "Connecting your work to the mission of empowering every person and every organisation on the planet to achieve more." }
+  ],
+  "valuesNote": "These are paraphrases of Microsoft's publicly described culture (growth mindset plus customer obsessed, diverse and inclusive, One Microsoft, making a difference) and its stated mission. Exact official wording may differ and change over time; check Microsoft's careers and culture pages.",
+  "weights": {
+    "concurrency": 1.0,
+    "consistency": 1.0,
+    "replication": 1.0,
+    "sharding": 1.0,
+    "resilience": 1.1,
+    "distributed": 1.1,
+    "storage": 0.9,
+    "modeling": 0.9,
+    "mongodb": 0.2,
+    "java": 0.8,
+    "design": 1.2,
+    "coding": 1.4,
+    "behavioral": 1.0
+  },
+  "focusTopics": [
+    "Trees and graphs (traversals, LCA, BFS shortest path)",
+    "Linked list manipulation",
+    "Dynamic programming basics (edit distance, coin change)",
+    "String parsing and edge cases",
+    "Object-oriented design (classes, interfaces, extensibility)",
+    "Designing cloud services at scale",
+    "Multi-tenancy and noisy-neighbour isolation",
+    "Availability zones, regions and failover",
+    "Safe deployment (rings, feature flags, rollback)",
+    "Telemetry, monitoring and live-site operations"
+  ]
+}

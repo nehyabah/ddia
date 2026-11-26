@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db } from "../db.js";
+import { content } from "./prep.js";
 
 /**
  * Interview readiness, computed from everything the user has done.
@@ -38,9 +39,9 @@ const DAY = 86400000;
 
 export const readiness = Router();
 
-readiness.get("/readiness", (req, res) => res.json(computeReadiness(req.userId!)));
+readiness.get("/readiness", (req, res) => res.json(computeReadiness(req.userId!, req.query.company ? String(req.query.company) : undefined)));
 
-export function computeReadiness(u: number) {
+export function computeReadiness(u: number, company?: string) {
   const now = Date.now();
   const since = now - 30 * DAY;
 
@@ -136,21 +137,125 @@ export function computeReadiness(u: number) {
     };
   });
 
-  const wsum = areas.reduce((s, a) => s + a.weight, 0);
-  const overall = Math.round(areas.reduce((s, a) => s + a.score * a.weight, 0) / wsum);
-  // An interview exposes your weakest areas: cap the overall at 20 points above your weakest high-weight area.
-  const floorArea = Math.min(...areas.filter((a) => a.weight >= 1).map((a) => a.score));
-  const capped = Math.min(overall, floorArea + 20);
+  // ---- interview rounds outside the book: system design, coding, behavioural; plus hands-on MongoDB ----
+  type Sig = { knowledge: number | null; accuracy: number | null; practice: number | null; explanation: number | null; coverage: number | null };
+  const pctS = (v: number | null) => (v == null ? null : Math.round(v * 100));
+  const scoreOf = (sig: Sig, lastTs: number) => {
+    let ws = 0, sum = 0;
+    for (const [k, v] of Object.entries(sig)) { if (v == null) continue; const w = W[k as keyof typeof W]; ws += w; sum += w * v; }
+    const idle = lastTs ? (now - lastTs) / DAY : null;
+    const decay = idle == null || idle <= 14 ? 1 : Math.max(0.7, 1 - (idle - 14) / 60);
+    return { score: Math.round((ws ? sum / ws : 0) * decay * 100), idleDays: idle == null ? null : Math.floor(idle), decayed: decay < 1 };
+  };
+  const extra = (id: string, label: string, weight: number, sig: Sig, lastTs: number, evidence: number, action: { label: string; to: string }, items: Record<string, number>) => {
+    const s = scoreOf(sig, lastTs);
+    const weakest = (Object.entries(sig).filter(([, v]) => v != null) as [keyof typeof W, number][]).sort((x, y) => x[1] - y[1])[0]?.[0];
+    return { id, label, weight, score: s.score, band: band(s.score), confidence: (evidence >= 30 ? "high" : evidence >= 8 ? "medium" : "low") as "high" | "medium" | "low", evidence,
+      idleDays: s.idleDays, decayed: s.decayed, items: items as { questions: number; java: number; puzzles: number },
+      signals: { knowledge: pctS(sig.knowledge), accuracy: pctS(sig.accuracy), practice: pctS(sig.practice), explanation: pctS(sig.explanation), coverage: pctS(sig.coverage) },
+      weakest, action };
+  };
+  const nDesign = content.design.length, nCoding = content.coding.length, nBeh = content.behavioral.questions.length;
+  if (nDesign) {
+    const rows = db.prepare("SELECT prompt_id, section, best_score, updated_at FROM design_progress WHERE user_id = ?").all(u) as { prompt_id: string; section: string; best_score: number | null; updated_at: number }[];
+    const graded = rows.filter((r) => r.best_score != null);
+    const prompts = new Set(rows.map((r) => r.prompt_id));
+    const totalSections = content.design.reduce((s, p) => s + p.sections.length, 0);
+    const sig: Sig = {
+      knowledge: null, accuracy: null,
+      practice: graded.filter((r) => (r.best_score ?? 0) >= 7).length / Math.min(totalSections, 35),
+      explanation: graded.length ? graded.reduce((s, r) => s + (r.best_score ?? 0) / 10, 0) / Math.max(graded.length, 5) : 0,
+      coverage: prompts.size / nDesign,
+    };
+    sig.practice = Math.min(1, sig.practice!);
+    areas.push(extra("design", "System design", 1.2, sig, Math.max(0, ...rows.map((r) => r.updated_at)), graded.length * 3, { label: "Practise a design", to: "/design" }, { questions: nDesign, java: 0, puzzles: 0 }));
+  }
+  if (nCoding) {
+    const rows = db.prepare("SELECT solved, first_try, attempts, best_passed, total, java_score, updated_at FROM coding_progress WHERE user_id = ?").all(u) as { solved: number; first_try: number; attempts: number; best_passed: number; total: number; java_score: number | null; updated_at: number }[];
+    const tried = rows.filter((r) => r.attempts > 0 || r.java_score != null);
+    const solved = rows.filter((r) => r.solved);
+    const js = rows.filter((r) => r.java_score != null);
+    const sig: Sig = {
+      knowledge: null,
+      accuracy: tried.length ? tried.reduce((s, r) => s + (r.total ? r.best_passed / r.total : (r.java_score ?? 0) / 10), 0) / Math.max(tried.length, 3) : 0,
+      practice: Math.min(1, solved.reduce((s, r) => s + (r.first_try ? 1 : 0.7), 0) / Math.min(nCoding, 15)),
+      explanation: js.length ? js.reduce((s, r) => s + (r.java_score ?? 0) / 10, 0) / Math.max(js.length, 3) : null,
+      coverage: tried.length / nCoding,
+    };
+    areas.push(extra("coding", "Coding (data structures & algorithms)", 1.0, sig, Math.max(0, ...rows.map((r) => r.updated_at)), rows.reduce((s, r) => s + r.attempts, 0) + js.length, { label: "Solve a problem", to: "/coding" }, { questions: nCoding, java: 0, puzzles: 0 }));
+  }
+  if (nBeh) {
+    const stories = db.prepare("SELECT themes, best_score, updated_at FROM stories WHERE user_id = ?").all(u) as { themes: string; best_score: number | null; updated_at: number }[];
+    const links = db.prepare("SELECT best_score FROM story_links WHERE user_id = ?").all(u) as { best_score: number | null }[];
+    const sg = db.prepare("SELECT ref_id, MAX(score) s, MAX(created_at) t FROM ai_grades WHERE user_id = ? AND kind = 'story' GROUP BY ref_id").all(u) as { ref_id: string; s: number; t: number }[];
+    const themesOk = new Set(stories.filter((s) => (s.best_score ?? 0) >= 7).flatMap((s) => JSON.parse(s.themes) as string[]));
+    const nThemes = Math.max(1, content.behavioral.themes.length);
+    const sig: Sig = {
+      knowledge: null, accuracy: null,
+      practice: Math.min(1, stories.length / 8),
+      explanation: sg.length ? sg.reduce((s, x) => s + x.s / 10, 0) / Math.max(sg.length, 4) : 0,
+      coverage: Math.min(1, (themesOk.size / nThemes) * 0.6 + (links.length / nBeh) * 0.4),
+    };
+    areas.push(extra("behavioral", "Behavioural & leadership", 0.9, sig, Math.max(0, ...stories.map((s) => s.updated_at), ...sg.map((x) => x.t)), stories.length * 2 + sg.length * 3, { label: "Work on your stories", to: "/behavioral" }, { questions: nBeh, java: 0, puzzles: 0 }));
+  }
+  if (content.mongo.length) {
+    const m = areas.find((a) => a.id === "mongodb");
+    const rows = db.prepare("SELECT solved, attempts, updated_at FROM mongo_progress WHERE user_id = ?").all(u) as { solved: number; attempts: number; updated_at: number }[];
+    if (m) {
+      const solvedShare = rows.filter((r) => r.solved).length / content.mongo.length;
+      const touchedShare = rows.length / content.mongo.length;
+      const s = m.signals;
+      const sig: Sig = {
+        knowledge: s.knowledge == null ? null : s.knowledge / 100, accuracy: s.accuracy == null ? null : s.accuracy / 100,
+        practice: solvedShare, explanation: s.explanation == null ? null : s.explanation / 100,
+        coverage: ((s.coverage ?? 0) / 100) * 0.5 + touchedShare * 0.5,
+      };
+      const re = extra("mongodb", m.label, m.weight, sig, Math.max(0, ...rows.map((r) => r.updated_at), now - (m.idleDays ?? 9999) * DAY), m.evidence + rows.reduce((a, r) => a + r.attempts, 0),
+        sig.practice! < (sig.knowledge ?? 1) ? { label: "Hands-on queries", to: "/mongo" } : m.action, { ...m.items });
+      Object.assign(m, re);
+    }
+  }
+
+  // Company focus: weights come from your target companies (averaged), or a specific company when asked.
+  const targets = targetCompanies(u);
+  const avgWeights = (ids: string[]) => {
+    const ps = ids.map((id) => content.companies.find((c) => c.id === id)).filter(Boolean) as { weights: Record<string, number> }[];
+    if (!ps.length) return null;
+    const keys = new Set(ps.flatMap((p) => Object.keys(p.weights)));
+    return Object.fromEntries([...keys].map((k) => [k, ps.reduce((s, p) => s + (p.weights[k] ?? 1), 0) / ps.length]));
+  };
+  const cw = (company ? avgWeights([company]) : avgWeights(targets));
+  for (const a of areas) if (cw?.[a.id] != null) a.weight = Math.round(cw[a.id] * 100) / 100;
+  const ov = overallFrom(areas);
   const totalEvidence = areas.reduce((s, a) => s + a.evidence, 0);
+  const perCompany = company ? [] : targets.map((id) => {
+    const w = avgWeights([id]) ?? {};
+    const o = overallFrom(areas.map((a) => ({ ...a, weight: w[a.id] ?? a.weight })));
+    return { id, name: content.companies.find((c) => c.id === id)?.name ?? id, overall: o.overall, band: band(o.overall) };
+  });
 
   return {
-    overall: capped, uncapped: overall, band: band(capped), capped: capped < overall,
+    overall: ov.overall, uncapped: ov.uncapped, band: band(ov.overall), capped: ov.overall < ov.uncapped,
     confidence: totalEvidence >= 400 ? "high" : totalEvidence >= 100 ? "medium" : "low",
     strongest: [...areas].sort((x, y) => y.score - x.score).slice(0, 2).map((a) => a.label),
     focus: [...areas].sort((x, y) => x.score * (2 - x.weight) - y.score * (2 - y.weight)).slice(0, 3).map((a) => ({ id: a.id, label: a.label, score: a.score, action: a.action })),
-    weights: W,
+    weights: W, company: company ?? null, targets, perCompany,
     areas,
   };
+}
+
+function overallFrom(areas: { score: number; weight: number }[]) {
+  const wsum = areas.reduce((s, a) => s + a.weight, 0) || 1;
+  const uncapped = Math.round(areas.reduce((s, a) => s + a.score * a.weight, 0) / wsum);
+  // An interview exposes your weakest areas: cap the overall at 20 points above your weakest high-weight area.
+  const core = areas.filter((a) => a.weight >= 1);
+  const floorArea = core.length ? Math.min(...core.map((a) => a.score)) : 100;
+  return { uncapped, overall: Math.min(uncapped, floorArea + 20) };
+}
+
+export function targetCompanies(u: number): string[] {
+  const r = db.prepare("SELECT target_companies t FROM users WHERE id = ?").get(u) as { t: string | null } | undefined;
+  try { return r?.t ? (JSON.parse(r.t) as string[]) : []; } catch { return []; }
 }
 
 function band(s: number) {

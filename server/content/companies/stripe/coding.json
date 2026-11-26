@@ -1,0 +1,537 @@
+[
+  {
+    "id": "stripe-code-01",
+    "title": "Aggregate Transactions CSV by Merchant and Currency",
+    "level": "medium",
+    "topic": "Parsing & aggregation",
+    "prompt": "You are given a CSV string of payment events. The first line is a header: `id,merchant,currency,amount,status`. `amount` is an integer in **minor units** (e.g. cents).\n\nReturn an object mapping `\"merchant|CURRENCY\"` to the **net** total in minor units, where:\n\n- `succeeded` rows add `amount`; `refunded` rows subtract `amount`; any other status is ignored.\n- Rows are de-duplicated by `id`: only the **first valid** occurrence of an id counts (retried webhooks can deliver duplicates).\n- Malformed rows (wrong column count, empty id or merchant, currency not exactly 3 letters, amount not a non-negative integer) are skipped and do not mark the id as seen.\n- Currency codes are normalised to upper case; surrounding whitespace on fields is trimmed; blank lines are ignored.\n- Groups with at least one counted row appear even if the net is 0.\n\n**Example:** `\"id,merchant,currency,amount,status\\n1,acme,usd,500,succeeded\\n2,acme,usd,200,refunded\"` -> `{\"acme|USD\":300}`\n\nJava: return a `Map<String, Long>`.",
+    "fn": "aggregateTransactions",
+    "starter": {
+      "js": "function aggregateTransactions(csv) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public Map<String, Long> aggregateTransactions(String csv) {\n    // your code\n    return new TreeMap<>();\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\\n1,acme,usd,500,succeeded\\n2,acme,usd,200,refunded\")",
+        "expected": {
+          "acme|USD": 300
+        }
+      },
+      {
+        "name": "multi merchant & currency",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\\n1,acme,usd,500,succeeded\\n2,acme,eur,100,succeeded\\n3,zen,usd,50,succeeded\")",
+        "expected": {
+          "acme|USD": 500,
+          "acme|EUR": 100,
+          "zen|USD": 50
+        }
+      },
+      {
+        "name": "duplicate ids count once",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\\n1,acme,usd,500,succeeded\\n1,acme,usd,500,succeeded\\n1,acme,usd,999,refunded\")",
+        "expected": {
+          "acme|USD": 500
+        }
+      },
+      {
+        "name": "ignores other statuses",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\\n1,acme,usd,500,failed\\n2,acme,usd,70,pending\\n3,acme,usd,10,succeeded\")",
+        "expected": {
+          "acme|USD": 10
+        }
+      },
+      {
+        "name": "skips malformed rows",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\\n1,acme,usd,abc,succeeded\\n2,,usd,5,succeeded\\n3,acme,usdx,5,succeeded\\n4,acme,usd,5\\n5,acme,usd,-5,succeeded\\n6,acme,usd,7,succeeded\")",
+        "expected": {
+          "acme|USD": 7
+        }
+      },
+      {
+        "name": "malformed row does not consume id",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\\n9,acme,usd,x,succeeded\\n9,acme,usd,40,succeeded\")",
+        "expected": {
+          "acme|USD": 40
+        }
+      },
+      {
+        "name": "whitespace, blanks, net zero",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\\n\\n 1 , shop , gbp , 100 , succeeded \\n2,shop,GBP,100,refunded\\n\")",
+        "expected": {
+          "shop|GBP": 0
+        }
+      },
+      {
+        "name": "header only",
+        "call": "aggregateTransactions(\"id,merchant,currency,amount,status\")",
+        "expected": {}
+      }
+    ],
+    "solution": {
+      "js": "function aggregateTransactions(csv) {\n  const out = {};\n  const seen = new Set();\n  const lines = csv.split(/\\r?\\n/).slice(1);\n  for (const raw of lines) {\n    if (raw.trim() === '') continue;\n    const f = raw.split(',').map(s => s.trim());\n    if (f.length !== 5) continue;\n    const [id, merchant, cur, amt, status] = f;\n    if (!id || !merchant || !/^[A-Za-z]{3}$/.test(cur) || !/^\\d+$/.test(amt)) continue;\n    if (seen.has(id)) continue;\n    seen.add(id);\n    let sign;\n    if (status === 'succeeded') sign = 1;\n    else if (status === 'refunded') sign = -1;\n    else continue;\n    const key = merchant + '|' + cur.toUpperCase();\n    out[key] = (out[key] || 0) + sign * Number(amt);\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public Map<String, Long> aggregateTransactions(String csv) {\n    Map<String, Long> out = new TreeMap<>();\n    Set<String> seen = new HashSet<>();\n    String[] lines = csv.split(\"\\\\r?\\\\n\");\n    for (int i = 1; i < lines.length; i++) {\n      if (lines[i].trim().isEmpty()) continue;\n      String[] f = lines[i].split(\",\", -1);\n      if (f.length != 5) continue;\n      for (int k = 0; k < 5; k++) f[k] = f[k].trim();\n      String id = f[0], merchant = f[1], cur = f[2], amt = f[3], status = f[4];\n      if (id.isEmpty() || merchant.isEmpty() || !cur.matches(\"[A-Za-z]{3}\") || !amt.matches(\"\\\\d+\")) continue;\n      if (!seen.add(id)) continue;\n      int sign;\n      if (status.equals(\"succeeded\")) sign = 1;\n      else if (status.equals(\"refunded\")) sign = -1;\n      else continue;\n      out.merge(merchant + \"|\" + cur.toUpperCase(), sign * Long.parseLong(amt), Long::sum);\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(n) in input size, space O(r) for seen ids and groups",
+    "hints": [
+      "Split into lines, skip the header, and validate each row before touching any state.",
+      "Decide carefully when an id becomes 'seen' - a malformed row should not block a later valid row with the same id.",
+      "Use a composite key string merchant|CURRENCY and accumulate signed integer amounts; never use floats for money."
+    ],
+    "keyPoints": [
+      "Validate, then dedupe, then aggregate - the order matters for correctness",
+      "Integer minor units avoid floating point rounding errors",
+      "Deduplication by id models at-least-once delivery of events",
+      "Normalise currency case and trim whitespace",
+      "Discuss streaming for large files and how you would surface rejected rows (an error report) in production"
+    ],
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-code-02",
+    "title": "Idempotency Key Store with TTL",
+    "level": "medium",
+    "topic": "Hash maps & state",
+    "prompt": "Implement the server-side behaviour of idempotency keys. You receive a TTL in seconds and a list of request lines, each `\"<t> <key> <bodyHash>\"` where `t` is a non-decreasing integer timestamp (seconds).\n\nFor each request output one string:\n\n- `\"new\"` - the key is unknown or its stored entry has expired. Store `(bodyHash, t)`; the entry expires when `now >= storedAt + ttl`.\n- `\"replay\"` - the key is live and the body hash matches: return the cached result (do **not** refresh the TTL).\n- `\"conflict\"` - the key is live but the body hash differs (the client reused a key with different parameters). The stored entry is unchanged.\n- `\"invalid\"` - the line does not have exactly 3 whitespace-separated fields or `t` is not an integer.\n\n**Example:** `processRequests(10, [\"0 k1 a\", \"5 k1 a\", \"6 k1 b\", \"10 k1 b\"])` -> `[\"new\",\"replay\",\"conflict\",\"new\"]`",
+    "fn": "processRequests",
+    "starter": {
+      "js": "function processRequests(ttl, requests) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<String> processRequests(int ttl, String[] requests) {\n    // your code\n    return new ArrayList<>();\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "processRequests(10, [\"0 k1 a\", \"5 k1 a\", \"6 k1 b\", \"10 k1 b\"])",
+        "expected": [
+          "new",
+          "replay",
+          "conflict",
+          "new"
+        ]
+      },
+      {
+        "name": "independent keys",
+        "call": "processRequests(5, [\"0 a x\", \"0 b x\", \"1 a x\", \"1 b y\"])",
+        "expected": [
+          "new",
+          "new",
+          "replay",
+          "conflict"
+        ]
+      },
+      {
+        "name": "replay does not refresh ttl",
+        "call": "processRequests(3, [\"0 k h\", \"2 k h\", \"3 k h\"])",
+        "expected": [
+          "new",
+          "replay",
+          "new"
+        ]
+      },
+      {
+        "name": "conflict keeps original",
+        "call": "processRequests(100, [\"0 k h1\", \"1 k h2\", \"2 k h1\"])",
+        "expected": [
+          "new",
+          "conflict",
+          "replay"
+        ]
+      },
+      {
+        "name": "invalid lines",
+        "call": "processRequests(10, [\"0 k\", \"x k h\", \"1 k h extra\", \"2 k h\"])",
+        "expected": [
+          "invalid",
+          "invalid",
+          "invalid",
+          "new"
+        ]
+      },
+      {
+        "name": "empty",
+        "call": "processRequests(10, [])",
+        "expected": []
+      }
+    ],
+    "solution": {
+      "js": "function processRequests(ttl, requests) {\n  const store = new Map(); // key -> { hash, at }\n  const out = [];\n  for (const line of requests) {\n    const f = line.trim().split(/\\s+/);\n    if (f.length !== 3 || !/^-?\\d+$/.test(f[0])) { out.push('invalid'); continue; }\n    const t = Number(f[0]), key = f[1], hash = f[2];\n    const e = store.get(key);\n    if (!e || t >= e.at + ttl) {\n      store.set(key, { hash, at: t });\n      out.push('new');\n    } else {\n      out.push(e.hash === hash ? 'replay' : 'conflict');\n    }\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<String> processRequests(int ttl, String[] requests) {\n    Map<String, String> hashes = new HashMap<>();\n    Map<String, Long> at = new HashMap<>();\n    List<String> out = new ArrayList<>();\n    for (String line : requests) {\n      String[] f = line.trim().split(\"\\\\s+\");\n      if (f.length != 3 || !f[0].matches(\"-?\\\\d+\")) { out.add(\"invalid\"); continue; }\n      long t = Long.parseLong(f[0]);\n      String key = f[1], hash = f[2];\n      Long storedAt = at.get(key);\n      if (storedAt == null || t >= storedAt + ttl) {\n        hashes.put(key, hash);\n        at.put(key, t);\n        out.add(\"new\");\n      } else {\n        out.add(hashes.get(key).equals(hash) ? \"replay\" : \"conflict\");\n      }\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(n) expected, space O(k) for live keys (add lazy or periodic eviction in production)",
+    "hints": [
+      "Store both the request fingerprint and the creation time per key.",
+      "Expiry can be checked lazily on access: is t >= storedAt + ttl?",
+      "Reusing a key with different parameters is a client bug - surface it instead of silently replaying."
+    ],
+    "keyPoints": [
+      "Idempotency keys make retries safe: same key + same params returns the original result",
+      "Fingerprinting the request detects key reuse with different params (Stripe's API returns an error in this case)",
+      "A TTL bounds storage; Stripe documents that keys can be pruned after at least 24 hours",
+      "In production: insert-if-absent atomically (unique constraint / SETNX) and handle concurrent in-flight requests with a lock or 409",
+      "Store the full response, including errors, so replays are identical"
+    ],
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-code-03",
+    "title": "Per-Key API Rate Limiter (Token Bucket)",
+    "level": "medium",
+    "topic": "Simulation",
+    "prompt": "Implement a token-bucket rate limiter keyed by API key. Each key has its own bucket with `capacity` tokens that starts **full** at the key's first request and refills continuously at `refillPerSec` tokens per second (never above `capacity`). Each request costs 1 token.\n\nRequests are strings `\"<t> <apiKey>\"` with non-decreasing integer `t` in seconds. Return an array of booleans: `true` if allowed (a token was consumed), `false` if rejected (HTTP 429).\n\n**Example:** `rateLimit(2, 1, [\"0 a\", \"0 a\", \"0 a\", \"1 a\"])` -> `[true,true,false,true]`",
+    "fn": "rateLimit",
+    "starter": {
+      "js": "function rateLimit(capacity, refillPerSec, requests) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<Boolean> rateLimit(int capacity, double refillPerSec, String[] requests) {\n    // your code\n    return new ArrayList<>();\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "rateLimit(2, 1, [\"0 a\", \"0 a\", \"0 a\", \"1 a\"])",
+        "expected": [
+          true,
+          true,
+          false,
+          true
+        ]
+      },
+      {
+        "name": "keys are isolated",
+        "call": "rateLimit(1, 1, [\"0 a\", \"0 b\", \"0 a\", \"0 b\"])",
+        "expected": [
+          true,
+          true,
+          false,
+          false
+        ]
+      },
+      {
+        "name": "refill capped at capacity",
+        "call": "rateLimit(2, 1, [\"0 a\", \"0 a\", \"100 a\", \"100 a\", \"100 a\"])",
+        "expected": [
+          true,
+          true,
+          true,
+          true,
+          false
+        ]
+      },
+      {
+        "name": "fractional refill",
+        "call": "rateLimit(1, 0.5, [\"0 a\", \"1 a\", \"2 a\", \"3 a\", \"4 a\"])",
+        "expected": [
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      },
+      {
+        "name": "rejected requests don't consume",
+        "call": "rateLimit(1, 1, [\"0 k\", \"0 k\", \"0 k\", \"1 k\"])",
+        "expected": [
+          true,
+          false,
+          false,
+          true
+        ]
+      },
+      {
+        "name": "new key starts full later",
+        "call": "rateLimit(3, 1, [\"50 z\", \"50 z\", \"50 z\", \"50 z\"])",
+        "expected": [
+          true,
+          true,
+          true,
+          false
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function rateLimit(capacity, refillPerSec, requests) {\n  const buckets = new Map(); // key -> { tokens, last }\n  const out = [];\n  for (const line of requests) {\n    const [ts, key] = line.trim().split(/\\s+/);\n    const t = Number(ts);\n    let b = buckets.get(key);\n    if (!b) { b = { tokens: capacity, last: t }; buckets.set(key, b); }\n    b.tokens = Math.min(capacity, b.tokens + (t - b.last) * refillPerSec);\n    b.last = t;\n    if (b.tokens >= 1) { b.tokens -= 1; out.push(true); }\n    else out.push(false);\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<Boolean> rateLimit(int capacity, double refillPerSec, String[] requests) {\n    Map<String, double[]> buckets = new HashMap<>(); // {tokens, last}\n    List<Boolean> out = new ArrayList<>();\n    for (String line : requests) {\n      String[] f = line.trim().split(\"\\\\s+\");\n      double t = Double.parseDouble(f[0]);\n      double[] b = buckets.computeIfAbsent(f[1], k -> new double[]{capacity, t});\n      b[0] = Math.min(capacity, b[0] + (t - b[1]) * refillPerSec);\n      b[1] = t;\n      if (b[0] >= 1) { b[0] -= 1; out.add(true); } else out.add(false);\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(1) per request, space O(k) buckets",
+    "hints": [
+      "Don't run a timer - compute the refill lazily from elapsed time when a request arrives.",
+      "Store per key: current tokens and last refill timestamp.",
+      "Clamp at capacity after refilling, then check >= 1."
+    ],
+    "keyPoints": [
+      "Lazy refill makes each check O(1) with two numbers of state",
+      "Token bucket allows bursts up to capacity while enforcing the average rate",
+      "Distributed version: atomic Redis Lua script or GCRA for check-and-decrement",
+      "Return 429 with Retry-After = ceil((1 - tokens) / rate)",
+      "Discuss fail-open vs fail-closed, and separate limits per endpoint or for test vs live mode"
+    ],
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-code-04",
+    "title": "Minimal Double-Entry Ledger",
+    "level": "medium",
+    "topic": "Simulation & invariants",
+    "prompt": "Build a tiny ledger that processes commands and returns one output string per command. Accounts are created implicitly with balance 0. Amounts are positive integers in minor units.\n\n- `DEPOSIT <acct> <amount>` - money enters from the special account `world` (whose balance may go negative). Output `\"OK\"`.\n- `TRANSFER <from> <to> <amount>` - output `\"OK\"` if `from` has enough balance, otherwise `\"INSUFFICIENT_FUNDS\"` and nothing changes. A transfer where `from == to` outputs `\"INVALID\"`. `world` has no special overdraft right for transfers.\n- `BALANCE <acct>` - output the balance as a string.\n- `CHECK` - output `\"BALANCED\"` if the sum of all balances (including `world`) is 0, else `\"UNBALANCED\"`.\n- Anything else, wrong argument counts, or a non-positive/non-integer amount outputs `\"INVALID\"`.\n\nEvery successful DEPOSIT/TRANSFER writes exactly two entries (one debit, one credit), so `CHECK` should always be `BALANCED`.\n\n**Example:** `runLedger([\"DEPOSIT alice 100\", \"TRANSFER alice bob 30\", \"BALANCE bob\", \"BALANCE world\"])` -> `[\"OK\",\"OK\",\"30\",\"-100\"]`",
+    "fn": "runLedger",
+    "starter": {
+      "js": "function runLedger(commands) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<String> runLedger(String[] commands) {\n    // your code\n    return new ArrayList<>();\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "runLedger([\"DEPOSIT alice 100\", \"TRANSFER alice bob 30\", \"BALANCE bob\", \"BALANCE world\"])",
+        "expected": [
+          "OK",
+          "OK",
+          "30",
+          "-100"
+        ]
+      },
+      {
+        "name": "insufficient funds",
+        "call": "runLedger([\"DEPOSIT a 10\", \"TRANSFER a b 11\", \"BALANCE a\", \"BALANCE b\"])",
+        "expected": [
+          "OK",
+          "INSUFFICIENT_FUNDS",
+          "10",
+          "0"
+        ]
+      },
+      {
+        "name": "exact balance allowed",
+        "call": "runLedger([\"DEPOSIT a 10\", \"TRANSFER a b 10\", \"BALANCE a\"])",
+        "expected": [
+          "OK",
+          "OK",
+          "0"
+        ]
+      },
+      {
+        "name": "invalid commands",
+        "call": "runLedger([\"DEPOSIT a -5\", \"DEPOSIT a 1.5\", \"TRANSFER a a 1\", \"WITHDRAW a 1\", \"DEPOSIT a\", \"BALANCE nobody\"])",
+        "expected": [
+          "INVALID",
+          "INVALID",
+          "INVALID",
+          "INVALID",
+          "INVALID",
+          "0"
+        ]
+      },
+      {
+        "name": "invariant holds",
+        "call": "runLedger([\"DEPOSIT a 50\", \"DEPOSIT b 20\", \"TRANSFER a b 25\", \"TRANSFER b c 45\", \"TRANSFER c a 100\", \"CHECK\", \"BALANCE c\"])",
+        "expected": [
+          "OK",
+          "OK",
+          "OK",
+          "OK",
+          "INSUFFICIENT_FUNDS",
+          "BALANCED",
+          "45"
+        ]
+      },
+      {
+        "name": "world cannot overdraw via transfer",
+        "call": "runLedger([\"TRANSFER world a 5\", \"BALANCE a\"])",
+        "expected": [
+          "INSUFFICIENT_FUNDS",
+          "0"
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function runLedger(commands) {\n  const bal = new Map();\n  const get = a => bal.get(a) || 0;\n  const post = (debit, credit, amt) => { // two entries, always together\n    bal.set(debit, get(debit) - amt);\n    bal.set(credit, get(credit) + amt);\n  };\n  const isAmt = s => /^\\d+$/.test(s) && Number(s) > 0;\n  const out = [];\n  for (const cmd of commands) {\n    const f = cmd.trim().split(/\\s+/);\n    if (f[0] === 'DEPOSIT' && f.length === 3 && isAmt(f[2])) {\n      post('world', f[1], Number(f[2])); out.push('OK');\n    } else if (f[0] === 'TRANSFER' && f.length === 4 && isAmt(f[3]) && f[1] !== f[2]) {\n      const amt = Number(f[3]);\n      if (get(f[1]) < amt) out.push('INSUFFICIENT_FUNDS');\n      else { post(f[1], f[2], amt); out.push('OK'); }\n    } else if (f[0] === 'BALANCE' && f.length === 2) {\n      out.push(String(get(f[1])));\n    } else if (f[0] === 'CHECK' && f.length === 1) {\n      let s = 0; for (const v of bal.values()) s += v;\n      out.push(s === 0 ? 'BALANCED' : 'UNBALANCED');\n    } else out.push('INVALID');\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  private final Map<String, Long> bal = new HashMap<>();\n\n  private long get(String a) { return bal.getOrDefault(a, 0L); }\n\n  private void post(String debit, String credit, long amt) {\n    bal.put(debit, get(debit) - amt);\n    bal.put(credit, get(credit) + amt);\n  }\n\n  private boolean isAmt(String s) { return s.matches(\"\\\\d+\") && Long.parseLong(s) > 0; }\n\n  public List<String> runLedger(String[] commands) {\n    List<String> out = new ArrayList<>();\n    for (String cmd : commands) {\n      String[] f = cmd.trim().split(\"\\\\s+\");\n      if (f[0].equals(\"DEPOSIT\") && f.length == 3 && isAmt(f[2])) {\n        post(\"world\", f[1], Long.parseLong(f[2])); out.add(\"OK\");\n      } else if (f[0].equals(\"TRANSFER\") && f.length == 4 && isAmt(f[3]) && !f[1].equals(f[2])) {\n        long amt = Long.parseLong(f[3]);\n        if (get(f[1]) < amt) out.add(\"INSUFFICIENT_FUNDS\");\n        else { post(f[1], f[2], amt); out.add(\"OK\"); }\n      } else if (f[0].equals(\"BALANCE\") && f.length == 2) {\n        out.add(String.valueOf(get(f[1])));\n      } else if (f[0].equals(\"CHECK\") && f.length == 1) {\n        long s = 0; for (long v : bal.values()) s += v;\n        out.add(s == 0 ? \"BALANCED\" : \"UNBALANCED\");\n      } else out.add(\"INVALID\");\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(1) per command except CHECK, which is O(accounts); space O(accounts)",
+    "hints": [
+      "Model DEPOSIT as a transfer from a 'world' account so every operation is a balanced pair of entries.",
+      "Validate fully before mutating anything - a rejected transfer must leave no trace.",
+      "CHECK is the double-entry invariant: the total of all balances is zero."
+    ],
+    "keyPoints": [
+      "Double-entry: every movement debits one account and credits another by the same amount",
+      "The invariant (sum = 0) is a cheap, powerful correctness check - run it continuously in production",
+      "Validate-then-apply keeps operations atomic; in a DB, write both entries in one transaction",
+      "Real ledgers are append-only entries; balances are derived or cached, never edited in place",
+      "Integer minor units; for multi-currency keep balances per currency and model FX as two balanced legs"
+    ],
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-code-05",
+    "title": "Webhook Retry Schedule with Backoff and Jitter",
+    "level": "medium",
+    "topic": "Simulation",
+    "prompt": "Simulate webhook delivery for a single event. The first attempt happens at time 0. After failed attempt number `i` (0-based), the next attempt is scheduled after a delay of\n\n`delay_i = floor(rands[i] * min(cap, base * 2^i))`  (\"full jitter\")\n\nwhere `rands` is an injected array of values in [0,1) so results are deterministic. Stop when an attempt succeeds or after `maxAttempts` attempts.\n\n`outcomes[i]` is `true` if attempt `i` succeeds; if `outcomes` is shorter than needed, missing attempts fail.\n\nReturn `{ times: [...attempt timestamps], delivered: boolean }`.\n\n**Example:** `retrySchedule(10, 1000, 4, [false,false,true], [0.5,0.5,0.5])` -> `{\"times\":[0,5,15],\"delivered\":true}`\n\nJava: return a `long[]` of the attempt times followed by one extra element, `1` if delivered or `0` if not.",
+    "fn": "retrySchedule",
+    "starter": {
+      "js": "function retrySchedule(base, cap, maxAttempts, outcomes, rands) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public long[] retrySchedule(long base, long cap, int maxAttempts, boolean[] outcomes, double[] rands) {\n    // your code\n    return new long[0];\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "retrySchedule(10, 1000, 4, [false,false,true], [0.5,0.5,0.5])",
+        "expected": {
+          "times": [
+            0,
+            5,
+            15
+          ],
+          "delivered": true
+        }
+      },
+      {
+        "name": "first try succeeds",
+        "call": "retrySchedule(10, 1000, 5, [true], [0.9])",
+        "expected": {
+          "times": [
+            0
+          ],
+          "delivered": true
+        }
+      },
+      {
+        "name": "exhausts attempts",
+        "call": "retrySchedule(10, 1000, 3, [], [0.99,0.99,0.99])",
+        "expected": {
+          "times": [
+            0,
+            9,
+            28
+          ],
+          "delivered": false
+        }
+      },
+      {
+        "name": "cap applies",
+        "call": "retrySchedule(100, 300, 5, [false,false,false,false,true], [1e-9,0.5,0.5,0.5])",
+        "expected": {
+          "times": [
+            0,
+            0,
+            100,
+            250,
+            400
+          ],
+          "delivered": true
+        }
+      },
+      {
+        "name": "zero jitter retries immediately",
+        "call": "retrySchedule(60, 3600, 3, [false,false,false], [0,0,0])",
+        "expected": {
+          "times": [
+            0,
+            0,
+            0
+          ],
+          "delivered": false
+        }
+      },
+      {
+        "name": "single attempt",
+        "call": "retrySchedule(10, 100, 1, [false], [0.5])",
+        "expected": {
+          "times": [
+            0
+          ],
+          "delivered": false
+        }
+      }
+    ],
+    "solution": {
+      "js": "function retrySchedule(base, cap, maxAttempts, outcomes, rands) {\n  const times = [];\n  let t = 0;\n  for (let i = 0; i < maxAttempts; i++) {\n    times.push(t);\n    if (outcomes[i] === true) return { times, delivered: true };\n    if (i === maxAttempts - 1) break;\n    const ceiling = Math.min(cap, base * Math.pow(2, i));\n    t += Math.floor(rands[i] * ceiling);\n  }\n  return { times, delivered: false };\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public long[] retrySchedule(long base, long cap, int maxAttempts, boolean[] outcomes, double[] rands) {\n    List<Long> times = new ArrayList<>();\n    long t = 0;\n    boolean delivered = false;\n    for (int i = 0; i < maxAttempts; i++) {\n      times.add(t);\n      if (i < outcomes.length && outcomes[i]) { delivered = true; break; }\n      if (i == maxAttempts - 1) break;\n      double ceiling = Math.min((double) cap, base * Math.pow(2, i));\n      t += (long) Math.floor(rands[i] * ceiling);\n    }\n    long[] out = new long[times.size() + 1];\n    for (int i = 0; i < times.size(); i++) out[i] = times.get(i);\n    out[times.size()] = delivered ? 1 : 0;\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(maxAttempts), space O(maxAttempts)",
+    "hints": [
+      "Track the current time t; record it before checking the outcome of each attempt.",
+      "The exponent uses the index of the attempt that just failed.",
+      "Apply the cap before multiplying by the random factor, and don't compute a delay after the final attempt."
+    ],
+    "keyPoints": [
+      "Exponential backoff gives a struggling endpoint room to recover; jitter prevents synchronized retry storms",
+      "Injecting randomness makes the scheduler deterministic and testable",
+      "Stripe documents retrying undelivered live-mode webhooks with exponential backoff for up to about 3 days",
+      "Receivers must be idempotent (dedupe on event id) because delivery is at-least-once",
+      "In production: a durable queue with per-endpoint scheduling, dead-lettering after max attempts, and alerting/auto-disable for failing endpoints"
+    ],
+    "company": "stripe"
+  },
+  {
+    "id": "stripe-code-06",
+    "title": "Format Money from Minor Units",
+    "level": "easy",
+    "topic": "Strings & numbers",
+    "prompt": "Format an integer amount in **minor units** for display as `\"<major>.<minor> <CURRENCY>\"`.\n\nThe number of decimal places depends on the currency (case-insensitive input, upper-case output):\n\n- 0 decimals: `JPY`, `KRW`, `VND`, `CLP`\n- 3 decimals: `BHD`, `KWD`, `JOD`, `OMR`, `TND`\n- everything else: 2 decimals\n\nRules: no decimal point for 0-decimal currencies; negative amounts get a leading `-`; the major part uses `,` as a thousands separator. Use integer/string arithmetic only - amounts can be up to 2^53 - 1.\n\n**Examples:** `formatAmount(123456, \"usd\")` -> `\"1,234.56 USD\"`; `formatAmount(-5, \"USD\")` -> `\"-0.05 USD\"`; `formatAmount(1500, \"jpy\")` -> `\"1,500 JPY\"`",
+    "fn": "formatAmount",
+    "starter": {
+      "js": "function formatAmount(amount, currency) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public String formatAmount(long amount, String currency) {\n    // your code\n    return \"\";\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "usd",
+        "call": "formatAmount(123456, \"usd\")",
+        "expected": "1,234.56 USD"
+      },
+      {
+        "name": "negative small",
+        "call": "formatAmount(-5, \"USD\")",
+        "expected": "-0.05 USD"
+      },
+      {
+        "name": "zero-decimal",
+        "call": "formatAmount(1500, \"jpy\")",
+        "expected": "1,500 JPY"
+      },
+      {
+        "name": "three-decimal",
+        "call": "formatAmount(1234567, \"KWD\")",
+        "expected": "1,234.567 KWD"
+      },
+      {
+        "name": "zero",
+        "call": "formatAmount(0, \"eur\")",
+        "expected": "0.00 EUR"
+      },
+      {
+        "name": "large exact",
+        "call": "formatAmount(9007199254740991, \"usd\")",
+        "expected": "90,071,992,547,409.91 USD"
+      },
+      {
+        "name": "under 1000 no separator",
+        "call": "formatAmount(99900, \"gbp\")",
+        "expected": "999.00 GBP"
+      },
+      {
+        "name": "negative zero-decimal",
+        "call": "formatAmount(-1000000, \"KRW\")",
+        "expected": "-1,000,000 KRW"
+      }
+    ],
+    "solution": {
+      "js": "function formatAmount(amount, currency) {\n  const cur = currency.toUpperCase();\n  const zero = ['JPY', 'KRW', 'VND', 'CLP'];\n  const three = ['BHD', 'KWD', 'JOD', 'OMR', 'TND'];\n  const d = zero.includes(cur) ? 0 : three.includes(cur) ? 3 : 2;\n  const neg = amount < 0;\n  const digits = String(Math.abs(amount)).padStart(d + 1, '0');\n  let major = digits.slice(0, digits.length - d);\n  const minor = digits.slice(digits.length - d);\n  major = major.replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');\n  return (neg ? '-' : '') + major + (d ? '.' + minor : '') + ' ' + cur;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public String formatAmount(long amount, String currency) {\n    String cur = currency.toUpperCase();\n    Set<String> zero = Set.of(\"JPY\", \"KRW\", \"VND\", \"CLP\");\n    Set<String> three = Set.of(\"BHD\", \"KWD\", \"JOD\", \"OMR\", \"TND\");\n    int d = zero.contains(cur) ? 0 : three.contains(cur) ? 3 : 2;\n    boolean neg = amount < 0;\n    String digits = Long.toString(Math.abs(amount));\n    while (digits.length() < d + 1) digits = \"0\" + digits;\n    String major = digits.substring(0, digits.length() - d);\n    String minor = digits.substring(digits.length() - d);\n    StringBuilder sb = new StringBuilder();\n    for (int i = 0; i < major.length(); i++) {\n      if (i > 0 && (major.length() - i) % 3 == 0) sb.append(',');\n      sb.append(major.charAt(i));\n    }\n    return (neg ? \"-\" : \"\") + sb + (d > 0 ? \".\" + minor : \"\") + \" \" + cur;\n  }\n}\n"
+    },
+    "complexity": "Time O(digits), space O(digits)",
+    "hints": [
+      "Never divide by 100 into a float - work on the decimal string of the absolute value.",
+      "Left-pad with zeros so there is at least one major digit.",
+      "Handle the sign separately, then insert separators into the major part."
+    ],
+    "keyPoints": [
+      "Money is stored as integer minor units; Stripe's API takes amounts in the smallest currency unit",
+      "Currency exponents vary (0, 2, 3) - use a lookup table, never assume 2",
+      "Floats lose precision (0.1 + 0.2) and beyond 2^53; strings/BigInt/BigDecimal are safe",
+      "Sign handling: -5 cents must render as -0.05, not -.05",
+      "Display formatting is locale-aware (Intl.NumberFormat) and separate from the storage format"
+    ],
+    "company": "stripe"
+  }
+]

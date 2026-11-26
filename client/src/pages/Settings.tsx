@@ -77,8 +77,11 @@ export function Settings() {
       <div className="morelinks">
         <Link to="/notes" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="notes" /></span><span className="tx"><h4>Notes & stars</h4><p style={{ margin: 0 }}>Your revision sheet</p></span><span className="go"><Icon name="arrow" /></span></Link>
         <Link to="/search" className="trackcard"><span className="ti java" style={{ width: 40, height: 40 }}><Icon name="search" /></span><span className="tx"><h4>Search</h4><p style={{ margin: 0 }}>Cards, terms, questions</p></span><span className="go"><Icon name="arrow" /></span></Link>
+        <Link to="/stats" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="chart" /></span><span className="tx"><h4>Stats</h4><p style={{ margin: 0 }}>Progress, weekly report</p></span><span className="go"><Icon name="arrow" /></span></Link>
+        <Link to="/readiness" className="trackcard"><span className="ti ddia" style={{ width: 40, height: 40 }}><Icon name="trophy" /></span><span className="tx"><h4>Readiness</h4><p style={{ margin: 0 }}>By area and company</p></span><span className="go"><Icon name="arrow" /></span></Link>
       </div>
 
+      <InterviewSettings />
       <EmailSettings />
 
       <form className="panel" onSubmit={saveGoal}>
@@ -161,6 +164,65 @@ function EmailSettings() {
       </label>
       {!configured && <p className="small muted">Sending is not set up on the server yet (RESEND_API_KEY). Your address is saved for when it is.</p>}
       <button className="primary">Save</button>
+    </form>
+  );
+}
+
+export function InterviewSettings() {
+  const { toast } = useProfile();
+  const [date, setDate] = useState("");
+  const [hour, setHour] = useState(19);
+  const [push, setPush] = useState<{ supported: boolean; subscribed: boolean; busy?: boolean }>({ supported: false, subscribed: false });
+  useEffect(() => {
+    api.get<{ date: string | null; reminderHour: number }>("/me/interview").then((r) => { setDate(r.date ?? ""); setHour(r.reminderHour); }).catch(() => {});
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    if (supported) api.get<{ subscribed: boolean }>("/push/status").then((s) => setPush({ supported, subscribed: s.subscribed })).catch(() => setPush({ supported, subscribed: false }));
+  }, []);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    try { await api.put("/me/interview", { date: date || null, reminderHour: hour }); toast("Saved"); } catch (err) { toast((err as Error).message); }
+  }
+  async function enablePush() {
+    setPush({ ...push, busy: true });
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") throw new Error("Notifications are blocked. Allow them in your browser or phone settings.");
+      const reg = await navigator.serviceWorker.ready;
+      const { key } = await api.get<{ key: string }>("/push/key");
+      const pad = "=".repeat((4 - (key.length % 4)) % 4);
+      const raw = atob((key + pad).replace(/-/g, "+").replace(/_/g, "/"));
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)) });
+      await api.post("/push/subscribe", { subscription: sub.toJSON(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      await api.post("/push/test");
+      setPush({ supported: true, subscribed: true });
+      toast("Reminders on. A test notification is on its way.");
+    } catch (err) { toast((err as Error).message); setPush({ ...push, busy: false }); }
+  }
+  async function disablePush() {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    await api.post("/push/unsubscribe", { endpoint: sub?.endpoint });
+    await sub?.unsubscribe();
+    setPush({ supported: true, subscribed: false });
+  }
+  return (
+    <form className="panel" id="interview" onSubmit={save}>
+      <h3>Interview & reminders</h3>
+      <label className="lbl" htmlFor="idate">Interview date</label>
+      <p className="small muted" style={{ margin: "0 0 4px" }}>Paces your daily plan: more mocks and design practice as the date gets closer.</p>
+      <input id="idate" className="field" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 220 }} />
+      <label className="lbl" htmlFor="rhour">Daily reminder time</label>
+      <select id="rhour" className="field" value={hour} onChange={(e) => setHour(Number(e.target.value))} style={{ maxWidth: 220 }}>
+        {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+      </select>
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <button className="primary">Save</button>
+        {push.supported ? (push.subscribed
+          ? <button type="button" className="ghost" onClick={disablePush}>Turn off reminders</button>
+          : <button type="button" className="ghost" onClick={enablePush} disabled={push.busy}><Icon name="bolt" />Turn on reminders</button>)
+          : <span className="small muted">On iPhone, add the app to your Home Screen to get reminders.</span>}
+      </div>
+      <p className="small muted">Reminders come once a day at that time: reviews due, a streak at risk, or what’s left on today’s plan. <Link to="/companies">Target companies →</Link></p>
     </form>
   );
 }

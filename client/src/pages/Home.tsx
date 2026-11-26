@@ -4,6 +4,7 @@ import { useLoad, useProfile } from "../state";
 import { Icon, Ring, type IconName } from "../components/ui";
 import { Pic } from "../components/Art";
 import { ReadinessCard } from "./Readiness";
+import { HomePlan } from "./Prep";
 
 const BADGE_ICON: Record<string, IconName> = {
   first: "check", combo5: "flame", combo10: "flame", perfect: "star", matcher: "puzzle", reader: "book",
@@ -99,6 +100,7 @@ export function Home() {
         <Link to="/java" className="tile-stat"><span className="ic code"><Icon name="code" /></span><span><div className="v">{profile.javaDue}</div><div className="l">Java due</div></span></Link>
       </div>
 
+      <HomePlan />
       <ReadinessCard />
 
       <h3 className="section-h">Tracks</h3>

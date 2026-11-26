@@ -1,0 +1,1557 @@
+[
+  {
+    "id": "code-01",
+    "title": "Two Sum (Indices)",
+    "level": "easy",
+    "topic": "Hash maps",
+    "prompt": "Given an array of integers `nums` and an integer `target`, return the indices `[i, j]` (with `i < j`) of the two numbers that add up to `target`. Exactly one solution exists; you may not use the same element twice.\n\n**Example 1:** `twoSum([2,7,11,15], 9)` -> `[0,1]`\n\n**Example 2:** `twoSum([3,2,4], 6)` -> `[1,2]`",
+    "fn": "twoSum",
+    "starter": {
+      "js": "function twoSum(nums, target) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] twoSum(int[] nums, int target) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "twoSum([2,7,11,15], 9)",
+        "expected": [
+          0,
+          1
+        ]
+      },
+      {
+        "name": "middle",
+        "call": "twoSum([3,2,4], 6)",
+        "expected": [
+          1,
+          2
+        ]
+      },
+      {
+        "name": "duplicates",
+        "call": "twoSum([3,3], 6)",
+        "expected": [
+          0,
+          1
+        ]
+      },
+      {
+        "name": "negatives",
+        "call": "twoSum([-1,-2,-3,-4,-5], -8)",
+        "expected": [
+          2,
+          4
+        ]
+      },
+      {
+        "name": "zero target",
+        "call": "twoSum([0,4,3,0], 0)",
+        "expected": [
+          0,
+          3
+        ]
+      },
+      {
+        "name": "far apart",
+        "call": "twoSum([1,5,9,13,2], 3)",
+        "expected": [
+          0,
+          4
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function twoSum(nums, target) {\n  const seen = new Map();\n  for (let i = 0; i < nums.length; i++) {\n    const need = target - nums[i];\n    if (seen.has(need)) return [seen.get(need), i];\n    seen.set(nums[i], i);\n  }\n  return [];\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int[] twoSum(int[] nums, int target) {\n    Map<Integer, Integer> seen = new HashMap<>();\n    for (int i = 0; i < nums.length; i++) {\n      Integer j = seen.get(target - nums[i]);\n      if (j != null) return new int[]{j, i};\n      seen.put(nums[i], i);\n    }\n    return new int[0];\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(n)",
+    "hints": [
+      "The brute force checks every pair in O(n^2). What do you need to look up quickly?",
+      "For each element x, you need to know whether target - x appeared earlier.",
+      "Store value -> index in a hash map as you scan; check before inserting so you never pair an element with itself."
+    ],
+    "keyPoints": [
+      "Single pass with a hash map of value -> index",
+      "Check for the complement before inserting the current value (handles [3,3])",
+      "O(n) time and space; mention sort + two pointers loses original indices",
+      "Handles negatives and zero"
+    ]
+  },
+  {
+    "id": "code-02",
+    "title": "Valid Parentheses",
+    "level": "easy",
+    "topic": "Stacks",
+    "prompt": "Given a string `s` containing only the characters `()[]{}`, return `true` if every bracket is closed by the same type of bracket in the correct order.\n\n**Example 1:** `isValid(\"()[]{}\")` -> `true`\n\n**Example 2:** `isValid(\"([)]\")` -> `false`",
+    "fn": "isValid",
+    "starter": {
+      "js": "function isValid(s) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public boolean isValid(String s) {\n    // your code\n    return false;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "simple",
+        "call": "isValid(\"()\")",
+        "expected": true
+      },
+      {
+        "name": "mixed",
+        "call": "isValid(\"()[]{}\")",
+        "expected": true
+      },
+      {
+        "name": "nested",
+        "call": "isValid(\"{[()()]}\")",
+        "expected": true
+      },
+      {
+        "name": "interleaved",
+        "call": "isValid(\"([)]\")",
+        "expected": false
+      },
+      {
+        "name": "unclosed",
+        "call": "isValid(\"((\")",
+        "expected": false
+      },
+      {
+        "name": "leading close",
+        "call": "isValid(\"]\")",
+        "expected": false
+      },
+      {
+        "name": "empty",
+        "call": "isValid(\"\")",
+        "expected": true
+      }
+    ],
+    "solution": {
+      "js": "function isValid(s) {\n  const pair = { ')': '(', ']': '[', '}': '{' };\n  const stack = [];\n  for (const ch of s) {\n    if (ch in pair) {\n      if (stack.pop() !== pair[ch]) return false;\n    } else stack.push(ch);\n  }\n  return stack.length === 0;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public boolean isValid(String s) {\n    Deque<Character> stack = new ArrayDeque<>();\n    for (char c : s.toCharArray()) {\n      if (c == '(' || c == '[' || c == '{') { stack.push(c); continue; }\n      if (stack.isEmpty()) return false;\n      char o = stack.pop();\n      if ((c == ')' && o != '(') || (c == ']' && o != '[') || (c == '}' && o != '{')) return false;\n    }\n    return stack.isEmpty();\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(n)",
+    "hints": [
+      "The most recently opened bracket must be closed first.",
+      "That LIFO property suggests a stack.",
+      "Remember to check both an empty stack on a close and a non-empty stack at the end."
+    ],
+    "keyPoints": [
+      "Stack of open brackets; pop and compare on each closer",
+      "Closer with empty stack -> false",
+      "Non-empty stack at end -> false",
+      "Empty string is valid; O(n) time"
+    ]
+  },
+  {
+    "id": "code-03",
+    "title": "Group Anagrams",
+    "level": "easy",
+    "topic": "Hash maps",
+    "prompt": "Given an array of strings `strs`, group the anagrams together. Return the groups with each group sorted alphabetically and the list of groups sorted by its first element.\n\n**Example:** `groupAnagrams([\"eat\",\"tea\",\"tan\",\"ate\",\"nat\",\"bat\"])` -> `[[\"ate\",\"eat\",\"tea\"],[\"bat\"],[\"nat\",\"tan\"]]`",
+    "fn": "groupAnagrams",
+    "starter": {
+      "js": "function groupAnagrams(strs) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<List<String>> groupAnagrams(String[] strs) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "groupAnagrams([\"eat\",\"tea\",\"tan\",\"ate\",\"nat\",\"bat\"])",
+        "expected": [
+          [
+            "ate",
+            "eat",
+            "tea"
+          ],
+          [
+            "bat"
+          ],
+          [
+            "nat",
+            "tan"
+          ]
+        ]
+      },
+      {
+        "name": "empty string",
+        "call": "groupAnagrams([\"\"])",
+        "expected": [
+          [
+            ""
+          ]
+        ]
+      },
+      {
+        "name": "single",
+        "call": "groupAnagrams([\"a\"])",
+        "expected": [
+          [
+            "a"
+          ]
+        ]
+      },
+      {
+        "name": "no input",
+        "call": "groupAnagrams([])",
+        "expected": []
+      },
+      {
+        "name": "duplicates",
+        "call": "groupAnagrams([\"ab\",\"ba\",\"ab\",\"c\"])",
+        "expected": [
+          [
+            "ab",
+            "ab",
+            "ba"
+          ],
+          [
+            "c"
+          ]
+        ]
+      },
+      {
+        "name": "same letters diff counts",
+        "call": "groupAnagrams([\"aab\",\"abb\",\"bab\"])",
+        "expected": [
+          [
+            "aab"
+          ],
+          [
+            "abb",
+            "bab"
+          ]
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function groupAnagrams(strs) {\n  const groups = new Map();\n  for (const s of strs) {\n    const key = s.split('').sort().join('');\n    if (!groups.has(key)) groups.set(key, []);\n    groups.get(key).push(s);\n  }\n  const out = [...groups.values()].map(g => g.sort());\n  out.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<List<String>> groupAnagrams(String[] strs) {\n    Map<String, List<String>> groups = new HashMap<>();\n    for (String s : strs) {\n      char[] cs = s.toCharArray();\n      Arrays.sort(cs);\n      groups.computeIfAbsent(new String(cs), k -> new ArrayList<>()).add(s);\n    }\n    List<List<String>> out = new ArrayList<>();\n    for (List<String> g : groups.values()) { Collections.sort(g); out.add(g); }\n    out.sort((a, b) -> a.get(0).compareTo(b.get(0)));\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(n * m log m) for n strings of length m (O(n*m) with a 26-count key), space O(n*m)",
+    "hints": [
+      "Two strings are anagrams iff they have the same multiset of characters.",
+      "Find a canonical key per string: sorted characters, or a 26-letter count signature.",
+      "Bucket strings by key in a hash map."
+    ],
+    "keyPoints": [
+      "Canonical key (sorted string or char-count tuple) into a hash map",
+      "Count-key gives O(n*m) vs sorting O(n*m log m)",
+      "Handles empty strings and duplicates",
+      "Deterministic output ordering when required"
+    ]
+  },
+  {
+    "id": "code-04",
+    "title": "Merge Intervals",
+    "level": "medium",
+    "topic": "Sorting",
+    "prompt": "Given an array of `intervals` where `intervals[i] = [start, end]`, merge all overlapping intervals (touching intervals like `[1,4]` and `[4,5]` overlap) and return the result sorted by start.\n\n**Example 1:** `merge([[1,3],[2,6],[8,10],[15,18]])` -> `[[1,6],[8,10],[15,18]]`\n\n**Example 2:** `merge([[1,4],[4,5]])` -> `[[1,5]]`",
+    "fn": "merge",
+    "starter": {
+      "js": "function merge(intervals) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[][] merge(int[][] intervals) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "merge([[1,3],[2,6],[8,10],[15,18]])",
+        "expected": [
+          [
+            1,
+            6
+          ],
+          [
+            8,
+            10
+          ],
+          [
+            15,
+            18
+          ]
+        ]
+      },
+      {
+        "name": "touching",
+        "call": "merge([[1,4],[4,5]])",
+        "expected": [
+          [
+            1,
+            5
+          ]
+        ]
+      },
+      {
+        "name": "unsorted",
+        "call": "merge([[8,10],[1,3],[2,6]])",
+        "expected": [
+          [
+            1,
+            6
+          ],
+          [
+            8,
+            10
+          ]
+        ]
+      },
+      {
+        "name": "contained",
+        "call": "merge([[1,10],[2,3],[4,5]])",
+        "expected": [
+          [
+            1,
+            10
+          ]
+        ]
+      },
+      {
+        "name": "single",
+        "call": "merge([[5,7]])",
+        "expected": [
+          [
+            5,
+            7
+          ]
+        ]
+      },
+      {
+        "name": "empty",
+        "call": "merge([])",
+        "expected": []
+      },
+      {
+        "name": "disjoint",
+        "call": "merge([[1,2],[3,4]])",
+        "expected": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function merge(intervals) {\n  const sorted = intervals.map(i => [i[0], i[1]]).sort((a, b) => a[0] - b[0]);\n  const out = [];\n  for (const cur of sorted) {\n    const last = out[out.length - 1];\n    if (last && cur[0] <= last[1]) last[1] = Math.max(last[1], cur[1]);\n    else out.push(cur);\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int[][] merge(int[][] intervals) {\n    int[][] a = intervals.clone();\n    Arrays.sort(a, (x, y) -> Integer.compare(x[0], y[0]));\n    List<int[]> out = new ArrayList<>();\n    for (int[] cur : a) {\n      if (!out.isEmpty() && cur[0] <= out.get(out.size() - 1)[1]) {\n        int[] last = out.get(out.size() - 1);\n        last[1] = Math.max(last[1], cur[1]);\n      } else out.add(new int[]{cur[0], cur[1]});\n    }\n    return out.toArray(new int[0][]);\n  }\n}\n"
+    },
+    "complexity": "Time O(n log n), space O(n)",
+    "hints": [
+      "Overlaps are easy to detect if intervals are processed in some order.",
+      "Sort by start time.",
+      "Keep the last merged interval; extend its end with max(end) when the next start <= its end."
+    ],
+    "keyPoints": [
+      "Sort by start, then single linear sweep",
+      "Use max for the end (contained intervals)",
+      "Touching endpoints treated as overlapping (<=)",
+      "Does not mutate input unexpectedly; handles empty input"
+    ]
+  },
+  {
+    "id": "code-05",
+    "title": "Top K Frequent Elements",
+    "level": "medium",
+    "topic": "Heaps",
+    "prompt": "Given an integer array `nums` and an integer `k`, return the `k` most frequent elements in any order. The answer is guaranteed to be unique.\n\n**Example:** `topKFrequent([1,1,1,2,2,3], 2)` -> `[1,2]`\n\nAim for better than O(n log n).",
+    "fn": "topKFrequent",
+    "starter": {
+      "js": "function topKFrequent(nums, k) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] topKFrequent(int[] nums, int k) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "topKFrequent([1,1,1,2,2,3], 2).sort((a,b)=>a-b)",
+        "expected": [
+          1,
+          2
+        ]
+      },
+      {
+        "name": "single",
+        "call": "topKFrequent([1], 1)",
+        "expected": [
+          1
+        ]
+      },
+      {
+        "name": "negatives",
+        "call": "topKFrequent([-1,-1,4,4,4,5], 2).sort((a,b)=>a-b)",
+        "expected": [
+          -1,
+          4
+        ]
+      },
+      {
+        "name": "k equals distinct",
+        "call": "topKFrequent([3,0,1,0], 3).sort((a,b)=>a-b)",
+        "expected": [
+          0,
+          1,
+          3
+        ]
+      },
+      {
+        "name": "top one",
+        "call": "topKFrequent([5,6,6,7,7,7], 1)",
+        "expected": [
+          7
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function topKFrequent(nums, k) {\n  const count = new Map();\n  for (const n of nums) count.set(n, (count.get(n) || 0) + 1);\n  const buckets = Array.from({ length: nums.length + 1 }, () => []);\n  for (const [n, c] of count) buckets[c].push(n);\n  const out = [];\n  for (let f = buckets.length - 1; f >= 0 && out.length < k; f--) {\n    for (const n of buckets[f]) { if (out.length < k) out.push(n); }\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int[] topKFrequent(int[] nums, int k) {\n    Map<Integer, Integer> count = new HashMap<>();\n    for (int n : nums) count.merge(n, 1, Integer::sum);\n    PriorityQueue<int[]> heap = new PriorityQueue<>((a, b) -> Integer.compare(a[1], b[1]));\n    for (Map.Entry<Integer, Integer> e : count.entrySet()) {\n      heap.offer(new int[]{e.getKey(), e.getValue()});\n      if (heap.size() > k) heap.poll();\n    }\n    int[] out = new int[heap.size()];\n    for (int i = out.length - 1; i >= 0; i--) out[i] = heap.poll()[0];\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(n) with bucket sort (O(n log k) with a size-k min-heap), space O(n)",
+    "hints": [
+      "First count frequencies with a hash map.",
+      "You only need the k largest counts - a min-heap of size k keeps the best k seen so far.",
+      "Frequencies are bounded by n, so bucket sort by frequency gives O(n)."
+    ],
+    "keyPoints": [
+      "Frequency map first",
+      "Min-heap of size k (O(n log k)) or bucket sort (O(n))",
+      "Explains why a size-k MIN heap, not max heap",
+      "Handles k == number of distinct values"
+    ]
+  },
+  {
+    "id": "code-06",
+    "title": "Search in Rotated Sorted Array",
+    "level": "medium",
+    "topic": "Binary search",
+    "prompt": "An ascending array of distinct integers was rotated at an unknown pivot (e.g. `[0,1,2,4,5,6,7]` -> `[4,5,6,7,0,1,2]`). Given the rotated array `nums` and a `target`, return its index or `-1`. Must run in O(log n).\n\n**Example 1:** `search([4,5,6,7,0,1,2], 0)` -> `4`\n\n**Example 2:** `search([4,5,6,7,0,1,2], 3)` -> `-1`",
+    "fn": "search",
+    "starter": {
+      "js": "function search(nums, target) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int search(int[] nums, int target) {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "right half",
+        "call": "search([4,5,6,7,0,1,2], 0)",
+        "expected": 4
+      },
+      {
+        "name": "missing",
+        "call": "search([4,5,6,7,0,1,2], 3)",
+        "expected": -1
+      },
+      {
+        "name": "single miss",
+        "call": "search([1], 0)",
+        "expected": -1
+      },
+      {
+        "name": "single hit",
+        "call": "search([1], 1)",
+        "expected": 0
+      },
+      {
+        "name": "not rotated",
+        "call": "search([1,2,3,4,5], 4)",
+        "expected": 3
+      },
+      {
+        "name": "left half",
+        "call": "search([6,7,8,1,2,3,4,5], 7)",
+        "expected": 1
+      },
+      {
+        "name": "two elements",
+        "call": "search([3,1], 1)",
+        "expected": 1
+      }
+    ],
+    "solution": {
+      "js": "function search(nums, target) {\n  let lo = 0, hi = nums.length - 1;\n  while (lo <= hi) {\n    const mid = (lo + hi) >> 1;\n    if (nums[mid] === target) return mid;\n    if (nums[lo] <= nums[mid]) {\n      if (nums[lo] <= target && target < nums[mid]) hi = mid - 1; else lo = mid + 1;\n    } else {\n      if (nums[mid] < target && target <= nums[hi]) lo = mid + 1; else hi = mid - 1;\n    }\n  }\n  return -1;\n}\n",
+      "java": "class Solution {\n  public int search(int[] nums, int target) {\n    int lo = 0, hi = nums.length - 1;\n    while (lo <= hi) {\n      int mid = (lo + hi) >>> 1;\n      if (nums[mid] == target) return mid;\n      if (nums[lo] <= nums[mid]) {\n        if (nums[lo] <= target && target < nums[mid]) hi = mid - 1; else lo = mid + 1;\n      } else {\n        if (nums[mid] < target && target <= nums[hi]) lo = mid + 1; else hi = mid - 1;\n      }\n    }\n    return -1;\n  }\n}\n"
+    },
+    "complexity": "Time O(log n), space O(1)",
+    "hints": [
+      "At any mid, at least one of the halves [lo..mid] or [mid..hi] is sorted.",
+      "Compare nums[lo] with nums[mid] to tell which half is sorted.",
+      "If target lies within the sorted half range, search there; otherwise search the other half."
+    ],
+    "keyPoints": [
+      "Modified binary search, one half always sorted",
+      "Correct use of <= in nums[lo] <= nums[mid] (lo == mid case)",
+      "Handles non-rotated and size 1-2 arrays",
+      "O(log n), no linear scan to find pivot"
+    ]
+  },
+  {
+    "id": "code-07",
+    "title": "Number of Islands",
+    "level": "medium",
+    "topic": "Graphs",
+    "prompt": "Given an `m x n` grid of `\"1\"` (land) and `\"0\"` (water), return the number of islands. An island is land connected 4-directionally (not diagonally).\n\n**Example:**\n```\nnumIslands([\n  [\"1\",\"1\",\"0\",\"0\",\"0\"],\n  [\"1\",\"1\",\"0\",\"0\",\"0\"],\n  [\"0\",\"0\",\"1\",\"0\",\"0\"],\n  [\"0\",\"0\",\"0\",\"1\",\"1\"]\n]) // -> 3\n```",
+    "fn": "numIslands",
+    "starter": {
+      "js": "function numIslands(grid) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int numIslands(char[][] grid) {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "three islands",
+        "call": "numIslands([[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"0\",\"0\",\"1\",\"0\",\"0\"],[\"0\",\"0\",\"0\",\"1\",\"1\"]])",
+        "expected": 3
+      },
+      {
+        "name": "one big",
+        "call": "numIslands([[\"1\",\"1\",\"1\",\"1\",\"0\"],[\"1\",\"1\",\"0\",\"1\",\"0\"],[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"0\",\"0\",\"0\",\"0\",\"0\"]])",
+        "expected": 1
+      },
+      {
+        "name": "all water",
+        "call": "numIslands([[\"0\",\"0\"],[\"0\",\"0\"]])",
+        "expected": 0
+      },
+      {
+        "name": "diagonal not connected",
+        "call": "numIslands([[\"1\",\"0\"],[\"0\",\"1\"]])",
+        "expected": 2
+      },
+      {
+        "name": "empty grid",
+        "call": "numIslands([])",
+        "expected": 0
+      },
+      {
+        "name": "snake",
+        "call": "numIslands([[\"1\",\"1\",\"1\"],[\"0\",\"0\",\"1\"],[\"1\",\"1\",\"1\"]])",
+        "expected": 1
+      }
+    ],
+    "solution": {
+      "js": "function numIslands(grid) {\n  if (!grid.length) return 0;\n  const g = grid.map(r => r.slice());\n  const m = g.length, n = g[0].length;\n  let count = 0;\n  for (let i = 0; i < m; i++) for (let j = 0; j < n; j++) {\n    if (g[i][j] !== '1') continue;\n    count++;\n    const stack = [[i, j]];\n    g[i][j] = '0';\n    while (stack.length) {\n      const [r, c] = stack.pop();\n      for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {\n        const nr = r + dr, nc = c + dc;\n        if (nr >= 0 && nr < m && nc >= 0 && nc < n && g[nr][nc] === '1') { g[nr][nc] = '0'; stack.push([nr, nc]); }\n      }\n    }\n  }\n  return count;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int numIslands(char[][] grid) {\n    if (grid.length == 0) return 0;\n    int m = grid.length, n = grid[0].length, count = 0;\n    boolean[][] seen = new boolean[m][n];\n    int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};\n    for (int i = 0; i < m; i++) for (int j = 0; j < n; j++) {\n      if (grid[i][j] != '1' || seen[i][j]) continue;\n      count++;\n      Deque<int[]> stack = new ArrayDeque<>();\n      stack.push(new int[]{i, j});\n      seen[i][j] = true;\n      while (!stack.isEmpty()) {\n        int[] p = stack.pop();\n        for (int[] d : dirs) {\n          int r = p[0] + d[0], c = p[1] + d[1];\n          if (r >= 0 && r < m && c >= 0 && c < n && grid[r][c] == '1' && !seen[r][c]) { seen[r][c] = true; stack.push(new int[]{r, c}); }\n        }\n      }\n    }\n    return count;\n  }\n}\n"
+    },
+    "complexity": "Time O(m*n), space O(m*n) worst case for the stack/visited",
+    "hints": [
+      "Each island is a connected component in a grid graph.",
+      "When you find unvisited land, increment the count and flood-fill the whole island.",
+      "Use iterative DFS/BFS to avoid recursion depth issues on large grids; alternatively union-find."
+    ],
+    "keyPoints": [
+      "Flood fill (DFS/BFS) or union-find per component",
+      "Mark visited when pushing, not popping, to avoid duplicates",
+      "Iterative to avoid stack overflow; bounds checks",
+      "Mentions whether input is mutated"
+    ]
+  },
+  {
+    "id": "code-08",
+    "title": "Kth Largest Element (Heap)",
+    "level": "medium",
+    "topic": "Heaps",
+    "prompt": "Given an integer array `nums` and `k`, return the `k`th largest element (in sorted order, not distinct). Solve it without fully sorting: implement a size-k min-heap (JavaScript has no built-in heap).\n\n**Example 1:** `findKthLargest([3,2,1,5,6,4], 2)` -> `5`\n\n**Example 2:** `findKthLargest([3,2,3,1,2,4,5,5,6], 4)` -> `4`",
+    "fn": "findKthLargest",
+    "starter": {
+      "js": "function findKthLargest(nums, k) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int findKthLargest(int[] nums, int k) {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "findKthLargest([3,2,1,5,6,4], 2)",
+        "expected": 5
+      },
+      {
+        "name": "duplicates",
+        "call": "findKthLargest([3,2,3,1,2,4,5,5,6], 4)",
+        "expected": 4
+      },
+      {
+        "name": "single",
+        "call": "findKthLargest([1], 1)",
+        "expected": 1
+      },
+      {
+        "name": "k = n (min)",
+        "call": "findKthLargest([7,-3,9,0], 4)",
+        "expected": -3
+      },
+      {
+        "name": "all same",
+        "call": "findKthLargest([2,2,2,2], 3)",
+        "expected": 2
+      },
+      {
+        "name": "large",
+        "call": "findKthLargest(Array.from({length:1000},(_, i)=>i), 10)",
+        "expected": 990
+      }
+    ],
+    "solution": {
+      "js": "function findKthLargest(nums, k) {\n  const h = [];\n  const up = (i) => { while (i > 0) { const p = (i - 1) >> 1; if (h[p] <= h[i]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } };\n  const down = (i) => {\n    for (;;) {\n      const l = 2 * i + 1, r = l + 1; let s = i;\n      if (l < h.length && h[l] < h[s]) s = l;\n      if (r < h.length && h[r] < h[s]) s = r;\n      if (s === i) return;\n      [h[s], h[i]] = [h[i], h[s]]; i = s;\n    }\n  };\n  for (const x of nums) {\n    if (h.length < k) { h.push(x); up(h.length - 1); }\n    else if (x > h[0]) { h[0] = x; down(0); }\n  }\n  return h[0];\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int findKthLargest(int[] nums, int k) {\n    PriorityQueue<Integer> heap = new PriorityQueue<>();\n    for (int x : nums) {\n      heap.offer(x);\n      if (heap.size() > k) heap.poll();\n    }\n    return heap.peek();\n  }\n}\n"
+    },
+    "complexity": "Time O(n log k), space O(k) (quickselect: O(n) average, O(1) space)",
+    "hints": [
+      "Keep only the k largest elements seen so far.",
+      "Use a min-heap: its root is the smallest of the top k, i.e. the kth largest.",
+      "If a new element beats the root, replace the root and sift down."
+    ],
+    "keyPoints": [
+      "Size-k min-heap, root is the answer",
+      "Correct sift-up/sift-down implementation",
+      "Mentions quickselect O(n) average as alternative and its worst case",
+      "Handles duplicates and k == n"
+    ]
+  },
+  {
+    "id": "code-09",
+    "title": "Meeting Rooms II",
+    "level": "medium",
+    "topic": "Heaps",
+    "prompt": "Given meeting time intervals `[start, end]` (half-open: a meeting ending at `t` frees its room for one starting at `t`), return the minimum number of conference rooms required.\n\n**Example 1:** `minMeetingRooms([[0,30],[5,10],[15,20]])` -> `2`\n\n**Example 2:** `minMeetingRooms([[7,10],[2,4]])` -> `1`",
+    "fn": "minMeetingRooms",
+    "starter": {
+      "js": "function minMeetingRooms(intervals) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int minMeetingRooms(int[][] intervals) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "minMeetingRooms([[0,30],[5,10],[15,20]])",
+        "expected": 2
+      },
+      {
+        "name": "disjoint",
+        "call": "minMeetingRooms([[7,10],[2,4]])",
+        "expected": 1
+      },
+      {
+        "name": "back to back",
+        "call": "minMeetingRooms([[1,5],[5,10],[10,15]])",
+        "expected": 1
+      },
+      {
+        "name": "all overlap",
+        "call": "minMeetingRooms([[1,10],[2,9],[3,8],[4,7]])",
+        "expected": 4
+      },
+      {
+        "name": "empty",
+        "call": "minMeetingRooms([])",
+        "expected": 0
+      },
+      {
+        "name": "mixed",
+        "call": "minMeetingRooms([[1,4],[2,5],[7,9],[3,6],[8,10]])",
+        "expected": 3
+      }
+    ],
+    "solution": {
+      "js": "function minMeetingRooms(intervals) {\n  const starts = intervals.map(i => i[0]).sort((a, b) => a - b);\n  const ends = intervals.map(i => i[1]).sort((a, b) => a - b);\n  let rooms = 0, best = 0, e = 0;\n  for (let s = 0; s < starts.length; s++) {\n    while (e < ends.length && ends[e] <= starts[s]) { e++; rooms--; }\n    rooms++;\n    best = Math.max(best, rooms);\n  }\n  return best;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int minMeetingRooms(int[][] intervals) {\n    int[][] a = intervals.clone();\n    Arrays.sort(a, (x, y) -> Integer.compare(x[0], y[0]));\n    PriorityQueue<Integer> ends = new PriorityQueue<>();\n    int best = 0;\n    for (int[] m : a) {\n      while (!ends.isEmpty() && ends.peek() <= m[0]) ends.poll();\n      ends.offer(m[1]);\n      best = Math.max(best, ends.size());\n    }\n    return best;\n  }\n}\n"
+    },
+    "complexity": "Time O(n log n), space O(n)",
+    "hints": [
+      "Process meetings in order of start time.",
+      "Track when currently-occupied rooms become free - you need the earliest end time quickly (min-heap).",
+      "Alternative: sort starts and ends separately and sweep with two pointers."
+    ],
+    "keyPoints": [
+      "Sort by start + min-heap of end times, or two sorted arrays sweep",
+      "Half-open intervals: end <= start frees a room",
+      "Answer is peak concurrent meetings",
+      "O(n log n); handles empty input"
+    ]
+  },
+  {
+    "id": "code-10",
+    "title": "Course Schedule (Cycle Detection)",
+    "level": "medium",
+    "topic": "Graphs",
+    "prompt": "There are `numCourses` courses labelled `0..numCourses-1`. `prerequisites[i] = [a, b]` means you must take `b` before `a`. Return a valid order to take all courses, or `[]` if impossible (a cycle exists). When several courses are available at once, always take the **smallest-numbered** one first so the answer is unique.\n\n**Example 1:** `findOrder(2, [[1,0]])` -> `[0,1]`\n\n**Example 2:** `findOrder(2, [[1,0],[0,1]])` -> `[]`",
+    "fn": "findOrder",
+    "starter": {
+      "js": "function findOrder(numCourses, prerequisites) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] findOrder(int numCourses, int[][] prerequisites) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "simple",
+        "call": "findOrder(2, [[1,0]])",
+        "expected": [
+          0,
+          1
+        ]
+      },
+      {
+        "name": "cycle",
+        "call": "findOrder(2, [[1,0],[0,1]])",
+        "expected": []
+      },
+      {
+        "name": "diamond",
+        "call": "findOrder(4, [[1,0],[2,0],[3,1],[3,2]])",
+        "expected": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "name": "no prereqs",
+        "call": "findOrder(3, [])",
+        "expected": [
+          0,
+          1,
+          2
+        ]
+      },
+      {
+        "name": "smallest first",
+        "call": "findOrder(4, [[0,3],[1,3]])",
+        "expected": [
+          2,
+          3,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "self loop",
+        "call": "findOrder(1, [[0,0]])",
+        "expected": []
+      },
+      {
+        "name": "longer cycle",
+        "call": "findOrder(4, [[1,0],[2,1],[3,2],[1,3]])",
+        "expected": []
+      }
+    ],
+    "solution": {
+      "js": "function findOrder(numCourses, prerequisites) {\n  const adj = Array.from({ length: numCourses }, () => []);\n  const indeg = new Array(numCourses).fill(0);\n  for (const [a, b] of prerequisites) { adj[b].push(a); indeg[a]++; }\n  // min-heap of available courses\n  const h = [];\n  const push = (x) => { h.push(x); let i = h.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (h[p] <= h[i]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } };\n  const pop = () => {\n    const top = h[0], last = h.pop();\n    if (h.length) { h[0] = last; let i = 0; for (;;) { const l = 2*i+1, r = l+1; let s = i; if (l < h.length && h[l] < h[s]) s = l; if (r < h.length && h[r] < h[s]) s = r; if (s === i) break; [h[s], h[i]] = [h[i], h[s]]; i = s; } }\n    return top;\n  };\n  for (let i = 0; i < numCourses; i++) if (indeg[i] === 0) push(i);\n  const order = [];\n  while (h.length) {\n    const c = pop();\n    order.push(c);\n    for (const nxt of adj[c]) if (--indeg[nxt] === 0) push(nxt);\n  }\n  return order.length === numCourses ? order : [];\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int[] findOrder(int numCourses, int[][] prerequisites) {\n    List<List<Integer>> adj = new ArrayList<>();\n    for (int i = 0; i < numCourses; i++) adj.add(new ArrayList<>());\n    int[] indeg = new int[numCourses];\n    for (int[] p : prerequisites) { adj.get(p[1]).add(p[0]); indeg[p[0]]++; }\n    PriorityQueue<Integer> ready = new PriorityQueue<>();\n    for (int i = 0; i < numCourses; i++) if (indeg[i] == 0) ready.offer(i);\n    int[] order = new int[numCourses];\n    int n = 0;\n    while (!ready.isEmpty()) {\n      int c = ready.poll();\n      order[n++] = c;\n      for (int nxt : adj.get(c)) if (--indeg[nxt] == 0) ready.offer(nxt);\n    }\n    return n == numCourses ? order : new int[0];\n  }\n}\n"
+    },
+    "complexity": "Time O((V + E) log V) with the min-heap tie-break (O(V + E) with a plain queue), space O(V + E)",
+    "hints": [
+      "Model courses as a directed graph b -> a.",
+      "Kahn's algorithm: repeatedly take a node with in-degree 0 and decrement its neighbours.",
+      "If you process fewer than numCourses nodes, there is a cycle. Use a min-heap instead of a queue for the smallest-first rule."
+    ],
+    "keyPoints": [
+      "Topological sort via Kahn's (or DFS with 3-colour marking)",
+      "Cycle detected when output size < numCourses",
+      "Edge direction correct (prereq -> course)",
+      "Handles self-loops and isolated nodes"
+    ]
+  },
+  {
+    "id": "code-11",
+    "title": "LRU Cache",
+    "level": "medium",
+    "topic": "Design",
+    "prompt": "Design a class `LRUCache(capacity)` with:\n\n- `get(key)` - return the value, or `-1` if absent. Counts as a use.\n- `put(key, value)` - insert or update. If size exceeds `capacity`, evict the least recently used key.\n\nBoth operations must be O(1).\n\n**Example:**\n```\nconst c = new LRUCache(2);\nc.put(1,1); c.put(2,2);\nc.get(1);    // 1\nc.put(3,3); // evicts 2\nc.get(2);    // -1\n```",
+    "fn": "LRUCache",
+    "starter": {
+      "js": "class LRUCache {\n  constructor(capacity) {\n    // your code\n  }\n  get(key) {\n    // your code\n  }\n  put(key, value) {\n    // your code\n  }\n}\n",
+      "java": "class LRUCache {\n  public LRUCache(int capacity) {\n    // your code\n  }\n  public int get(int key) {\n    // your code\n    return 0;\n  }\n  public void put(int key, int value) {\n    // your code\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic eviction",
+        "call": "(() => { const c = new LRUCache(2); c.put(1,1); c.put(2,2); const a = c.get(1); c.put(3,3); return [a, c.get(2), c.get(3)]; })()",
+        "expected": [
+          1,
+          -1,
+          3
+        ]
+      },
+      {
+        "name": "update refreshes",
+        "call": "(() => { const c = new LRUCache(2); c.put(1,1); c.put(2,2); c.put(1,10); c.put(3,3); return [c.get(1), c.get(2), c.get(3)]; })()",
+        "expected": [
+          10,
+          -1,
+          3
+        ]
+      },
+      {
+        "name": "capacity one",
+        "call": "(() => { const c = new LRUCache(1); c.put(1,1); c.put(2,2); return [c.get(1), c.get(2)]; })()",
+        "expected": [
+          -1,
+          2
+        ]
+      },
+      {
+        "name": "miss on empty",
+        "call": "(() => { const c = new LRUCache(3); return c.get(42); })()",
+        "expected": -1
+      },
+      {
+        "name": "get protects key",
+        "call": "(() => { const c = new LRUCache(3); c.put(1,1); c.put(2,2); c.put(3,3); c.get(1); c.put(4,4); return [c.get(1), c.get(2), c.get(3), c.get(4)]; })()",
+        "expected": [
+          1,
+          -1,
+          3,
+          4
+        ]
+      },
+      {
+        "name": "long sequence",
+        "call": "(() => { const c = new LRUCache(2); c.put(2,1); c.put(1,1); c.put(2,3); c.put(4,1); return [c.get(1), c.get(2)]; })()",
+        "expected": [
+          -1,
+          3
+        ]
+      }
+    ],
+    "solution": {
+      "js": "class LRUCache {\n  constructor(capacity) {\n    this.cap = capacity;\n    this.map = new Map();\n    this.head = { prev: null, next: null };\n    this.tail = { prev: this.head, next: null };\n    this.head.next = this.tail;\n  }\n  _remove(n) { n.prev.next = n.next; n.next.prev = n.prev; }\n  _addFront(n) { n.next = this.head.next; n.prev = this.head; this.head.next.prev = n; this.head.next = n; }\n  get(key) {\n    const n = this.map.get(key);\n    if (!n) return -1;\n    this._remove(n); this._addFront(n);\n    return n.val;\n  }\n  put(key, value) {\n    let n = this.map.get(key);\n    if (n) { n.val = value; this._remove(n); this._addFront(n); return; }\n    n = { key, val: value, prev: null, next: null };\n    this.map.set(key, n); this._addFront(n);\n    if (this.map.size > this.cap) {\n      const lru = this.tail.prev;\n      this._remove(lru); this.map.delete(lru.key);\n    }\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass LRUCache {\n  private static class Node { int key, val; Node prev, next; Node(int k, int v) { key = k; val = v; } }\n  private final int cap;\n  private final Map<Integer, Node> map = new HashMap<>();\n  private final Node head = new Node(0, 0), tail = new Node(0, 0);\n\n  public LRUCache(int capacity) { cap = capacity; head.next = tail; tail.prev = head; }\n\n  private void remove(Node n) { n.prev.next = n.next; n.next.prev = n.prev; }\n  private void addFront(Node n) { n.next = head.next; n.prev = head; head.next.prev = n; head.next = n; }\n\n  public int get(int key) {\n    Node n = map.get(key);\n    if (n == null) return -1;\n    remove(n); addFront(n);\n    return n.val;\n  }\n\n  public void put(int key, int value) {\n    Node n = map.get(key);\n    if (n != null) { n.val = value; remove(n); addFront(n); return; }\n    n = new Node(key, value);\n    map.put(key, n); addFront(n);\n    if (map.size() > cap) { Node lru = tail.prev; remove(lru); map.remove(lru.key); }\n  }\n}\n"
+    },
+    "complexity": "Time O(1) per get/put, space O(capacity)",
+    "hints": [
+      "You need O(1) lookup by key and O(1) \"move to most recent\" / \"remove least recent\".",
+      "Combine a hash map (key -> node) with a doubly linked list ordered by recency.",
+      "Sentinel head/tail nodes remove null-check edge cases. (In JS, a Map's insertion order can also be exploited: delete + re-set.)"
+    ],
+    "keyPoints": [
+      "Hash map + doubly linked list (or LinkedHashMap with accessOrder)",
+      "get and put-update both refresh recency",
+      "Evict from the tail after insert when over capacity",
+      "O(1) operations; sentinels for clean code",
+      "Mentions thread-safety concerns for real caches"
+    ]
+  },
+  {
+    "id": "code-12",
+    "title": "Time-Based Key-Value Store",
+    "level": "medium",
+    "topic": "Design",
+    "prompt": "Design `TimeMap`, a key-value store that keeps multiple versions per key (like an MVCC store):\n\n- `set(key, value, timestamp)` - store `value` at `timestamp`. Timestamps for a key are strictly increasing.\n- `get(key, timestamp)` - return the value with the largest stored timestamp `<= timestamp`, or `\"\"` if none.\n\n**Example:**\n```\nconst t = new TimeMap();\nt.set(\"foo\",\"bar\",1);\nt.get(\"foo\",1);  // \"bar\"\nt.get(\"foo\",3);  // \"bar\"\nt.set(\"foo\",\"bar2\",4);\nt.get(\"foo\",4);  // \"bar2\"\nt.get(\"foo\",0);  // \"\"\n```",
+    "fn": "TimeMap",
+    "starter": {
+      "js": "class TimeMap {\n  constructor() {\n    // your code\n  }\n  set(key, value, timestamp) {\n    // your code\n  }\n  get(key, timestamp) {\n    // your code\n  }\n}\n",
+      "java": "class TimeMap {\n  public TimeMap() {\n    // your code\n  }\n  public void set(String key, String value, int timestamp) {\n    // your code\n  }\n  public String get(String key, int timestamp) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "(() => { const t = new TimeMap(); t.set(\"foo\",\"bar\",1); const r = [t.get(\"foo\",1), t.get(\"foo\",3)]; t.set(\"foo\",\"bar2\",4); r.push(t.get(\"foo\",4), t.get(\"foo\",5), t.get(\"foo\",0)); return r; })()",
+        "expected": [
+          "bar",
+          "bar",
+          "bar2",
+          "bar2",
+          ""
+        ]
+      },
+      {
+        "name": "missing key",
+        "call": "(() => { const t = new TimeMap(); return t.get(\"nope\", 10); })()",
+        "expected": ""
+      },
+      {
+        "name": "between versions",
+        "call": "(() => { const t = new TimeMap(); t.set(\"k\",\"a\",10); t.set(\"k\",\"b\",20); t.set(\"k\",\"c\",30); return [t.get(\"k\",9), t.get(\"k\",10), t.get(\"k\",19), t.get(\"k\",25), t.get(\"k\",1000)]; })()",
+        "expected": [
+          "",
+          "a",
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      {
+        "name": "keys independent",
+        "call": "(() => { const t = new TimeMap(); t.set(\"x\",\"1\",5); t.set(\"y\",\"2\",6); return [t.get(\"x\",6), t.get(\"y\",5), t.get(\"y\",6)]; })()",
+        "expected": [
+          "1",
+          "",
+          "2"
+        ]
+      },
+      {
+        "name": "many versions",
+        "call": "(() => { const t = new TimeMap(); for (let i = 1; i <= 1000; i++) t.set(\"k\", \"v\" + i, i * 2); return [t.get(\"k\", 1), t.get(\"k\", 501), t.get(\"k\", 2000), t.get(\"k\", 5000)]; })()",
+        "expected": [
+          "",
+          "v250",
+          "v1000",
+          "v1000"
+        ]
+      }
+    ],
+    "solution": {
+      "js": "class TimeMap {\n  constructor() { this.data = new Map(); }\n  set(key, value, timestamp) {\n    if (!this.data.has(key)) this.data.set(key, []);\n    this.data.get(key).push([timestamp, value]);\n  }\n  get(key, timestamp) {\n    const arr = this.data.get(key);\n    if (!arr) return '';\n    let lo = 0, hi = arr.length - 1, ans = '';\n    while (lo <= hi) {\n      const mid = (lo + hi) >> 1;\n      if (arr[mid][0] <= timestamp) { ans = arr[mid][1]; lo = mid + 1; } else hi = mid - 1;\n    }\n    return ans;\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass TimeMap {\n  private final Map<String, TreeMap<Integer, String>> data = new HashMap<>();\n\n  public TimeMap() {}\n\n  public void set(String key, String value, int timestamp) {\n    data.computeIfAbsent(key, k -> new TreeMap<>()).put(timestamp, value);\n  }\n\n  public String get(String key, int timestamp) {\n    TreeMap<Integer, String> versions = data.get(key);\n    if (versions == null) return \"\";\n    Map.Entry<Integer, String> e = versions.floorEntry(timestamp);\n    return e == null ? \"\" : e.getValue();\n  }\n}\n"
+    },
+    "complexity": "set O(1) amortized, get O(log v) for v versions of a key; space O(total sets)",
+    "hints": [
+      "Per key, keep versions in timestamp order - they arrive increasing, so appending keeps them sorted.",
+      "get is a \"floor\" query: the last version with ts <= query.",
+      "Binary search the version list (or use TreeMap.floorEntry in Java)."
+    ],
+    "keyPoints": [
+      "Map key -> sorted list of (ts, value)",
+      "Binary search for floor (upper-bound minus one)",
+      "Returns \"\" for missing key and ts before first version",
+      "Relates to MVCC/snapshot reads; discusses garbage-collecting old versions"
+    ]
+  },
+  {
+    "id": "code-13",
+    "title": "Token Bucket Rate Limiter",
+    "level": "medium",
+    "topic": "Systems design",
+    "prompt": "Implement `TokenBucket(capacity, refillPerSecond, clock)` where `clock()` returns the current time in **milliseconds** (injected so it is testable). The bucket starts full.\n\n- `tryAcquire(n = 1)` - refill tokens for elapsed time (capped at `capacity`, fractional tokens allowed), then if at least `n` tokens are available consume them and return `true`; otherwise return `false` and consume nothing.\n\n**Example:**\n```\nlet now = 0; const clock = () => now;\nconst b = new TokenBucket(2, 1, clock);\nb.tryAcquire(); b.tryAcquire(); // true, true\nb.tryAcquire();                 // false\nnow = 1000; b.tryAcquire();     // true (1 token refilled)\n```\n\nIn Java the clock is a `java.util.function.LongSupplier`.",
+    "fn": "TokenBucket",
+    "starter": {
+      "js": "class TokenBucket {\n  constructor(capacity, refillPerSecond, clock) {\n    // your code\n  }\n  tryAcquire(n = 1) {\n    // your code\n  }\n}\n",
+      "java": "import java.util.function.LongSupplier;\n\nclass TokenBucket {\n  public TokenBucket(int capacity, double refillPerSecond, LongSupplier clock) {\n    // your code\n  }\n  public boolean tryAcquire(int n) {\n    // your code\n    return false;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "burst then deny",
+        "call": "(() => { let now = 0; const b = new TokenBucket(2, 1, () => now); return [b.tryAcquire(), b.tryAcquire(), b.tryAcquire()]; })()",
+        "expected": [
+          true,
+          true,
+          false
+        ]
+      },
+      {
+        "name": "refill after time",
+        "call": "(() => { let now = 0; const b = new TokenBucket(2, 1, () => now); b.tryAcquire(); b.tryAcquire(); now = 1000; const a = b.tryAcquire(); const c = b.tryAcquire(); return [a, c]; })()",
+        "expected": [
+          true,
+          false
+        ]
+      },
+      {
+        "name": "capped at capacity",
+        "call": "(() => { let now = 0; const b = new TokenBucket(3, 10, () => now); now = 60000; const r = []; for (let i = 0; i < 4; i++) r.push(b.tryAcquire()); return r; })()",
+        "expected": [
+          true,
+          true,
+          true,
+          false
+        ]
+      },
+      {
+        "name": "fractional refill",
+        "call": "(() => { let now = 0; const b = new TokenBucket(1, 2, () => now); b.tryAcquire(); now = 250; const a = b.tryAcquire(); now = 500; const c = b.tryAcquire(); return [a, c]; })()",
+        "expected": [
+          false,
+          true
+        ]
+      },
+      {
+        "name": "multi-token acquire",
+        "call": "(() => { let now = 0; const b = new TokenBucket(5, 1, () => now); const a = b.tryAcquire(4); const c = b.tryAcquire(2); const d = b.tryAcquire(1); return [a, c, d]; })()",
+        "expected": [
+          true,
+          false,
+          true
+        ]
+      },
+      {
+        "name": "failed acquire consumes nothing",
+        "call": "(() => { let now = 0; const b = new TokenBucket(3, 1, () => now); b.tryAcquire(2); const a = b.tryAcquire(5); const c = b.tryAcquire(1); const d = b.tryAcquire(1); return [a, c, d]; })()",
+        "expected": [
+          false,
+          true,
+          false
+        ]
+      }
+    ],
+    "solution": {
+      "js": "class TokenBucket {\n  constructor(capacity, refillPerSecond, clock) {\n    this.capacity = capacity;\n    this.rate = refillPerSecond;\n    this.clock = clock;\n    this.tokens = capacity;\n    this.last = clock();\n  }\n  _refill() {\n    const now = this.clock();\n    const elapsed = Math.max(0, now - this.last);\n    this.tokens = Math.min(this.capacity, this.tokens + (elapsed / 1000) * this.rate);\n    this.last = now;\n  }\n  tryAcquire(n = 1) {\n    this._refill();\n    if (this.tokens >= n) { this.tokens -= n; return true; }\n    return false;\n  }\n}\n",
+      "java": "import java.util.function.LongSupplier;\n\nclass TokenBucket {\n  private final int capacity;\n  private final double rate;\n  private final LongSupplier clock;\n  private double tokens;\n  private long last;\n\n  public TokenBucket(int capacity, double refillPerSecond, LongSupplier clock) {\n    this.capacity = capacity;\n    this.rate = refillPerSecond;\n    this.clock = clock;\n    this.tokens = capacity;\n    this.last = clock.getAsLong();\n  }\n\n  private void refill() {\n    long now = clock.getAsLong();\n    long elapsed = Math.max(0, now - last);\n    tokens = Math.min(capacity, tokens + elapsed / 1000.0 * rate);\n    last = now;\n  }\n\n  public synchronized boolean tryAcquire() { return tryAcquire(1); }\n\n  public synchronized boolean tryAcquire(int n) {\n    refill();\n    if (tokens >= n) { tokens -= n; return true; }\n    return false;\n  }\n}\n"
+    },
+    "complexity": "Time O(1) per call, space O(1)",
+    "hints": [
+      "You do not need a background timer: refill lazily on each call from the elapsed time.",
+      "tokens = min(capacity, tokens + elapsed_seconds * rate); then update the last-refill time.",
+      "Only subtract if the full n is available; otherwise leave the bucket untouched."
+    ],
+    "keyPoints": [
+      "Lazy refill based on injected clock (testable, no timers)",
+      "Cap at capacity; allows bursts up to capacity",
+      "All-or-nothing acquire for n tokens",
+      "Thread safety (synchronized / atomic CAS) and clock going backwards guarded",
+      "Can contrast with leaky bucket / sliding window; distributed version via Redis/Lua"
+    ]
+  },
+  {
+    "id": "code-14",
+    "title": "Retry with Exponential Backoff Schedule",
+    "level": "medium",
+    "topic": "Systems design",
+    "prompt": "Write `backoffSchedule(baseMs, maxMs, attempts, rand)` returning an array of `attempts` delays (ms) before each retry, using **capped exponential backoff with full jitter**:\n\n- `cap_i = min(maxMs, baseMs * 2^i)` for retry `i = 0..attempts-1`\n- if `rand` is provided (a function returning a number in `[0,1)`), delay is `Math.floor(rand() * cap_i)` (call `rand` once per retry, in order)\n- if `rand` is omitted/null, delay is `cap_i` (no jitter)\n\nMust not overflow for large `attempts` (e.g. 100).\n\n**Example 1:** `backoffSchedule(100, 1000, 5)` -> `[100,200,400,800,1000]`\n\n**Example 2:** `backoffSchedule(100, 1000, 3, () => 0.5)` -> `[50,100,200]`\n\nIn Java use `long[] backoffSchedule(long baseMs, long maxMs, int attempts, java.util.function.DoubleSupplier rand)` (rand may be null).",
+    "fn": "backoffSchedule",
+    "starter": {
+      "js": "function backoffSchedule(baseMs, maxMs, attempts, rand) {\n  // your code\n}\n",
+      "java": "import java.util.function.DoubleSupplier;\n\nclass Solution {\n  public long[] backoffSchedule(long baseMs, long maxMs, int attempts, DoubleSupplier rand) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "no jitter",
+        "call": "backoffSchedule(100, 1000, 5)",
+        "expected": [
+          100,
+          200,
+          400,
+          800,
+          1000
+        ]
+      },
+      {
+        "name": "half jitter",
+        "call": "backoffSchedule(100, 1000, 3, () => 0.5)",
+        "expected": [
+          50,
+          100,
+          200
+        ]
+      },
+      {
+        "name": "zero attempts",
+        "call": "backoffSchedule(100, 1000, 0)",
+        "expected": []
+      },
+      {
+        "name": "scripted rand",
+        "call": "(() => { const seq = [0.0, 0.99, 0.25, 0.5]; let i = 0; return backoffSchedule(10, 50, 4, () => seq[i++]); })()",
+        "expected": [
+          0,
+          19,
+          10,
+          25
+        ]
+      },
+      {
+        "name": "no overflow",
+        "call": "(() => { const s = backoffSchedule(1, 30000, 100); return [s.length, s[0], s[14], s[15], s[99]]; })()",
+        "expected": [
+          100,
+          1,
+          16384,
+          30000,
+          30000
+        ]
+      },
+      {
+        "name": "base above max",
+        "call": "backoffSchedule(500, 200, 3)",
+        "expected": [
+          200,
+          200,
+          200
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function backoffSchedule(baseMs, maxMs, attempts, rand) {\n  const out = [];\n  let cap = Math.min(baseMs, maxMs);\n  for (let i = 0; i < attempts; i++) {\n    out.push(rand ? Math.floor(rand() * cap) : cap);\n    // double without overflow: once we hit max, stay there\n    cap = cap >= maxMs / 2 ? maxMs : cap * 2;\n  }\n  return out;\n}\n",
+      "java": "import java.util.function.DoubleSupplier;\n\nclass Solution {\n  public long[] backoffSchedule(long baseMs, long maxMs, int attempts, DoubleSupplier rand) {\n    long[] out = new long[attempts];\n    long cap = Math.min(baseMs, maxMs);\n    for (int i = 0; i < attempts; i++) {\n      out[i] = rand == null ? cap : (long) Math.floor(rand.getAsDouble() * cap);\n      cap = cap >= maxMs / 2 ? maxMs : cap * 2;\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(attempts), space O(attempts)",
+    "hints": [
+      "Compute the cap iteratively rather than with Math.pow / bit shifts that overflow.",
+      "Once the cap reaches maxMs it never grows again.",
+      "Full jitter spreads retries across [0, cap) to avoid thundering herds."
+    ],
+    "keyPoints": [
+      "Capped exponential growth computed without overflow",
+      "Full jitter vs equal/decorrelated jitter trade-offs",
+      "Injected randomness for determinism in tests",
+      "Mentions retry budgets, idempotency, and only retrying retryable errors"
+    ]
+  },
+  {
+    "id": "code-15",
+    "title": "Trie Autocomplete",
+    "level": "medium",
+    "topic": "Tries",
+    "prompt": "Implement `Autocomplete` with:\n\n- `insert(word)` - add a lowercase word (inserting twice is a no-op).\n- `suggest(prefix, k)` - return up to `k` stored words starting with `prefix`, in **lexicographic** order.\n\n**Example:**\n```\nconst a = new Autocomplete();\n[\"car\",\"card\",\"care\",\"cat\",\"dog\"].forEach(w => a.insert(w));\na.suggest(\"car\", 2); // [\"car\",\"card\"]\na.suggest(\"z\", 3);   // []\n```\n\nIn Java, `suggest` returns `List<String>`.",
+    "fn": "Autocomplete",
+    "starter": {
+      "js": "class Autocomplete {\n  constructor() {\n    // your code\n  }\n  insert(word) {\n    // your code\n  }\n  suggest(prefix, k) {\n    // your code\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass Autocomplete {\n  public void insert(String word) {\n    // your code\n  }\n  public List<String> suggest(String prefix, int k) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "(() => { const a = new Autocomplete(); [\"car\",\"card\",\"care\",\"cat\",\"dog\"].forEach(w => a.insert(w)); return a.suggest(\"car\", 2); })()",
+        "expected": [
+          "car",
+          "card"
+        ]
+      },
+      {
+        "name": "all matches",
+        "call": "(() => { const a = new Autocomplete(); [\"car\",\"card\",\"care\",\"cat\",\"dog\"].forEach(w => a.insert(w)); return a.suggest(\"ca\", 10); })()",
+        "expected": [
+          "car",
+          "card",
+          "care",
+          "cat"
+        ]
+      },
+      {
+        "name": "no match",
+        "call": "(() => { const a = new Autocomplete(); a.insert(\"dog\"); return a.suggest(\"z\", 3); })()",
+        "expected": []
+      },
+      {
+        "name": "empty prefix",
+        "call": "(() => { const a = new Autocomplete(); [\"b\",\"a\",\"c\"].forEach(w => a.insert(w)); return a.suggest(\"\", 2); })()",
+        "expected": [
+          "a",
+          "b"
+        ]
+      },
+      {
+        "name": "duplicate insert",
+        "call": "(() => { const a = new Autocomplete(); a.insert(\"hi\"); a.insert(\"hi\"); return a.suggest(\"h\", 5); })()",
+        "expected": [
+          "hi"
+        ]
+      },
+      {
+        "name": "prefix longer than words",
+        "call": "(() => { const a = new Autocomplete(); a.insert(\"ab\"); return a.suggest(\"abc\", 5); })()",
+        "expected": []
+      },
+      {
+        "name": "insertion order irrelevant",
+        "call": "(() => { const a = new Autocomplete(); [\"zeta\",\"zebra\",\"zeal\",\"zero\"].forEach(w => a.insert(w)); return a.suggest(\"ze\", 3); })()",
+        "expected": [
+          "zeal",
+          "zebra",
+          "zero"
+        ]
+      }
+    ],
+    "solution": {
+      "js": "class Autocomplete {\n  constructor() { this.root = { children: new Map(), end: false }; }\n  insert(word) {\n    let node = this.root;\n    for (const ch of word) {\n      if (!node.children.has(ch)) node.children.set(ch, { children: new Map(), end: false });\n      node = node.children.get(ch);\n    }\n    node.end = true;\n  }\n  suggest(prefix, k) {\n    let node = this.root;\n    for (const ch of prefix) {\n      node = node.children.get(ch);\n      if (!node) return [];\n    }\n    const out = [];\n    const dfs = (n, path) => {\n      if (out.length >= k) return;\n      if (n.end) out.push(path);\n      const keys = [...n.children.keys()].sort();\n      for (const c of keys) { if (out.length >= k) return; dfs(n.children.get(c), path + c); }\n    };\n    dfs(node, prefix);\n    return out;\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass Autocomplete {\n  private static class Node { TreeMap<Character, Node> children = new TreeMap<>(); boolean end; }\n  private final Node root = new Node();\n\n  public void insert(String word) {\n    Node n = root;\n    for (char c : word.toCharArray()) n = n.children.computeIfAbsent(c, x -> new Node());\n    n.end = true;\n  }\n\n  public List<String> suggest(String prefix, int k) {\n    Node n = root;\n    for (char c : prefix.toCharArray()) {\n      n = n.children.get(c);\n      if (n == null) return new ArrayList<>();\n    }\n    List<String> out = new ArrayList<>();\n    dfs(n, new StringBuilder(prefix), k, out);\n    return out;\n  }\n\n  private void dfs(Node n, StringBuilder path, int k, List<String> out) {\n    if (out.size() >= k) return;\n    if (n.end) out.add(path.toString());\n    for (Map.Entry<Character, Node> e : n.children.entrySet()) {\n      if (out.size() >= k) return;\n      path.append(e.getKey());\n      dfs(e.getValue(), path, k, out);\n      path.deleteCharAt(path.length() - 1);\n    }\n  }\n}\n"
+    },
+    "complexity": "insert O(L); suggest O(P + visited nodes) - stops early after k words; space O(total characters)",
+    "hints": [
+      "A trie lets you jump to the subtree of all words with a given prefix in O(P).",
+      "Pre-order DFS visiting children in sorted order yields words lexicographically (a word comes before its extensions).",
+      "Stop the DFS as soon as you have k results."
+    ],
+    "keyPoints": [
+      "Trie with end-of-word marker",
+      "Walk prefix, then ordered DFS of subtree",
+      "Early termination at k results",
+      "Edge cases: empty prefix, missing prefix, duplicates",
+      "Production idea: cache top-k per node for hot prefixes"
+    ]
+  },
+  {
+    "id": "code-16",
+    "title": "Flatten Nested List Iterator",
+    "level": "medium",
+    "topic": "Iterators",
+    "prompt": "Implement `NestedIterator(nestedList)` where `nestedList` contains integers or (arbitrarily deep) nested arrays. Provide `hasNext()` and `next()` that iterate all integers in order. Do it **lazily** - do not flatten everything in the constructor.\n\n**Example:** iterating `[[1,1],2,[1,[1]]]` yields `1,1,2,1,1`.\n\n**Example:** iterating `[[],[[]],3]` yields `3`.\n\nIn Java the input is a `List<Object>` whose elements are `Integer` or `List<Object>`.",
+    "fn": "NestedIterator",
+    "starter": {
+      "js": "class NestedIterator {\n  constructor(nestedList) {\n    // your code\n  }\n  hasNext() {\n    // your code\n  }\n  next() {\n    // your code\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass NestedIterator {\n  public NestedIterator(List<Object> nestedList) {\n    // your code\n  }\n  public boolean hasNext() {\n    // your code\n    return false;\n  }\n  public int next() {\n    // your code\n    return 0;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "(() => { const it = new NestedIterator([[1,1],2,[1,[1]]]); const r = []; while (it.hasNext()) r.push(it.next()); return r; })()",
+        "expected": [
+          1,
+          1,
+          2,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "deep",
+        "call": "(() => { const it = new NestedIterator([1,[4,[6]]]); const r = []; while (it.hasNext()) r.push(it.next()); return r; })()",
+        "expected": [
+          1,
+          4,
+          6
+        ]
+      },
+      {
+        "name": "empty lists skipped",
+        "call": "(() => { const it = new NestedIterator([[],[[]],3,[]]); const r = []; while (it.hasNext()) r.push(it.next()); return r; })()",
+        "expected": [
+          3
+        ]
+      },
+      {
+        "name": "totally empty",
+        "call": "(() => { const it = new NestedIterator([[[]]]); return it.hasNext(); })()",
+        "expected": false
+      },
+      {
+        "name": "hasNext idempotent",
+        "call": "(() => { const it = new NestedIterator([[5]]); return [it.hasNext(), it.hasNext(), it.next(), it.hasNext()]; })()",
+        "expected": [
+          true,
+          true,
+          5,
+          false
+        ]
+      },
+      {
+        "name": "very deep",
+        "call": "(() => { let x = [7]; for (let i = 0; i < 5000; i++) x = [x]; const it = new NestedIterator([x, 8]); const r = []; while (it.hasNext()) r.push(it.next()); return r; })()",
+        "expected": [
+          7,
+          8
+        ]
+      }
+    ],
+    "solution": {
+      "js": "class NestedIterator {\n  constructor(nestedList) {\n    // stack of [array, index] frames\n    this.stack = [[nestedList, 0]];\n  }\n  _advance() {\n    while (this.stack.length) {\n      const top = this.stack[this.stack.length - 1];\n      const [arr, i] = top;\n      if (i >= arr.length) { this.stack.pop(); continue; }\n      const item = arr[i];\n      if (Array.isArray(item)) { top[1]++; this.stack.push([item, 0]); continue; }\n      return true;\n    }\n    return false;\n  }\n  hasNext() { return this._advance(); }\n  next() {\n    if (!this._advance()) throw new Error('no more elements');\n    const top = this.stack[this.stack.length - 1];\n    return top[0][top[1]++];\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass NestedIterator {\n  private final Deque<Iterator<Object>> stack = new ArrayDeque<>();\n  private Integer peeked;\n\n  public NestedIterator(List<Object> nestedList) { stack.push(nestedList.iterator()); }\n\n  @SuppressWarnings(\"unchecked\")\n  public boolean hasNext() {\n    while (peeked == null && !stack.isEmpty()) {\n      Iterator<Object> it = stack.peek();\n      if (!it.hasNext()) { stack.pop(); continue; }\n      Object o = it.next();\n      if (o instanceof Integer i) peeked = i;\n      else stack.push(((List<Object>) o).iterator());\n    }\n    return peeked != null;\n  }\n\n  public int next() {\n    if (!hasNext()) throw new NoSuchElementException();\n    int v = peeked;\n    peeked = null;\n    return v;\n  }\n}\n"
+    },
+    "complexity": "Amortized O(1) per next/hasNext (each list entered once); space O(depth)",
+    "hints": [
+      "Recursion in the constructor is the eager answer - think about what state a lazy iterator must keep.",
+      "Keep an explicit stack of (list, index) cursors.",
+      "Make hasNext() do the work of skipping empty lists so it is correct and idempotent; next() just consumes."
+    ],
+    "keyPoints": [
+      "Explicit stack of iterators/cursors, not eager flattening",
+      "hasNext handles empty nested lists and is idempotent",
+      "No recursion -> no stack overflow on deep nesting",
+      "next() on exhausted iterator throws",
+      "O(depth) memory"
+    ]
+  },
+  {
+    "id": "code-17",
+    "title": "Consistent Hash Ring",
+    "level": "hard",
+    "topic": "Systems design",
+    "prompt": "Implement `ConsistentHashRing(vnodes)` for routing keys to shards. Use this exact hash (32-bit FNV-1a, unsigned) so results are deterministic:\n\n```js\nfunction fnv1a(s) {\n  let h = 0x811c9dc5;\n  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }\n  return h >>> 0;\n}\n```\n\n- `addNode(name)` - place `vnodes` points on the ring at `fnv1a(name + \"#\" + i)` for `i = 0..vnodes-1`.\n- `removeNode(name)` - remove all its points.\n- `getNode(key)` - return the node owning the first point with hash `>= fnv1a(key)`, wrapping to the smallest point. Return `null` if the ring is empty. (Ties on a hash point: keep the first one added.)\n\n`getNode` must be O(log n) in the number of points.\n\n**Example:** after adding `\"A\"`,`\"B\"`,`\"C\"` with `vnodes=50`, removing `\"B\"` must only move keys that were on `\"B\"`.",
+    "fn": "ConsistentHashRing",
+    "starter": {
+      "js": "function fnv1a(s) {\n  let h = 0x811c9dc5;\n  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }\n  return h >>> 0;\n}\n\nclass ConsistentHashRing {\n  constructor(vnodes) {\n    // your code\n  }\n  addNode(name) {\n    // your code\n  }\n  removeNode(name) {\n    // your code\n  }\n  getNode(key) {\n    // your code\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass ConsistentHashRing {\n  static long fnv1a(String s) {\n    int h = 0x811c9dc5;\n    for (int i = 0; i < s.length(); i++) { h ^= s.charAt(i); h *= 0x01000193; }\n    return Integer.toUnsignedLong(h);\n  }\n  public ConsistentHashRing(int vnodes) {\n    // your code\n  }\n  public void addNode(String name) {\n    // your code\n  }\n  public void removeNode(String name) {\n    // your code\n  }\n  public String getNode(String key) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "empty ring",
+        "call": "(() => { const r = new ConsistentHashRing(10); return r.getNode(\"k\"); })()",
+        "expected": null
+      },
+      {
+        "name": "single node owns all",
+        "call": "(() => { const r = new ConsistentHashRing(5); r.addNode(\"A\"); const s = new Set(); for (let i = 0; i < 50; i++) s.add(r.getNode(\"key\" + i)); return [...s]; })()",
+        "expected": [
+          "A"
+        ]
+      },
+      {
+        "name": "fixed routing",
+        "call": "(() => { const r = new ConsistentHashRing(50); [\"A\",\"B\",\"C\"].forEach(n => r.addNode(n)); return [\"user:1\",\"user:2\",\"user:3\",\"order:42\",\"x\"].map(k => r.getNode(k)); })()",
+        "expected": [
+          "B",
+          "B",
+          "B",
+          "A",
+          "B"
+        ]
+      },
+      {
+        "name": "removal only moves removed keys",
+        "call": "(() => { const r = new ConsistentHashRing(50); [\"A\",\"B\",\"C\"].forEach(n => r.addNode(n)); const keys = Array.from({length: 500}, (_, i) => \"k\" + i); const before = keys.map(k => r.getNode(k)); r.removeNode(\"B\"); const after = keys.map(k => r.getNode(k)); return keys.every((_, i) => before[i] === \"B\" ? after[i] !== \"B\" : after[i] === before[i]); })()",
+        "expected": true
+      },
+      {
+        "name": "every node gets a share with vnodes",
+        "call": "(() => { const r = new ConsistentHashRing(100); [\"A\",\"B\",\"C\",\"D\"].forEach(n => r.addNode(n)); const c = {A:0,B:0,C:0,D:0}; for (let i = 0; i < 4000; i++) c[r.getNode(\"key-\" + i)]++; return Object.values(c).every(v => v > 400 && v < 2000); })()",
+        "expected": true
+      },
+      {
+        "name": "add then remove restores",
+        "call": "(() => { const r = new ConsistentHashRing(20); [\"A\",\"B\"].forEach(n => r.addNode(n)); const keys = Array.from({length: 200}, (_, i) => \"q\" + i); const before = keys.map(k => r.getNode(k)); r.addNode(\"C\"); r.removeNode(\"C\"); return keys.every((k, i) => r.getNode(k) === before[i]); })()",
+        "expected": true
+      },
+      {
+        "name": "remove all",
+        "call": "(() => { const r = new ConsistentHashRing(3); r.addNode(\"A\"); r.removeNode(\"A\"); return r.getNode(\"x\"); })()",
+        "expected": null
+      }
+    ],
+    "solution": {
+      "js": "function fnv1a(s) {\n  let h = 0x811c9dc5;\n  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }\n  return h >>> 0;\n}\n\nclass ConsistentHashRing {\n  constructor(vnodes) {\n    this.vnodes = vnodes;\n    this.points = []; // sorted [hash, node]\n  }\n  _lowerBound(h) {\n    let lo = 0, hi = this.points.length;\n    while (lo < hi) { const mid = (lo + hi) >> 1; if (this.points[mid][0] < h) lo = mid + 1; else hi = mid; }\n    return lo;\n  }\n  addNode(name) {\n    for (let i = 0; i < this.vnodes; i++) {\n      const h = fnv1a(name + '#' + i);\n      const idx = this._lowerBound(h);\n      if (idx < this.points.length && this.points[idx][0] === h) continue; // collision: first wins\n      this.points.splice(idx, 0, [h, name]);\n    }\n  }\n  removeNode(name) {\n    this.points = this.points.filter(p => p[1] !== name);\n  }\n  getNode(key) {\n    if (!this.points.length) return null;\n    let idx = this._lowerBound(fnv1a(key));\n    if (idx === this.points.length) idx = 0;\n    return this.points[idx][1];\n  }\n}\n",
+      "java": "import java.util.*;\n\nclass ConsistentHashRing {\n  static long fnv1a(String s) {\n    int h = 0x811c9dc5;\n    for (int i = 0; i < s.length(); i++) { h ^= s.charAt(i); h *= 0x01000193; }\n    return Integer.toUnsignedLong(h);\n  }\n\n  private final int vnodes;\n  private final TreeMap<Long, String> ring = new TreeMap<>();\n\n  public ConsistentHashRing(int vnodes) { this.vnodes = vnodes; }\n\n  public void addNode(String name) {\n    for (int i = 0; i < vnodes; i++) ring.putIfAbsent(fnv1a(name + \"#\" + i), name);\n  }\n\n  public void removeNode(String name) {\n    ring.values().removeIf(n -> n.equals(name));\n  }\n\n  public String getNode(String key) {\n    if (ring.isEmpty()) return null;\n    Map.Entry<Long, String> e = ring.ceilingEntry(fnv1a(key));\n    if (e == null) e = ring.firstEntry();\n    return e.getValue();\n  }\n}\n"
+    },
+    "complexity": "getNode O(log P) for P = nodes*vnodes points; addNode O(vnodes * log P) with a balanced tree (O(vnodes * P) with array splice); removeNode O(P)",
+    "hints": [
+      "Keep ring points sorted by hash so lookup is a binary search for the first point >= hash(key).",
+      "Wrap around to the first point when the key hashes past the last point.",
+      "Virtual nodes smooth out load; removing a node must only affect the keys it owned. Java: TreeMap.ceilingEntry."
+    ],
+    "keyPoints": [
+      "Sorted structure (TreeMap / sorted array) + ceiling search with wrap-around",
+      "Virtual nodes for balance; explains variance vs vnode count",
+      "Minimal key movement on add/remove (~1/N keys)",
+      "Hash collision policy defined",
+      "Relates to sharding/rebalancing (Dynamo, Cassandra) vs MongoDB range/hashed sharding with chunks"
+    ]
+  },
+  {
+    "id": "code-18",
+    "title": "Sliding Window Maximum",
+    "level": "hard",
+    "topic": "Deques",
+    "prompt": "Given an array `nums` and window size `k`, return the max of each window of size `k` as it slides from left to right. Target O(n).\n\n**Example 1:** `maxSlidingWindow([1,3,-1,-3,5,3,6,7], 3)` -> `[3,3,5,5,6,7]`\n\n**Example 2:** `maxSlidingWindow([1], 1)` -> `[1]`",
+    "fn": "maxSlidingWindow",
+    "starter": {
+      "js": "function maxSlidingWindow(nums, k) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] maxSlidingWindow(int[] nums, int k) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "maxSlidingWindow([1,3,-1,-3,5,3,6,7], 3)",
+        "expected": [
+          3,
+          3,
+          5,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "name": "single",
+        "call": "maxSlidingWindow([1], 1)",
+        "expected": [
+          1
+        ]
+      },
+      {
+        "name": "k = 1",
+        "call": "maxSlidingWindow([4,2,7], 1)",
+        "expected": [
+          4,
+          2,
+          7
+        ]
+      },
+      {
+        "name": "k = n",
+        "call": "maxSlidingWindow([4,2,12,3], 4)",
+        "expected": [
+          12
+        ]
+      },
+      {
+        "name": "decreasing",
+        "call": "maxSlidingWindow([9,8,7,6,5], 2)",
+        "expected": [
+          9,
+          8,
+          7,
+          6
+        ]
+      },
+      {
+        "name": "duplicates",
+        "call": "maxSlidingWindow([2,2,2,1,1], 2)",
+        "expected": [
+          2,
+          2,
+          2,
+          1
+        ]
+      },
+      {
+        "name": "large O(n)",
+        "call": "(() => { const a = Array.from({length: 200000}, (_, i) => i % 1000); const r = maxSlidingWindow(a, 1000); return [r.length, r[0], r[r.length - 1]]; })()",
+        "expected": [
+          199001,
+          999,
+          999
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function maxSlidingWindow(nums, k) {\n  const dq = new Array(nums.length); // indices, values decreasing\n  let head = 0, tail = 0;\n  const out = [];\n  for (let i = 0; i < nums.length; i++) {\n    if (head < tail && dq[head] <= i - k) head++;\n    while (head < tail && nums[dq[tail - 1]] <= nums[i]) tail--;\n    dq[tail++] = i;\n    if (i >= k - 1) out.push(nums[dq[head]]);\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int[] maxSlidingWindow(int[] nums, int k) {\n    if (nums.length == 0) return new int[0];\n    int[] out = new int[nums.length - k + 1];\n    Deque<Integer> dq = new ArrayDeque<>();\n    for (int i = 0; i < nums.length; i++) {\n      if (!dq.isEmpty() && dq.peekFirst() <= i - k) dq.pollFirst();\n      while (!dq.isEmpty() && nums[dq.peekLast()] <= nums[i]) dq.pollLast();\n      dq.offerLast(i);\n      if (i >= k - 1) out[i - k + 1] = nums[dq.peekFirst()];\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(k)",
+    "hints": [
+      "A heap gives O(n log n); can you do better?",
+      "An element smaller than a newer element to its right can never be a window max again.",
+      "Maintain a deque of indices with decreasing values; pop expired indices from the front and dominated ones from the back."
+    ],
+    "keyPoints": [
+      "Monotonic decreasing deque of indices",
+      "Evict out-of-window index from front",
+      "Each index pushed/popped once -> O(n)",
+      "Avoid Array.shift (O(n)) in JS; use head pointer",
+      "Edge cases k=1, k=n, duplicates"
+    ]
+  },
+  {
+    "id": "code-19",
+    "title": "Merge K Sorted Lists",
+    "level": "hard",
+    "topic": "Heaps",
+    "prompt": "Given `lists`, an array of `k` arrays each sorted ascending, merge them into one sorted array. With `N` total elements, aim for O(N log k) - do not concatenate and sort.\n\n**Example:** `mergeKSorted([[1,4,5],[1,3,4],[2,6]])` -> `[1,1,2,3,4,4,5,6]`\n\nIn Java: `int[] mergeKSorted(int[][] lists)`.",
+    "fn": "mergeKSorted",
+    "starter": {
+      "js": "function mergeKSorted(lists) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] mergeKSorted(int[][] lists) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "mergeKSorted([[1,4,5],[1,3,4],[2,6]])",
+        "expected": [
+          1,
+          1,
+          2,
+          3,
+          4,
+          4,
+          5,
+          6
+        ]
+      },
+      {
+        "name": "no lists",
+        "call": "mergeKSorted([])",
+        "expected": []
+      },
+      {
+        "name": "empty lists",
+        "call": "mergeKSorted([[],[]])",
+        "expected": []
+      },
+      {
+        "name": "one list",
+        "call": "mergeKSorted([[1,2,3]])",
+        "expected": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "name": "negatives & uneven",
+        "call": "mergeKSorted([[-5,0,10],[],[-10],[1,1,1,1]])",
+        "expected": [
+          -10,
+          -5,
+          0,
+          1,
+          1,
+          1,
+          1,
+          10
+        ]
+      },
+      {
+        "name": "many lists",
+        "call": "(() => { const lists = Array.from({length: 100}, (_, i) => Array.from({length: 50}, (_, j) => j * 100 + i)); const r = mergeKSorted(lists); return [r.length, r[0], r[1], r[4999], r.every((v, i) => i === 0 || r[i-1] <= v)]; })()",
+        "expected": [
+          5000,
+          0,
+          1,
+          4999,
+          true
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function mergeKSorted(lists) {\n  const h = []; // [value, listIdx, elemIdx]\n  const less = (a, b) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);\n  const push = (x) => { h.push(x); let i = h.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (!less(h[i], h[p])) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } };\n  const pop = () => {\n    const top = h[0], last = h.pop();\n    if (h.length) { h[0] = last; let i = 0; for (;;) { const l = 2*i+1, r = l+1; let s = i; if (l < h.length && less(h[l], h[s])) s = l; if (r < h.length && less(h[r], h[s])) s = r; if (s === i) break; [h[s], h[i]] = [h[i], h[s]]; i = s; } }\n    return top;\n  };\n  lists.forEach((l, i) => { if (l.length) push([l[0], i, 0]); });\n  const out = [];\n  while (h.length) {\n    const [v, li, ei] = pop();\n    out.push(v);\n    if (ei + 1 < lists[li].length) push([lists[li][ei + 1], li, ei + 1]);\n  }\n  return out;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int[] mergeKSorted(int[][] lists) {\n    PriorityQueue<int[]> heap = new PriorityQueue<>((a, b) -> a[0] != b[0] ? Integer.compare(a[0], b[0]) : Integer.compare(a[1], b[1]));\n    int total = 0;\n    for (int i = 0; i < lists.length; i++) {\n      total += lists[i].length;\n      if (lists[i].length > 0) heap.offer(new int[]{lists[i][0], i, 0});\n    }\n    int[] out = new int[total];\n    int n = 0;\n    while (!heap.isEmpty()) {\n      int[] t = heap.poll();\n      out[n++] = t[0];\n      if (t[2] + 1 < lists[t[1]].length) heap.offer(new int[]{lists[t[1]][t[2] + 1], t[1], t[2] + 1});\n    }\n    return out;\n  }\n}\n"
+    },
+    "complexity": "Time O(N log k), space O(k) for the heap (plus O(N) output)",
+    "hints": [
+      "At any moment the next output is the smallest among the k current heads.",
+      "Keep the heads in a min-heap keyed by value, remembering which list and position each came from.",
+      "Alternative: divide-and-conquer pairwise merging, also O(N log k)."
+    ],
+    "keyPoints": [
+      "Min-heap of k heads (or pairwise divide & conquer)",
+      "O(N log k) vs naive O(N k) or O(N log N)",
+      "Skips empty lists",
+      "Relates to LSM-tree compaction / k-way merge of sorted runs (WiredTiger, external sort)"
+    ]
+  },
+  {
+    "id": "code-20",
+    "title": "Word Ladder",
+    "level": "hard",
+    "topic": "Graphs",
+    "prompt": "Given `beginWord`, `endWord` and a `wordList`, return the number of words in the shortest transformation sequence from `beginWord` to `endWord` where each step changes exactly one letter and every intermediate word (and `endWord`) must be in `wordList`. Return `0` if impossible. `beginWord` need not be in the list.\n\n**Example 1:** `ladderLength(\"hit\",\"cog\",[\"hot\",\"dot\",\"dog\",\"lot\",\"log\",\"cog\"])` -> `5` (hit -> hot -> dot -> dog -> cog)\n\n**Example 2:** `ladderLength(\"hit\",\"cog\",[\"hot\",\"dot\",\"dog\",\"lot\",\"log\"])` -> `0`",
+    "fn": "ladderLength",
+    "starter": {
+      "js": "function ladderLength(beginWord, endWord, wordList) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int ladderLength(String beginWord, String endWord, List<String> wordList) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "basic",
+        "call": "ladderLength(\"hit\",\"cog\",[\"hot\",\"dot\",\"dog\",\"lot\",\"log\",\"cog\"])",
+        "expected": 5
+      },
+      {
+        "name": "end missing",
+        "call": "ladderLength(\"hit\",\"cog\",[\"hot\",\"dot\",\"dog\",\"lot\",\"log\"])",
+        "expected": 0
+      },
+      {
+        "name": "one step",
+        "call": "ladderLength(\"a\",\"c\",[\"a\",\"b\",\"c\"])",
+        "expected": 2
+      },
+      {
+        "name": "unreachable",
+        "call": "ladderLength(\"abc\",\"xyz\",[\"abd\",\"xyz\"])",
+        "expected": 0
+      },
+      {
+        "name": "begin equals end chain",
+        "call": "ladderLength(\"hot\",\"dog\",[\"hot\",\"dog\",\"dot\"])",
+        "expected": 3
+      },
+      {
+        "name": "shortest of many",
+        "call": "ladderLength(\"red\",\"tax\",[\"ted\",\"tex\",\"red\",\"tax\",\"tad\",\"den\",\"rex\",\"pee\"])",
+        "expected": 4
+      }
+    ],
+    "solution": {
+      "js": "function ladderLength(beginWord, endWord, wordList) {\n  const dict = new Set(wordList);\n  if (!dict.has(endWord)) return 0;\n  const letters = 'abcdefghijklmnopqrstuvwxyz';\n  let frontier = [beginWord];\n  const seen = new Set([beginWord]);\n  let steps = 1;\n  while (frontier.length) {\n    const next = [];\n    for (const w of frontier) {\n      if (w === endWord) return steps;\n      for (let i = 0; i < w.length; i++) {\n        for (const c of letters) {\n          if (c === w[i]) continue;\n          const cand = w.slice(0, i) + c + w.slice(i + 1);\n          if (dict.has(cand) && !seen.has(cand)) { seen.add(cand); next.push(cand); }\n        }\n      }\n    }\n    frontier = next;\n    steps++;\n  }\n  return 0;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int ladderLength(String beginWord, String endWord, List<String> wordList) {\n    Set<String> dict = new HashSet<>(wordList);\n    if (!dict.contains(endWord)) return 0;\n    Deque<String> q = new ArrayDeque<>();\n    Set<String> seen = new HashSet<>();\n    q.add(beginWord);\n    seen.add(beginWord);\n    int steps = 1;\n    while (!q.isEmpty()) {\n      for (int size = q.size(); size > 0; size--) {\n        String w = q.poll();\n        if (w.equals(endWord)) return steps;\n        char[] cs = w.toCharArray();\n        for (int i = 0; i < cs.length; i++) {\n          char orig = cs[i];\n          for (char c = 'a'; c <= 'z'; c++) {\n            if (c == orig) continue;\n            cs[i] = c;\n            String cand = new String(cs);\n            if (dict.contains(cand) && seen.add(cand)) q.add(cand);\n          }\n          cs[i] = orig;\n        }\n      }\n      steps++;\n    }\n    return 0;\n  }\n}\n"
+    },
+    "complexity": "Time O(N * L * 26) where N = words, L = word length (string building adds another L); space O(N * L)",
+    "hints": [
+      "Words are nodes; edges connect words differing by one letter. Shortest path in an unweighted graph -> BFS.",
+      "Generate neighbours by trying all 26 letters at each position and checking a hash set, rather than comparing all pairs.",
+      "Mark words visited when enqueued. For extra credit, bidirectional BFS shrinks the search dramatically."
+    ],
+    "keyPoints": [
+      "BFS level-by-level for shortest path",
+      "Neighbour generation via set lookups (or wildcard pattern buckets like h*t)",
+      "Early exit when endWord not in list",
+      "Visited marking on enqueue",
+      "Mentions bidirectional BFS optimization"
+    ]
+  }
+]
