@@ -23,6 +23,7 @@
     "@anthropic-ai/sdk": "^1.14.0",
     "cross-env": "^7.0.3",
     "express": "^5.1.0",
+    "lottie-web": "^5.13.0",
     "mingo": "^7.2.7",
     "tsx": "^4.19.4",
     "web-push": "^4.0.0",

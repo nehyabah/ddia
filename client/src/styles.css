@@ -1024,3 +1024,4 @@ button.themechip{cursor:pointer}
 /* standalone rows (not inside a .list) get breathing room from what's above/below */
 :not(.list)>.listrow{margin-top:12px;margin-bottom:12px}
 .cogrid+.listrow,.readyhero+.listrow{margin-top:12px}
+.ai-orb{display:inline-block;flex:none}.ai-orb svg{display:block}

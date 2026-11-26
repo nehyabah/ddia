@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AiOrb } from "./AiOrb";
 
 /**
  * The one animation used wherever the AI is working: an orbiting "thinking" mark,
@@ -13,7 +14,7 @@ export function Thinking({ phases, compact }: { phases: string[]; compact?: bool
   return (
     <div className={`thinking ${compact ? "compact" : ""}`} role="status" aria-live="polite">
       <div className="th-row">
-        <span className="th-orb" aria-hidden="true"><i /><i /><i /><b /></span>
+        <AiOrb size={compact ? 32 : 44} />
         <span className="th-text" key={i}>{phases[i]}</span>
       </div>
       {!compact && (
