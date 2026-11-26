@@ -9,6 +9,10 @@ export const BADGES: Record<string, string> = {
   bughunter: "Squashed a Java bug",
   eagle: "Pinpointed 10 bug lines exactly",
   javaexpert: "Solved an expert Java bug",
+  puzzler: "Solved a systems puzzle",
+  track_concurrency: "Concurrency track complete",
+  track_resilience: "Rate limits & retries complete",
+  track_distributed: "Distributed systems complete",
 };
 
 /** Days until the next review after a correct answer lands a question in box N. */

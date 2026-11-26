@@ -79,6 +79,8 @@ export function Settings() {
         <Link to="/search" className="trackcard"><span className="ti java" style={{ width: 40, height: 40 }}><Icon name="search" /></span><span className="tx"><h4>Search</h4><p style={{ margin: 0 }}>Cards, terms, questions</p></span><span className="go"><Icon name="arrow" /></span></Link>
       </div>
 
+      <EmailSettings />
+
       <form className="panel" onSubmit={saveGoal}>
         <h3>Daily goal</h3>
         <p className="small muted">XP to earn each day. A 10‑question quiz run is roughly 100–150 XP.</p>
@@ -128,5 +130,37 @@ export function Settings() {
         </div>
       </div>
     </>
+  );
+}
+
+function EmailSettings() {
+  const { toast } = useProfile();
+  const [email, setEmail] = useState("");
+  const [weekly, setWeekly] = useState(true);
+  const [configured, setConfigured] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    api.get<{ email: string | null; weeklyEmail: boolean; configured: boolean }>("/me/email").then((r) => {
+      setEmail(r.email ?? ""); setWeekly(r.weeklyEmail); setConfigured(r.configured); setLoaded(true);
+    }).catch(() => setLoaded(true));
+  }, []);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    try { await api.put("/me/email", { email, weeklyEmail: weekly }); toast(email ? "Email saved" : "Email removed"); }
+    catch (err) { toast((err as Error).message); }
+  }
+  if (!loaded) return null;
+  return (
+    <form className="panel" onSubmit={save}>
+      <h3>Weekly email</h3>
+      <p className="small muted">Every Sunday evening: time on the platform, what you did, what needs work and next steps. Preview it any time on <Link to="/report">the weekly report</Link>.</p>
+      <label className="lbl" htmlFor="em">Your email</label>
+      <input id="em" className="field" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+      <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+        <input type="checkbox" checked={weekly} onChange={(e) => setWeekly(e.target.checked)} /> Send me the weekly report
+      </label>
+      {!configured && <p className="small muted">Sending is not set up on the server yet (RESEND_API_KEY). Your address is saved for when it is.</p>}
+      <button className="primary">Save</button>
+    </form>
   );
 }

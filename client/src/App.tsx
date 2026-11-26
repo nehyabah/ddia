@@ -18,6 +18,8 @@ import { JavaHome } from "./pages/JavaHome";
 import { JavaPlay } from "./pages/JavaPlay";
 import { JavaLessons } from "./pages/JavaLessons";
 import { JavaBrowse } from "./pages/JavaBrowse";
+import { PuzzlePlay, PuzzlesHome } from "./pages/Puzzles";
+import { ReportPage } from "./pages/ReportPage";
 
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
 
@@ -47,6 +49,7 @@ function Shell() {
     { to: "/", label: "Home", icon: "home", end: true, match: ["/chapter"] },
     { to: "/review", label: "Review", icon: "review", badge: profile.dueCount },
     { to: "/java", label: "Java", icon: "code", badge: profile.javaDue },
+    { to: "/puzzles", label: "Puzzles", icon: "puzzle" },
     { to: "/stats", label: "Stats", icon: "chart" },
     { to: "/notes", label: "Notes", icon: "notes", desktopOnly: true },
     { to: "/search", label: "Search", icon: "search", desktopOnly: true },
@@ -119,7 +122,11 @@ export function App() {
             <Route path="/java/c/:id" element={<JavaPlay />} />
             <Route path="/java/lessons" element={<JavaLessons />} />
             <Route path="/java/all" element={<JavaBrowse />} />
-            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/puzzles" element={<PuzzlesHome />} />
+          <Route path="/puzzles/play" element={<PuzzlePlay />} />
+          <Route path="/puzzles/p/:id" element={<PuzzlePlay />} />
+          <Route path="/report" element={<ReportPage />} />
+          <Route path="/stats" element={<StatsPage />} />
             <Route path="/notes" element={<NotesPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/settings" element={<Settings />} />

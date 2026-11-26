@@ -25,7 +25,7 @@ export function Home() {
 
   const book = chapters.filter((c) => !c.tag);
   const extra = chapters.filter((c) => c.tag);
-  const next = chapters.find((c) => c.mastery < 80);
+  const next = chapters.find((c) => c.mastery < 80 && !c.locked);
   const goalPct = Math.min(100, Math.round((profile.xpToday / profile.dailyGoal) * 100));
   const ddiaPct = Math.round(chapters.reduce((a, c) => a + c.mastery, 0) / chapters.length);
   const javaTotal = java ? java.levels.reduce((a, l) => a + l.count, 0) : 0;
@@ -49,14 +49,15 @@ export function Home() {
     const label = c.mastery === 0 ? (c.cardsSeen ? `${c.cardsSeen}/${c.cardCount} cards read` : "Not started")
       : c.mastery >= 80 ? "Healthy" : "In progress";
     return (
-      <button key={c.id} className={`node ${c.mastery >= 80 ? "done" : ""}`} onClick={() => nav(`/chapter/${c.id}`)}>
+      <button key={c.id} className={`node ${c.mastery >= 80 ? "done" : ""} ${c.locked ? "locked" : ""}`} disabled={c.locked}
+        title={c.locked ? `Reach ${c.unlockAt}% on ${c.unlockAfter} to unlock` : undefined} onClick={() => nav(`/chapter/${c.id}`)}>
         {c.due > 0 && <span className="due pill" title="Questions due for review">{c.due}</span>}
         <span className="nh">
           <span className="num">{c.tag ?? c.id}</span>
-          <Ring value={c.mastery} size={38} stroke={4}>{c.mastery}%</Ring>
+          {c.locked ? <span className="lockic"><Icon name="lock" size={16} /></span> : <Ring value={c.mastery} size={38} stroke={4}>{c.mastery}%</Ring>}
         </span>
         <span className="ttl">{c.title}</span>
-        <span className="health"><span className={`dot ${cls}`} />{label}</span>
+        <span className="health">{c.locked ? <><Icon name="lock" size={12} />Reach {c.unlockAt}% on {c.unlockAfter}</> : <><span className={`dot ${cls}`} />{label}</>}</span>
         {(c.cardsSeen === c.cardCount || c.mastery >= 80 || c.bossWon) && (
           <span className="donechips">
             {c.cardsSeen === c.cardCount && <span><Icon name="check" size={11} />Read</span>}
@@ -102,6 +103,11 @@ export function Home() {
           <span className="tx"><h4>Designing Data‑Intensive Apps</h4><p>{chapters.length} chapters · {ddiaPct}% mastered</p><span className="bar" style={{ display: "block" }}><i style={{ width: `${ddiaPct}%` }} /></span></span>
           <span className="go"><Icon name="arrow" /></span>
         </a>
+        <Link className="trackcard" to="/puzzles">
+          <span className="ti" style={{ background: "var(--teal)", color: "#fff" }}><Icon name="puzzle" /></span>
+          <span className="tx"><h4>Systems puzzles</h4><p>Concurrency · rate limits &amp; retries · distributed</p></span>
+          <span className="go"><Icon name="arrow" /></span>
+        </Link>
         <Link className="trackcard" to="/java">
           <span className="ti java"><Icon name="bug" /></span>
           <span className="tx"><h4>Java debugging</h4><p>{javaTotal || "…"} challenges · {javaPct}% mastered</p><span className="bar" style={{ display: "block" }}><i style={{ width: `${javaPct}%`, background: "var(--grad-warm)" }} /></span></span>

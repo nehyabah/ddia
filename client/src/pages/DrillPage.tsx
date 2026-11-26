@@ -22,6 +22,12 @@ export function DrillPage() {
     [c?.id], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const d = order[n];
+  const [gate, setGate] = useState<{ best: number | null; passScore: number; passed: boolean } | null>(null);
+  useEffect(() => {
+    if (!d) return;
+    setGate(null);
+    api.get<{ best: number | null; passScore: number; passed: boolean }>(`/ai/best?kind=drill&id=${d.id}`).then(setGate).catch(() => setGate({ best: null, passScore: 7, passed: true }));
+  }, [d?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setAnswer(""); setRevealed(false); setGraded(null);
@@ -53,7 +59,9 @@ export function DrillPage() {
             <p className="small" style={{ whiteSpace: "pre-wrap" }}>{d.lastAnswer}</p>
           </details>
         )}
-        <GradeBox kind="drill" id={d.id} answer={answer} onAnswer={setAnswer} hideInput />
+        <GradeBox kind="drill" id={d.id} answer={answer} onAnswer={setAnswer} hideInput
+          onGraded={(g) => setGate((x) => ({ passScore: x?.passScore ?? 7, best: Math.max(x?.best ?? 0, g.score), passed: Math.max(x?.best ?? 0, g.score) >= (x?.passScore ?? 7) }))} />
+        {gate && !gate.passed && <p className="small muted" style={{ marginTop: 8 }}><Icon name="lock" size={13} /> Score {gate.passScore}/10 with Claude to unlock the next prompt{gate.best != null ? ` (best so far: ${gate.best}/10)` : ""}.</p>}
         {!revealed ? (
           <button className="ghost" onClick={() => setRevealed(true)}>Self-check key points</button>
         ) : (
@@ -78,7 +86,7 @@ export function DrillPage() {
                   <b>{graded.covered}/{graded.total} points.</b>{" "}
                   {graded.ratio >= 0.8 ? "Interview‑ready." : graded.ratio >= 0.5 ? "Close. Rehearse the missing points." : "Revisit the cards for this topic, then try again."}
                 </p>
-                <button className="primary" onClick={() => (last ? nav(`/chapter/${c.id}`) : setN(n + 1))}>{last ? "Finish" : "Next prompt"}</button>
+                <button className="primary" disabled={!gate?.passed} onClick={() => (last ? nav(`/chapter/${c.id}`) : setN(n + 1))}>{!gate?.passed ? `Score ${gate?.passScore ?? 7}/10 to continue` : last ? "Finish" : "Next prompt"}</button>
               </>
             )}
           </>

@@ -75,7 +75,7 @@ account.post("/me/password", (req, res) => {
   res.json({ ok: true });
 });
 
-const PROGRESS_TABLES = ["card_progress", "question_srs", "attempts", "drill_progress", "badges", "boss_wins", "xp_events", "runs", "java_srs", "java_attempts", "java_lesson_reads", "ai_grades"];
+const PROGRESS_TABLES = ["card_progress", "question_srs", "attempts", "drill_progress", "badges", "boss_wins", "xp_events", "runs", "java_srs", "java_attempts", "java_lesson_reads", "ai_grades", "puzzle_progress", "activity"];
 
 account.post("/me/reset", (req, res) => {
   tx(() => {

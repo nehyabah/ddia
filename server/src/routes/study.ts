@@ -25,6 +25,37 @@ function getChapter(id: number) {
   return c;
 }
 
+export const UNLOCK_AT = 80;
+
+/**
+ * Chapters unlock in order within each track (the book, then the MongoDB track separately):
+ * the first is always open; each next one opens when the previous reaches UNLOCK_AT% mastery.
+ * A chapter with existing progress stays open so earlier work is never locked away.
+ */
+export function chapterLocks(userId: number): Map<number, { locked: boolean; after: string | null }> {
+  const m = masteryByChapter(userId);
+  const chapters = db.prepare("SELECT id, tag FROM chapters ORDER BY position").all() as { id: number; tag: string | null }[];
+  const started = new Set((db.prepare(`
+    SELECT DISTINCT q.chapter_id AS id FROM question_srs s JOIN questions q ON q.id = s.question_id WHERE s.user_id = ?
+    UNION SELECT DISTINCT k.chapter_id FROM card_progress p JOIN cards k ON k.id = p.card_id WHERE p.user_id = ? AND p.seen_at IS NOT NULL
+  `).all(userId, userId) as { id: number }[]).map((r) => r.id));
+  const out = new Map<number, { locked: boolean; after: string | null }>();
+  const prev: Record<string, { id: number; tag: string | null } | undefined> = {};
+  for (const c of chapters) {
+    const track = c.tag ? "db" : "book";
+    const p = prev[track];
+    const locked = !!p && (m.get(p.id) ?? 0) < UNLOCK_AT && !started.has(c.id);
+    out.set(c.id, { locked, after: p ? chapterLabel(p) : null });
+    prev[track] = c;
+  }
+  return out;
+}
+
+export function assertUnlocked(userId: number, chapterId: number) {
+  const l = chapterLocks(userId).get(chapterId);
+  if (l?.locked) throw new HttpError(403, `Locked: reach ${UNLOCK_AT}% on ${l.after} first`);
+}
+
 /* ---------- chapters ---------- */
 
 study.get("/chapters", (req, res) => {
@@ -39,16 +70,19 @@ study.get("/chapters", (req, res) => {
       EXISTS (SELECT 1 FROM boss_wins b WHERE b.user_id = ? AND b.chapter_id = c.id) AS boss_won
     FROM chapters c ORDER BY c.position
   `).all(u, u, t, u) as (ChapterRow & { card_count: number; cards_seen: number; question_count: number; due: number; boss_won: number })[];
+  const locks = chapterLocks(u);
   res.json(rows.map((r) => ({
     id: r.id, tag: r.tag, label: chapterLabel(r), title: r.title, blurb: r.blurb,
     cardCount: r.card_count, cardsSeen: r.cards_seen, questionCount: r.question_count,
     due: r.due, bossWon: !!r.boss_won, mastery: m.get(r.id) ?? 0,
+    locked: locks.get(r.id)?.locked ?? false, unlockAfter: locks.get(r.id)?.after ?? null, unlockAt: UNLOCK_AT,
   })));
 });
 
 study.get("/chapters/:id", (req, res) => {
   const u = req.userId;
   const c = getChapter(int(req.params.id, "id"));
+  assertUnlocked(u, c.id);
   const cards = db.prepare(`
     SELECT k.id, k.idx, k.title, k.bullets, p.seen_at, COALESCE(p.starred, 0) AS starred, COALESCE(p.note, '') AS note
     FROM cards k LEFT JOIN card_progress p ON p.card_id = k.id AND p.user_id = ?
@@ -88,6 +122,7 @@ function cardChapter(cardId: number) {
 study.post("/cards/:id/seen", (req, res) => {
   const u = req.userId, id = int(req.params.id, "id");
   const ch = cardChapter(id);
+  assertUnlocked(u, ch);
   const out = tx(() => {
     const r = db.prepare(`
       INSERT INTO card_progress (user_id, card_id, seen_at) VALUES (?, ?, ?)
@@ -149,6 +184,7 @@ study.post("/runs", (req, res) => {
     picked = shuffle(picked);
   } else {
     chapterId = getChapter(int(req.body?.chapterId, "chapterId")).id;
+    assertUnlocked(u, chapterId);
     if (mode === "boss") {
       if (mastery(u, chapterId) < BOSS_UNLOCK) throw new HttpError(403, `Boss unlocks at ${BOSS_UNLOCK}% node health`);
       picked = shuffle(db.prepare("SELECT * FROM questions WHERE chapter_id = ? AND boss = 1").all(chapterId) as QuestionRow[]);
@@ -253,6 +289,7 @@ study.post("/runs/:id/answer", (req, res) => {
 study.post("/match", (req, res) => {
   const u = req.userId;
   const c = getChapter(int(req.body?.chapterId, "chapterId"));
+  assertUnlocked(u, c.id);
   const seconds = int(req.body?.seconds, "seconds", 1, 86_400);
   const misses = int(req.body?.misses, "misses", 0, 1000);
   const gain = Math.max(Math.max(10, 60 - seconds) - misses * 3, 5);
@@ -268,8 +305,9 @@ study.post("/match", (req, res) => {
 
 study.post("/drills/:id", (req, res) => {
   const u = req.userId, id = int(req.params.id, "id");
-  const d = db.prepare("SELECT id, points FROM drills WHERE id = ?").get(id) as { id: number; points: string } | undefined;
+  const d = db.prepare("SELECT id, chapter_id, points FROM drills WHERE id = ?").get(id) as { id: number; chapter_id: number; points: string } | undefined;
   if (!d) throw new HttpError(404, "No such drill");
+  assertUnlocked(u, d.chapter_id);
   const total = (JSON.parse(d.points) as string[]).length;
   const covered = int(req.body?.covered, "covered", 0, total);
   const answer = str(req.body?.answer ?? "", "answer", 0, 20_000);

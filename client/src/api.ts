@@ -40,6 +40,7 @@ export type Profile = {
 export type ChapterSummary = {
   id: number; tag: string | null; label: string; title: string; blurb: string;
   cardCount: number; cardsSeen: number; questionCount: number; due: number; bossWon: boolean; mastery: number;
+  locked: boolean; unlockAfter: string | null; unlockAt: number;
 };
 
 export type Card = { id: number; idx: number; title: string; bullets: string[]; seen: boolean; starred: boolean; note: string };
@@ -110,3 +111,33 @@ export type JavaResult = {
 
 export type JavaListItem = { id: string; level: JavaLevel; topic: string; title: string; kind: string; box: number | null; reps: number; lapses: number; solved: boolean };
 export type JavaLesson = { id: string; level: JavaLevel; title: string; body: string[]; example?: string; read: boolean };
+
+/* ---------- puzzles ---------- */
+export type PuzzleTrack = { id: string; label: string; count: number; solved: number; topics: { topic: string; count: number; solved: number }[] };
+export type PuzzleView = {
+  id: string; track: string; trackLabel: string; level: JavaLevel; topic: string; title: string; kind: "parsons" | "blanks" | "theory";
+  prompt: string; attempts: number; solved: boolean; revealed: boolean; bestScore: number | null; xp: number; passScore: number; revealAfter: number;
+  pool?: string[]; slots?: number; code?: string; blanks?: { options: string[] }[]; question?: string; hint?: string | null;
+  reveal?: PuzzleReveal;
+};
+export type PuzzleReveal = {
+  explanation: string; solution: string | null; expectedOutput: string | null; lines: string[] | null;
+  answers: number[] | null; modelAnswer: string | null; keyPoints: string[] | null;
+};
+export type PuzzleCheck = { correct: boolean; detail: boolean[]; attempts: number; xp: number; canReveal: boolean; newBadges: Badge[]; reveal?: PuzzleReveal };
+
+/* ---------- weekly report ---------- */
+export type WeeklyReport = {
+  user: { username: string; email: string | null };
+  range: { from: string; to: string; label: string };
+  totals: {
+    activeMinutes: number; prevActiveMinutes: number; xp: number; prevXp: number; daysActive: number; goalDays: number;
+    questions: number; questionAccuracy: number | null; javaAnswered: number; javaAccuracy: number | null; javaSolvedNew: number;
+    cardsRead: number; puzzlesSolved: number; aiGraded: number; aiAvg: number | null; aiPassed: number;
+    streak: number; bestStreak: number; level: number; totalXp: number;
+  };
+  days: { day: string; minutes: number; xp: number }[];
+  chapters: { label: string; title: string; answered: number; accuracy: number; mastery: number }[];
+  needsWork: string[];
+  nextSteps: string[];
+};

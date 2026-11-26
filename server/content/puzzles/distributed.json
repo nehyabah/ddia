@@ -1,0 +1,589 @@
+[
+  {
+    "id": "dist-01",
+    "track": "distributed",
+    "level": "beginner",
+    "topic": "Logical clocks",
+    "title": "Lamport clock: tick, send, receive",
+    "kind": "parsons",
+    "prompt": "Complete the Lamport clock: every local event ticks, a send stamps the message with a tick, and a receive must jump past the sender's timestamp.",
+    "lines": [
+      "        long tick() {",
+      "            return ++time;",
+      "        }",
+      "        long send() {",
+      "            return tick();",
+      "        }",
+      "        long receive(long remote) {",
+      "            time = Math.max(time, remote);",
+      "            return tick();",
+      "        }"
+    ],
+    "distractors": [
+      "            time = Math.min(time, remote);",
+      "            time = remote;"
+    ],
+    "solution": "public class Main {\n    static class Clock {\n        long time = 0;\n        long tick() {\n            return ++time;\n        }\n        long send() {\n            return tick();\n        }\n        long receive(long remote) {\n            time = Math.max(time, remote);\n            return tick();\n        }\n    }\n\n    public static void main(String[] args) {\n        Clock a = new Clock(), b = new Clock();\n        long m1 = a.send();\n        a.tick();\n        long m2 = a.send();\n        b.tick();\n        System.out.println(\"m1=\" + m1 + \" m2=\" + m2);\n        System.out.println(\"b after m1: \" + b.receive(m1));\n        System.out.println(\"b after m2: \" + b.receive(m2));\n        System.out.println(\"a=\" + a.time + \" b=\" + b.time);\n    }\n}\n",
+    "expectedOutput": "m1=1 m2=3\nb after m1: 2\nb after m2: 4\na=3 b=4\n",
+    "explanation": "A Lamport clock guarantees that if event A happened-before event B then L(A) < L(B): local events tick, and a receive sets the clock to max(local, remote) and then ticks so it is strictly after the send. The converse does not hold: a smaller timestamp does not prove causality, which is why vector clocks exist. Taking min, or blindly copying the remote value, can move the clock backwards and break the ordering. MongoDB's cluster time is a hybrid logical clock built on the same idea: every message carries $clusterTime and nodes advance to the max they have seen."
+  },
+  {
+    "id": "dist-02",
+    "track": "distributed",
+    "level": "beginner",
+    "topic": "Messaging",
+    "title": "Idempotent consumer with a processed-id set",
+    "kind": "parsons",
+    "prompt": "The broker delivers at-least-once, so messages may arrive twice. Make `handle` apply each message id exactly once and report duplicates.",
+    "lines": [
+      "        if (!processed.add(msgId)) {",
+      "            System.out.println(\"dup \" + msgId + \" skipped\");",
+      "            return;",
+      "        }",
+      "        balance += amount;",
+      "        System.out.println(\"applied \" + msgId + \" -> \" + balance);"
+    ],
+    "distractors": [
+      "        if (processed.add(msgId)) {",
+      "        if (processed.contains(amount)) {"
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    static Set<String> processed = new HashSet<>();\n    static long balance = 0;\n\n    static void handle(String msgId, long amount) {\n        if (!processed.add(msgId)) {\n            System.out.println(\"dup \" + msgId + \" skipped\");\n            return;\n        }\n        balance += amount;\n        System.out.println(\"applied \" + msgId + \" -> \" + balance);\n    }\n\n    public static void main(String[] args) {\n        handle(\"m1\", 100);\n        handle(\"m2\", 50);\n        handle(\"m1\", 100);\n        handle(\"m3\", -30);\n        handle(\"m2\", 50);\n        System.out.println(\"final balance \" + balance);\n    }\n}\n",
+    "expectedOutput": "applied m1 -> 100\napplied m2 -> 150\ndup m1 skipped\napplied m3 -> 120\ndup m2 skipped\nfinal balance 120\n",
+    "explanation": "At-least-once delivery plus an idempotent consumer gives effectively-once processing. `Set.add` returns false when the id is already present, so a single call both checks and records. In production the dedupe record and the side effect must commit atomically, for example in the same MongoDB transaction, or as a unique index on the message id in the same collection write; otherwise a crash between them reintroduces duplicates or losses. Change stream consumers and outbox relays depend on this pattern because they replay after a resume."
+  },
+  {
+    "id": "dist-03",
+    "track": "distributed",
+    "level": "beginner",
+    "topic": "Sharding",
+    "title": "Hash vs range shard routing",
+    "kind": "blanks",
+    "prompt": "Fill the gaps so hashed keys spread over shards without negative indexes, and range routing sends each id to the chunk whose upper bound is exclusive, like MongoDB chunk ranges [min, max).",
+    "code": "static int hashShard(String key, int shards) {\n    return Math.[[1]](key.hashCode(), shards);\n}\n\nstatic int rangeShard(int userId, int[] splits) {\n    for (int i = 0; i < splits.length; i++) {\n        if (userId [[2]] splits[i]) return i;\n    }\n    return splits.length;\n}",
+    "blanks": [
+      {
+        "options": [
+          "abs",
+          "floorMod",
+          "max"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "<=",
+          ">",
+          "<"
+        ],
+        "answer": 2
+      }
+    ],
+    "solution": "public class Main {\n    static int hashShard(String key, int shards) {\n        return Math.floorMod(key.hashCode(), shards);\n    }\n\n    static int rangeShard(int userId, int[] splits) {\n        for (int i = 0; i < splits.length; i++) {\n            if (userId < splits[i]) return i;\n        }\n        return splits.length;\n    }\n\n    public static void main(String[] args) {\n        for (String k : new String[]{\"alice\", \"bob\", \"carol\", \"polygenelubricants\"}) {\n            System.out.println(k + \" hash=\" + k.hashCode() + \" -> shard \" + hashShard(k, 3));\n        }\n        int[] splits = {100, 200};\n        for (int id : new int[]{5, 99, 100, 199, 200, 1000}) {\n            System.out.println(\"user \" + id + \" -> chunk \" + rangeShard(id, splits));\n        }\n    }\n}\n",
+    "expectedOutput": "alice hash=92903040 -> shard 0\nbob hash=97717 -> shard 1\ncarol hash=94431409 -> shard 1\npolygenelubricants hash=-2147483648 -> shard 1\nuser 5 -> chunk 0\nuser 99 -> chunk 0\nuser 100 -> chunk 1\nuser 199 -> chunk 1\nuser 200 -> chunk 2\nuser 1000 -> chunk 2\n",
+    "explanation": "Java's `%` returns negative results for negative hash codes, and `Math.abs(Integer.MIN_VALUE)` is still negative, so `floorMod` is the safe choice. MongoDB chunks cover [min, max) ranges, so a value equal to a split point belongs to the next chunk, hence `<`. Range sharding keeps nearby keys together (efficient range queries, but monotonically increasing keys hot-spot the last chunk); hashed sharding spreads writes evenly but turns range queries into scatter-gather. Note that plain modulo hashing remaps most keys when the shard count changes, which is why MongoDB moves chunks instead of rehashing."
+  },
+  {
+    "id": "dist-04",
+    "track": "distributed",
+    "level": "beginner",
+    "topic": "Quorums",
+    "title": "Quorum overlap: w + r > n",
+    "kind": "blanks",
+    "prompt": "Fill the gaps: a read quorum must overlap every write quorum, and a majority must be strictly more than half of the voting members.",
+    "code": "static boolean overlaps(int n, int w, int r) {\n    return [[1]];\n}\n\nstatic int majority(int n) {\n    return [[2]];\n}",
+    "blanks": [
+      {
+        "options": [
+          "w + r >= n",
+          "w + r > n",
+          "w > r"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "n / 2",
+          "(n + 1) / 2",
+          "n / 2 + 1"
+        ],
+        "answer": 2
+      }
+    ],
+    "solution": "public class Main {\n    static boolean overlaps(int n, int w, int r) {\n        return w + r > n;\n    }\n\n    static int majority(int n) {\n        return n / 2 + 1;\n    }\n\n    public static void main(String[] args) {\n        int[][] cfg = {{3, 2, 2}, {3, 1, 2}, {5, 3, 3}, {5, 1, 5}, {4, 2, 2}};\n        for (int[] c : cfg) {\n            System.out.println(\"n=\" + c[0] + \" w=\" + c[1] + \" r=\" + c[2] + \" overlap=\" + overlaps(c[0], c[1], c[2]));\n        }\n        for (int n = 1; n <= 5; n++) {\n            System.out.println(\"majority(\" + n + \")=\" + majority(n));\n        }\n    }\n}\n",
+    "expectedOutput": "n=3 w=2 r=2 overlap=true\nn=3 w=1 r=2 overlap=false\nn=5 w=3 r=3 overlap=true\nn=5 w=1 r=5 overlap=true\nn=4 w=2 r=2 overlap=false\nmajority(1)=1\nmajority(2)=2\nmajority(3)=2\nmajority(4)=3\nmajority(5)=3\n",
+    "explanation": "If w + r > n, any set of r replicas must include at least one replica that acknowledged the latest write, so a read can find the newest version. With w + r = n (e.g. 2 + 2 of 4) the two sets can be disjoint. A majority is floor(n/2)+1; `(n+1)/2` is wrong for even n, which is why replica sets prefer odd voting membership. MongoDB writeConcern \"majority\" uses exactly this count of voting members, but note MongoDB reads go to one node, not r nodes: readConcern \"majority\" relies on the majority-commit point rather than quorum reads."
+  },
+  {
+    "id": "dist-05",
+    "track": "distributed",
+    "level": "beginner",
+    "topic": "CAP",
+    "title": "CAP and PACELC, stated precisely",
+    "kind": "theory",
+    "prompt": "Explain CAP precisely and why PACELC is a more useful framing, using a MongoDB replica set as the example.",
+    "question": "State the CAP theorem precisely (what C, A and P actually mean), explain why \"pick 2 of 3\" is misleading, and use PACELC to describe where a MongoDB replica set sits under different read/write concern settings.",
+    "keyPoints": [
+      "C in CAP means linearizability (single-copy recency), not ACID consistency; A means every request to a non-failed node gets a non-error response",
+      "P is not optional: partitions happen, so the real choice is C vs A during a partition",
+      "CAP says nothing about normal operation or latency; it is a narrow impossibility result",
+      "PACELC: if Partition, choose A or C; Else, choose Latency or Consistency",
+      "MongoDB with majority write/read concerns behaves PC/EC: the minority side cannot accept writes, and majority acks add latency",
+      "Tunable: w:1 and reading from secondaries trade consistency for latency/availability (closer to PA/EL), and the minority side can still serve stale reads"
+    ],
+    "modelAnswer": "CAP says that during a network partition a system cannot be both linearizable (every read sees the latest completed write, as if there were one copy) and available (every non-failed node returns a non-error response). Partitions are not something you opt out of, so \"pick 2 of 3\" is misleading; the real choice is what you do when a partition happens. CAP also ignores latency and the normal case, where most trade-offs actually live. PACELC extends it: if there is a Partition, choose Availability or Consistency; Else, choose Latency or Consistency. A MongoDB replica set elects a single primary that needs a majority, so the minority side cannot take writes: with writeConcern and readConcern majority (or linearizable) it is PC/EC, paying replication latency for durability and recency. Lower settings like w:1 or readPreference secondary make it closer to PA/EL: faster and more available reads, but they may be stale or rolled back.",
+    "hint": "Define C as linearizability, and ask what happens on the minority side of a partition and on a healthy cluster.",
+    "explanation": "Interviewers look for the precise definitions: CAP consistency is linearizability and availability is a strict per-node property. Because partitions are inevitable, CAP is a statement about behaviour during a partition, while PACELC adds the everyday latency vs consistency trade-off. MongoDB is tunable per operation via writeConcern, readConcern and readPreference, so a good answer describes behaviour per setting rather than labelling the whole database \"CP\"."
+  },
+  {
+    "id": "dist-06",
+    "track": "distributed",
+    "level": "intermediate",
+    "topic": "Consistent hashing",
+    "title": "Ring lookup with virtual nodes",
+    "kind": "parsons",
+    "prompt": "Each physical node owns many virtual points on a hash ring. Find the owner of a key: the first point clockwise from the key's hash, wrapping around at the end.",
+    "lines": [
+      "        int hk = h(key);",
+      "        Map.Entry<Integer, String> e = ring.ceilingEntry(hk);",
+      "        if (e == null) {",
+      "            e = ring.firstEntry();",
+      "        }",
+      "        return e.getValue();"
+    ],
+    "distractors": [
+      "        Map.Entry<Integer, String> e = ring.floorEntry(hk);",
+      "            e = ring.lastEntry();"
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    static TreeMap<Integer, String> ring = new TreeMap<>();\n\n    static int h(String s) {\n        int x = s.hashCode() * 0x9E3779B1;\n        return (x ^ (x >>> 15)) & 0x7fffffff;\n    }\n\n    static void addNode(String node, int vnodes) {\n        for (int i = 0; i < vnodes; i++) ring.put(h(node + \"#\" + i), node);\n    }\n\n    static String owner(String key) {\n        int hk = h(key);\n        Map.Entry<Integer, String> e = ring.ceilingEntry(hk);\n        if (e == null) {\n            e = ring.firstEntry();\n        }\n        return e.getValue();\n    }\n\n    public static void main(String[] args) {\n        for (String n : new String[]{\"A\", \"B\", \"C\"}) addNode(n, 50);\n        String[] before = new String[3000];\n        Map<String, Integer> counts = new TreeMap<>();\n        for (int i = 0; i < 3000; i++) {\n            before[i] = owner(\"key\" + i);\n            counts.merge(before[i], 1, Integer::sum);\n        }\n        System.out.println(\"3 nodes: \" + counts);\n        addNode(\"D\", 50);\n        int moved = 0;\n        for (int i = 0; i < 3000; i++) {\n            String now = owner(\"key\" + i);\n            if (!now.equals(before[i])) {\n                moved++;\n                if (!now.equals(\"D\")) System.out.println(\"unexpected move\");\n            }\n        }\n        System.out.println(\"after adding D, moved \" + moved + \" of 3000, all to D\");\n    }\n}\n",
+    "expectedOutput": "3 nodes: {A=1005, B=1170, C=825}\nafter adding D, moved 254 of 3000, all to D\n",
+    "explanation": "A sorted map makes ring lookup O(log n): `ceilingEntry` finds the first point at or after the key's hash, and when none exists the ring wraps to `firstEntry`. Adding a node only steals keys that now fall just before its new points, so roughly 1/N of keys move and every move goes to the new node, unlike `hash % N` which remaps almost everything. Virtual nodes smooth out the uneven arc sizes that a single point per node would produce and let heterogeneous machines take more points. Dynamo-style stores (Cassandra, Riak) use this; MongoDB instead uses explicit chunk ranges plus a balancer, which achieves the same \"move only a slice\" property with a metadata catalog."
+  },
+  {
+    "id": "dist-07",
+    "track": "distributed",
+    "level": "intermediate",
+    "topic": "Quorums",
+    "title": "Quorum read with read repair",
+    "kind": "parsons",
+    "prompt": "Read from the replicas in `ask`, return the value with the highest version, and repair any queried replica that was stale.",
+    "lines": [
+      "        Replica best = null;",
+      "        for (int i : ask) {",
+      "            if (best == null || reps[i].version > best.version) best = reps[i];",
+      "        }",
+      "        for (int j : ask) {",
+      "            if (reps[j].version < best.version) {",
+      "                reps[j].version = best.version;",
+      "                reps[j].value = best.value;",
+      "            }",
+      "        }",
+      "        return best.value + \"@v\" + best.version;"
+    ],
+    "distractors": [
+      "            if (best == null || reps[i].version < best.version) best = reps[i];"
+    ],
+    "solution": "public class Main {\n    static class Replica {\n        String value; long version;\n        Replica(String v, long ver) { value = v; version = ver; }\n        public String toString() { return value + \"@v\" + version; }\n    }\n\n    static String quorumRead(Replica[] reps, int[] ask) {\n        Replica best = null;\n        for (int i : ask) {\n            if (best == null || reps[i].version > best.version) best = reps[i];\n        }\n        for (int j : ask) {\n            if (reps[j].version < best.version) {\n                reps[j].version = best.version;\n                reps[j].value = best.value;\n            }\n        }\n        return best.value + \"@v\" + best.version;\n    }\n\n    public static void main(String[] args) {\n        Replica[] reps = { new Replica(\"red\", 1), new Replica(\"red\", 1), new Replica(\"red\", 1) };\n        // write \"blue\" v2 with w=2: only replicas 0 and 1 acknowledged\n        reps[0].value = \"blue\"; reps[0].version = 2;\n        reps[1].value = \"blue\"; reps[1].version = 2;\n        System.out.println(\"before: \" + java.util.Arrays.toString(reps));\n        System.out.println(\"read r=2 from {1,2}: \" + quorumRead(reps, new int[]{1, 2}));\n        System.out.println(\"after:  \" + java.util.Arrays.toString(reps));\n        System.out.println(\"read r=1 from {2}: \" + quorumRead(reps, new int[]{2}));\n    }\n}\n",
+    "expectedOutput": "before: [blue@v2, blue@v2, red@v1]\nread r=2 from {1,2}: blue@v2\nafter:  [blue@v2, blue@v2, blue@v2]\nread r=1 from {2}: blue@v2\n",
+    "explanation": "With n=3, w=2, r=2 every read quorum overlaps the write quorum, so at least one replica returns v2 and the highest version wins. Read repair then pushes the newest value to stale replicas that were queried, reducing divergence without a separate anti-entropy pass. Versions must be comparable (a counter, or vector clocks if concurrent writes are allowed); wall-clock timestamps would reintroduce last-write-wins problems. MongoDB does not do leaderless quorum reads: one primary orders writes in the oplog and readConcern \"majority\" returns data acknowledged by a majority instead."
+  },
+  {
+    "id": "dist-08",
+    "track": "distributed",
+    "level": "intermediate",
+    "topic": "Split brain",
+    "title": "Fencing tokens reject a zombie leader",
+    "kind": "parsons",
+    "prompt": "A lock service hands out monotonically increasing fencing tokens. Make the storage reject any write that carries a token older than one it has already seen.",
+    "lines": [
+      "        synchronized boolean write(long token, String data) {",
+      "            if (token < highestToken) {",
+      "                rejected.add(data + \"#\" + token);",
+      "                return false;",
+      "            }",
+      "            highestToken = token;",
+      "            log.add(data + \"#\" + token);",
+      "            return true;",
+      "        }"
+    ],
+    "distractors": [
+      "            if (token <= highestToken) {",
+      "            highestToken = Math.min(highestToken, token);"
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    static class Storage {\n        long highestToken = 0;\n        List<String> log = new ArrayList<>();\n        List<String> rejected = new ArrayList<>();\n        synchronized boolean write(long token, String data) {\n            if (token < highestToken) {\n                rejected.add(data + \"#\" + token);\n                return false;\n            }\n            highestToken = token;\n            log.add(data + \"#\" + token);\n            return true;\n        }\n    }\n\n    public static void main(String[] args) {\n        Storage s = new Storage();\n        long t1 = 33;                 // client 1 acquires the lease\n        s.write(t1, \"c1-a\");\n        // client 1 hits a long GC pause, its lease expires\n        long t2 = 34;                 // client 2 acquires the lease\n        s.write(t2, \"c2-a\");\n        s.write(t1, \"c1-b\");          // client 1 wakes up, still thinks it is leader\n        s.write(t2, \"c2-b\");\n        System.out.println(\"accepted: \" + s.log);\n        System.out.println(\"rejected: \" + s.rejected);\n    }\n}\n",
+    "expectedOutput": "accepted: [c1-a#33, c2-a#34, c2-b#34]\nrejected: [c1-b#33]\n",
+    "explanation": "A lease alone cannot stop a paused process from acting after its lease expired, because it does not know it was paused. The fencing token moves the check to the resource: it remembers the highest token seen and refuses older ones, so the zombie leader cannot corrupt data. Using `<=` would wrongly reject the current holder's second write. MongoDB uses the same idea with election terms: a deposed primary's writes carry an old term, cannot reach majority commit, and are rolled back when it rejoins as a secondary."
+  },
+  {
+    "id": "dist-09",
+    "track": "distributed",
+    "level": "intermediate",
+    "topic": "Logical clocks",
+    "title": "Vector clocks: compare and merge",
+    "kind": "blanks",
+    "prompt": "Fill the gaps so `compare` detects concurrent updates and `merge` produces the clock after receiving a message.",
+    "code": "static String compare(int[] a, int[] b) {\n    boolean aLess = false, bLess = false;\n    for (int i = 0; i < a.length; i++) {\n        if (a[i] < b[i]) aLess = true;\n        if (a[i] > b[i]) bLess = true;\n    }\n    if (aLess && bLess) return \"[[1]]\";\n    if (aLess) return \"[[2]]\";\n    if (bLess) return \"after\";\n    return \"equal\";\n}\n\nstatic int[] merge(int[] a, int[] b) {\n    int[] m = new int[a.length];\n    for (int i = 0; i < a.length; i++)\n        m[i] = [[3]];\n    return m;\n}",
+    "blanks": [
+      {
+        "options": [
+          "equal",
+          "concurrent",
+          "before"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "after",
+          "concurrent",
+          "before"
+        ],
+        "answer": 2
+      },
+      {
+        "options": [
+          "Math.max(a[i], b[i])",
+          "a[i] + b[i]",
+          "Math.min(a[i], b[i])"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.util.Arrays;\n\npublic class Main {\n    static String compare(int[] a, int[] b) {\n        boolean aLess = false, bLess = false;\n        for (int i = 0; i < a.length; i++) {\n            if (a[i] < b[i]) aLess = true;\n            if (a[i] > b[i]) bLess = true;\n        }\n        if (aLess && bLess) return \"concurrent\";\n        if (aLess) return \"before\";\n        if (bLess) return \"after\";\n        return \"equal\";\n    }\n\n    static int[] merge(int[] a, int[] b) {\n        int[] m = new int[a.length];\n        for (int i = 0; i < a.length; i++)\n            m[i] = Math.max(a[i], b[i]);\n        return m;\n    }\n\n    public static void main(String[] args) {\n        int[] x = {2, 0, 0};\n        int[] y = {2, 1, 0};\n        int[] z = {3, 0, 0};\n        System.out.println(\"x vs y: \" + compare(x, y));\n        System.out.println(\"y vs z: \" + compare(y, z));\n        System.out.println(\"z vs x: \" + compare(z, x));\n        int[] m = merge(y, z);\n        System.out.println(\"merge(y,z) = \" + Arrays.toString(m));\n        System.out.println(\"y vs merged: \" + compare(y, m));\n        System.out.println(\"m vs m: \" + compare(m, m));\n    }\n}\n",
+    "expectedOutput": "x vs y: before\ny vs z: concurrent\nz vs x: after\nmerge(y,z) = [3, 1, 0]\ny vs merged: before\nm vs m: equal\n",
+    "explanation": "A vector clock A happened-before B iff every entry of A is <= B and at least one is strictly less; if each has an entry larger than the other they are concurrent and neither write should silently overwrite the other. Merge takes the element-wise max, after which the receiver increments its own entry. Unlike Lamport clocks, vector clocks can detect concurrency, at the cost of one entry per node. Dynamo-style stores return concurrent siblings to the client; MongoDB avoids the problem by ordering all writes through a single primary's oplog."
+  },
+  {
+    "id": "dist-10",
+    "track": "distributed",
+    "level": "intermediate",
+    "topic": "Failure detection",
+    "title": "Heartbeat timeout failure detector",
+    "kind": "blanks",
+    "prompt": "Fill the gaps: record the latest heartbeat time for each node, and suspect nodes whose last heartbeat is older than the timeout.",
+    "code": "static Map<String, Long> lastBeat = new TreeMap<>();\n\nstatic void onHeartbeat(String node, long now) {\n    lastBeat.[[1]](node, now);\n}\n\nstatic List<String> suspects(long now, long timeout) {\n    List<String> out = new ArrayList<>();\n    for (var e : lastBeat.entrySet()) {\n        if ([[2]] > timeout) out.add(e.getKey());\n    }\n    return out;\n}",
+    "blanks": [
+      {
+        "options": [
+          "putIfAbsent",
+          "put",
+          "remove"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "e.getValue() - now",
+          "now",
+          "now - e.getValue()"
+        ],
+        "answer": 2
+      }
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    static Map<String, Long> lastBeat = new TreeMap<>();\n\n    static void onHeartbeat(String node, long now) {\n        lastBeat.put(node, now);\n    }\n\n    static List<String> suspects(long now, long timeout) {\n        List<String> out = new ArrayList<>();\n        for (var e : lastBeat.entrySet()) {\n            if (now - e.getValue() > timeout) out.add(e.getKey());\n        }\n        return out;\n    }\n\n    public static void main(String[] args) {\n        // MongoDB-like: heartbeat every 2000ms, electionTimeoutMillis 10000\n        for (long t = 0; t <= 20000; t += 2000) {\n            onHeartbeat(\"secondary-1\", t);\n            if (t <= 6000) onHeartbeat(\"primary\", t);\n            if (t % 4000 == 0) onHeartbeat(\"secondary-2\", t);\n        }\n        for (long now : new long[]{12000, 16001, 20000}) {\n            System.out.println(\"t=\" + now + \" suspects=\" + suspects(now, 10000));\n        }\n    }\n}\n",
+    "expectedOutput": "t=12000 suspects=[]\nt=16001 suspects=[primary]\nt=20000 suspects=[primary]\n",
+    "explanation": "A heartbeat detector can never distinguish a crashed node from a slow node or a slow network; it only suspects, so the timeout trades detection speed against false positives. `put` must overwrite the previous timestamp or nodes become suspected even while healthy. MongoDB replica set members heartbeat each other every 2 seconds and a secondary calls an election if it has not heard from the primary within electionTimeoutMillis (10s by default); lowering it speeds failover but risks needless elections. Adaptive detectors such as the phi-accrual detector in Cassandra scale suspicion with observed heartbeat variance."
+  },
+  {
+    "id": "dist-11",
+    "track": "distributed",
+    "level": "intermediate",
+    "topic": "Replication",
+    "title": "Read preference and stale reads",
+    "kind": "theory",
+    "prompt": "Explain MongoDB read preferences and the staleness and consistency risks of reading from secondaries.",
+    "question": "A team sets readPreference \"secondaryPreferred\" to offload the primary and users start reporting that their just-saved profile edits \"disappear\" after refresh. Explain why, what the read preference modes are, and how you would fix it without sending every read to the primary.",
+    "keyPoints": [
+      "Secondaries replicate the oplog asynchronously, so they can lag the primary; secondary reads may be stale",
+      "Modes: primary, primaryPreferred, secondary, secondaryPreferred, nearest; plus tag sets and maxStalenessSeconds",
+      "The bug is a read-your-writes violation: the write went to the primary, the next read hit a lagging secondary",
+      "Fix with causally consistent sessions (afterClusterTime) so a secondary waits until it has the session's writes, or route that user's reads to primary",
+      "maxStalenessSeconds bounds lag but does not guarantee read-your-writes",
+      "Secondary reads do not scale writes and add load from replication; readConcern majority on secondaries avoids reading data that may be rolled back"
+    ],
+    "modelAnswer": "Writes always go to the primary and secondaries apply the oplog asynchronously, so a secondary can be seconds behind. With secondaryPreferred the save lands on the primary but the refresh reads from a lagging secondary, a classic read-your-writes violation. The modes are primary (default, strongest), primaryPreferred, secondary, secondaryPreferred and nearest (lowest latency, any member), refined by tag sets and maxStalenessSeconds, which only excludes very lagged members and still allows some staleness. The fix that keeps reads on secondaries is a causally consistent session: the driver passes afterClusterTime equal to the session's last operationTime, and the secondary blocks until it has replicated that far, giving read-your-writes and monotonic reads. Combine it with writeConcern and readConcern majority so the read cannot see, or depend on, data that later rolls back. Alternatively route only the \"my own profile\" reads to the primary and leave analytics-style reads on secondaries.",
+    "hint": "Replication to secondaries is asynchronous; what guarantee does the user expect after their own write?",
+    "explanation": "Read preference controls which member serves a read, while readConcern controls which data it may return; they are independent knobs. Secondaries lag by design, so offloading reads silently weakens session guarantees. Causal consistency sessions with afterClusterTime restore read-your-writes on secondaries by making the read wait for replication instead of returning stale data."
+  },
+  {
+    "id": "dist-12",
+    "track": "distributed",
+    "level": "advanced",
+    "topic": "Leader election",
+    "title": "Raft-style RequestVote handler",
+    "kind": "parsons",
+    "prompt": "Implement the vote rules a MongoDB replica set member (pv1, Raft-based) applies: reject stale terms, step up to newer terms, vote at most once per term, and only for a candidate whose log is at least as up to date.",
+    "lines": [
+      "            if (term < currentTerm) return false;",
+      "            if (term > currentTerm) {",
+      "                currentTerm = term;",
+      "                votedFor = null;",
+      "            }",
+      "            boolean upToDate = cLastTerm > lastLogTerm",
+      "                || (cLastTerm == lastLogTerm && cLastIndex >= lastLogIndex);",
+      "            if (upToDate && (votedFor == null || votedFor.equals(cand))) {",
+      "                votedFor = cand;",
+      "                return true;",
+      "            }",
+      "            return false;"
+    ],
+    "distractors": [
+      "            boolean upToDate = cLastIndex >= lastLogIndex;",
+      "            if (upToDate || votedFor == null) {"
+    ],
+    "solution": "public class Main {\n    static class Node {\n        long currentTerm, lastLogTerm, lastLogIndex;\n        String votedFor;\n\n        Node(long term, long llt, long lli) {\n            currentTerm = term; lastLogTerm = llt; lastLogIndex = lli;\n        }\n\n        boolean requestVote(long term, String cand, long cLastTerm, long cLastIndex) {\n            if (term < currentTerm) return false;\n            if (term > currentTerm) {\n                currentTerm = term;\n                votedFor = null;\n            }\n            boolean upToDate = cLastTerm > lastLogTerm\n                || (cLastTerm == lastLogTerm && cLastIndex >= lastLogIndex);\n            if (upToDate && (votedFor == null || votedFor.equals(cand))) {\n                votedFor = cand;\n                return true;\n            }\n            return false;\n        }\n    }\n\n    public static void main(String[] args) {\n        Node n = new Node(5, 5, 10);\n        System.out.println(\"old term 4, x:      \" + n.requestVote(4, \"x\", 5, 20));\n        System.out.println(\"term 6, a stale log: \" + n.requestVote(6, \"a\", 5, 9));\n        System.out.println(\"term 6, b fresh:     \" + n.requestVote(6, \"b\", 5, 10));\n        System.out.println(\"term 6, b again:     \" + n.requestVote(6, \"b\", 5, 10));\n        System.out.println(\"term 6, c fresher:   \" + n.requestVote(6, \"c\", 6, 1));\n        System.out.println(\"term 7, c fresher:   \" + n.requestVote(7, \"c\", 6, 1));\n        System.out.println(\"term=\" + n.currentTerm + \" votedFor=\" + n.votedFor);\n    }\n}\n",
+    "expectedOutput": "old term 4, x:      false\nterm 6, a stale log: false\nterm 6, b fresh:     true\nterm 6, b again:     true\nterm 6, c fresher:   false\nterm 7, c fresher:   true\nterm=7 votedFor=c\n",
+    "explanation": "Terms act as a logical clock for leadership: a vote request from an older term is ignored and a newer term makes the voter forget its previous vote. Voting at most once per term guarantees at most one leader per term, because two candidates cannot both win a majority. The log freshness check (compare last entry term first, then index) ensures the winner holds every majority-committed entry, which is why a stale candidate is refused even in a new term. MongoDB's protocolVersion 1 elections apply the same rules using the oplog optime, and add member priority: a higher-priority secondary that catches up calls an election to take over."
+  },
+  {
+    "id": "dist-13",
+    "track": "distributed",
+    "level": "advanced",
+    "topic": "Outbox & change streams",
+    "title": "Outbox relay with a resume token",
+    "kind": "parsons",
+    "prompt": "A relay publishes outbox events to a broker in batches. Resume after the last published sequence number and persist the token only after a successful publish.",
+    "lines": [
+      "    static void relay(int maxBatch) {",
+      "        int published = 0;",
+      "        for (Event e : outbox) {",
+      "            if (e.seq() <= resumeToken) continue;",
+      "            if (published == maxBatch) return;",
+      "            broker.add(e.payload());",
+      "            published++;",
+      "            resumeToken = e.seq();",
+      "        }",
+      "    }"
+    ],
+    "distractors": [
+      "            if (e.seq() < resumeToken) continue;",
+      "            resumeToken = e.seq() + 1;"
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    record Event(long seq, String payload) {}\n\n    static List<Event> outbox = new ArrayList<>();\n    static List<String> broker = new ArrayList<>();\n    static long resumeToken = 0;   // persisted alongside the relay\n\n    static void relay(int maxBatch) {\n        int published = 0;\n        for (Event e : outbox) {\n            if (e.seq() <= resumeToken) continue;\n            if (published == maxBatch) return;\n            broker.add(e.payload());\n            published++;\n            resumeToken = e.seq();\n        }\n    }\n\n    public static void main(String[] args) {\n        // business write and outbox insert happen in one local transaction\n        for (int i = 1; i <= 5; i++) outbox.add(new Event(i, \"order-\" + i));\n        relay(2);\n        System.out.println(\"batch 1: \" + broker + \" token=\" + resumeToken);\n        relay(2);\n        System.out.println(\"batch 2: \" + broker + \" token=\" + resumeToken);\n        outbox.add(new Event(6, \"order-6\"));\n        relay(10);\n        System.out.println(\"batch 3: \" + broker + \" token=\" + resumeToken);\n        relay(10);\n        System.out.println(\"idle:    \" + broker.size() + \" events, token=\" + resumeToken);\n    }\n}\n",
+    "expectedOutput": "batch 1: [order-1, order-2] token=2\nbatch 2: [order-1, order-2, order-3, order-4] token=4\nbatch 3: [order-1, order-2, order-3, order-4, order-5, order-6] token=6\nidle:    6 events, token=6\n",
+    "explanation": "The outbox pattern avoids the dual-write problem: the service writes the business change and the event in one local transaction, and a separate relay publishes events. Saving the token after publishing gives at-least-once delivery: a crash between publish and save replays the last event, so consumers must be idempotent. Saving before publishing would instead risk losing events. In MongoDB the relay is typically a change stream on the outbox collection; each change event carries a resume token (`_id`) that you persist and pass to `resumeAfter`/`startAfter`, which works as long as the token is still within the oplog window."
+  },
+  {
+    "id": "dist-14",
+    "track": "distributed",
+    "level": "advanced",
+    "topic": "Conflict resolution",
+    "title": "Last-write-wins loses a causal update",
+    "kind": "blanks",
+    "prompt": "Fill the gaps to implement last-write-wins with a deterministic tie-break, then observe how clock skew makes it drop a write that causally came later.",
+    "code": "record Write(String value, long ts, String node) {}\n\nstatic Write lww(Write x, Write y) {\n    if (x.ts() != y.ts())\n        return x.ts() [[1]] y.ts() ? x : y;\n    return [[2]] ? x : y;\n}",
+    "blanks": [
+      {
+        "options": [
+          "<",
+          ">",
+          "=="
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "Math.random() > 0.5",
+          "x.node().compareTo(y.node()) > 0",
+          "true"
+        ],
+        "answer": 1
+      }
+    ],
+    "solution": "public class Main {\n    record Write(String value, long ts, String node) {}\n\n    static Write lww(Write x, Write y) {\n        if (x.ts() != y.ts())\n            return x.ts() > y.ts() ? x : y;\n        return x.node().compareTo(y.node()) > 0 ? x : y;\n    }\n\n    public static void main(String[] args) {\n        long skewA = 100;  // node A's clock runs 100ms fast\n        // real time 1000: A writes v1\n        Write w1 = new Write(\"v1\", 1000 + skewA, \"A\");\n        // real time 1050: B reads v1, then writes v2 (causally after v1)\n        Write w2 = new Write(\"v2\", 1050, \"B\");\n        System.out.println(\"winner: \" + lww(w1, w2).value() + \" (v2 was written later)\");\n        System.out.println(\"order-independent: \" + lww(w2, w1).value());\n        Write t1 = new Write(\"x\", 2000, \"A\"), t2 = new Write(\"y\", 2000, \"B\");\n        System.out.println(\"tie: \" + lww(t1, t2).value() + \" / \" + lww(t2, t1).value());\n    }\n}\n",
+    "expectedOutput": "winner: v1 (v2 was written later)\norder-independent: v1\ntie: y / y\n",
+    "explanation": "LWW converges because every replica picks the same winner, which requires a total order: the larger timestamp, with a deterministic tie-break such as node id (a random tie-break would let replicas diverge). But wall clocks skew, so a write that causally happened later can carry a smaller timestamp and be silently discarded; LWW also drops one of two genuinely concurrent writes. Remedies are logical or hybrid clocks, version vectors with sibling resolution, or CRDTs. MongoDB sidesteps LWW for a replica set by having a single primary assign oplog order, and its cluster time is a hybrid logical clock rather than raw wall time."
+  },
+  {
+    "id": "dist-15",
+    "track": "distributed",
+    "level": "advanced",
+    "topic": "Replication",
+    "title": "Idempotent oplog entries",
+    "kind": "blanks",
+    "prompt": "The primary executes `$inc` but must log an idempotent entry, because secondaries may replay oplog entries after a restart. Fill the gaps so replaying the oplog twice gives the same result.",
+    "code": "static long primary = 0, secondary = 0;\nstatic List<long[]> oplog = new ArrayList<>();\n\nstatic void primaryInc(long delta) {\n    primary += delta;\n    // entry = {ts, field value}\n    oplog.add(new long[]{oplog.size() + 1, [[1]]});\n}\n\nstatic void apply(long[] entry) {\n    secondary [[2]] entry[1];\n}",
+    "blanks": [
+      {
+        "options": [
+          "delta",
+          "primary",
+          "primary + delta"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "+=",
+          "=",
+          "-="
+        ],
+        "answer": 1
+      }
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    static long primary = 0, secondary = 0;\n    static List<long[]> oplog = new ArrayList<>();\n\n    static void primaryInc(long delta) {\n        primary += delta;\n        // entry = {ts, field value}\n        oplog.add(new long[]{oplog.size() + 1, primary});\n    }\n\n    static void apply(long[] entry) {\n        secondary = entry[1];\n    }\n\n    public static void main(String[] args) {\n        primaryInc(5);\n        primaryInc(3);\n        primaryInc(2);\n        for (long[] e : oplog) apply(e);\n        System.out.println(\"after first apply: primary=\" + primary + \" secondary=\" + secondary);\n        // crash: secondary restarts from an older checkpoint and replays from ts 2\n        for (long[] e : oplog) if (e[0] >= 2) apply(e);\n        System.out.println(\"after replay:      primary=\" + primary + \" secondary=\" + secondary);\n        for (long[] e : oplog) System.out.println(\"oplog ts=\" + e[0] + \" {$set: {n: \" + e[1] + \"}}\");\n    }\n}\n",
+    "expectedOutput": "after first apply: primary=10 secondary=10\nafter replay:      primary=10 secondary=10\noplog ts=1 {$set: {n: 5}}\noplog ts=2 {$set: {n: 8}}\noplog ts=3 {$set: {n: 10}}\n",
+    "explanation": "Replication must tolerate applying an entry more than once, for example after a crash between applying a batch and recording progress. MongoDB therefore rewrites non-idempotent operations into idempotent oplog entries: an `$inc` on the primary is logged as a `$set` of the resulting value, and an `$push` as a set of the resulting array or a positioned update. Replaying a `$set` any number of times converges, whereas replaying `+= delta` would double-count. The same principle applies to any log-shipping or event-sourcing consumer."
+  },
+  {
+    "id": "dist-16",
+    "track": "distributed",
+    "level": "advanced",
+    "topic": "Consistency",
+    "title": "writeConcern and readConcern levels",
+    "kind": "theory",
+    "prompt": "Explain MongoDB writeConcern and readConcern levels and which combinations give which guarantees.",
+    "question": "Walk through writeConcern w:1 vs w:\"majority\" (with j) and readConcern \"local\", \"majority\", \"snapshot\" and \"linearizable\". What can go wrong with w:1 during a failover, and which combination gives linearizable reads of a single document?",
+    "keyPoints": [
+      "w:1 acks after the primary applies the write; if the primary fails before replicating, the write can be rolled back after a new primary is elected",
+      "w:\"majority\" acks once a majority of voting members have it (j:true makes it journaled), so it survives failover",
+      "readConcern local returns the node's latest data, which may later be rolled back; majority returns only majority-committed data (may be slightly stale)",
+      "linearizable (primary only, single document) confirms primacy with a majority before returning, guaranteeing the latest majority-acknowledged write; it is slow and should have maxTimeMS",
+      "snapshot is for multi-document transactions/point-in-time reads",
+      "Majority write + majority read gives no rollback and read-your-writes on the primary; causal sessions extend guarantees to secondaries"
+    ],
+    "modelAnswer": "writeConcern w:1 acknowledges once the primary applies the write, so if that primary crashes or is partitioned before a secondary copies it, a new primary is elected without the write and the old primary rolls it back when it rejoins; the client was told \"success\" for lost data. w:\"majority\" waits until a majority of voting members have the write (and with j:true, journaled), so any future primary must have it. On the read side, \"local\" returns whatever the node has, including writes that may roll back; \"majority\" returns only majority-committed data, so it never rolls back but can be slightly behind; \"snapshot\" gives a consistent point-in-time view for multi-document transactions. \"linearizable\" is primary-only and per document: before returning, the primary confirms with a majority that it is still primary, so the read reflects every write acknowledged with majority before it started, even if an old primary is still partitioned off and serving stale data. So w:\"majority\" plus readConcern \"linearizable\" on the primary gives linearizable single-document reads, at extra latency; always set maxTimeMS because it can block if a majority is unreachable.",
+    "hint": "Think about which writes can be rolled back after a failover, and how a deposed primary might still answer reads.",
+    "explanation": "Durability and recency are separate: writeConcern decides when a write is safe from rollback, readConcern decides which data a read may observe. The failover rollback case is the canonical interview scenario for w:1. Linearizable reads exist because a partitioned old primary may not yet know it was deposed, so it must check with a majority before answering."
+  },
+  {
+    "id": "dist-17",
+    "track": "distributed",
+    "level": "advanced",
+    "topic": "Sharding",
+    "title": "Choosing a shard key",
+    "kind": "theory",
+    "prompt": "Explain range vs hashed sharding and how to choose a shard key, including jumbo chunks and the balancer.",
+    "question": "You must shard an `events` collection queried mostly by `tenantId` and time range, with heavy insert traffic. Compare range and hashed shard keys, explain what makes a good shard key (cardinality, frequency, monotonicity), and describe jumbo chunks and what the balancer does.",
+    "keyPoints": [
+      "Range sharding keeps adjacent keys together: efficient targeted range queries, but monotonically increasing keys (timestamps, ObjectId) send all inserts to the last chunk (hot shard)",
+      "Hashed sharding spreads inserts evenly but turns range queries into scatter-gather across all shards",
+      "Good key: high cardinality, low frequency of any single value, non-monotonic, and present in most queries so mongos can target shards",
+      "Compound key such as { tenantId: 1, ts: 1 } (or hashed tenantId prefix) targets tenant queries while spreading writes across tenants",
+      "Jumbo chunks: a chunk exceeding the size limit that cannot be split because all docs share the same key value (low cardinality); the balancer cannot move it easily",
+      "The balancer migrates chunks/ranges between shards to even out data; migrations cost I/O and the key can be refined or resharded (refineCollectionShardKey, reshardCollection) since 4.4/5.0"
+    ],
+    "modelAnswer": "With range sharding, documents with adjacent key values live in the same chunk, so a query on a key range targets a few shards, but a monotonically increasing key like a timestamp or ObjectId directs every insert to the chunk holding the max value, creating a single hot shard. Hashed sharding hashes the key, spreading inserts evenly, at the cost of making range queries on that field scatter-gather. A good shard key has high cardinality, no single value that dominates (low frequency), is not monotonic, and appears in most queries so mongos can route to one shard. For this workload I would use a compound key like { tenantId: 1, ts: 1 }, or a hashed tenantId prefix if tenants are skewed, so a tenant's time-range query is targeted while inserts spread across tenants. If one value is extremely hot, for example a huge tenant, all its documents share the prefix and its chunk cannot be split, producing a jumbo chunk that the balancer cannot migrate; adding ts gives split points. The balancer runs on the config server primary and migrates chunks from shards with more data to those with less; migrations cost I/O, and since 5.0 reshardCollection lets you change a bad key online.",
+    "hint": "Think about where inserts land with a timestamp key, and what happens when many documents share one key value.",
+    "explanation": "The shard key is the most consequential and hardest-to-change sharding decision. Interviewers want the trade-off between targeted queries (range locality) and write distribution (hashing), plus the cardinality/frequency/monotonicity checklist. Jumbo chunks are the classic symptom of a low-cardinality key, and compound keys are the usual cure."
+  },
+  {
+    "id": "dist-18",
+    "track": "distributed",
+    "level": "expert",
+    "topic": "Anti-entropy",
+    "title": "Merkle tree diff between replicas",
+    "kind": "parsons",
+    "prompt": "Two replicas built Merkle trees over 8 key-range buckets (heap layout, root at index 1). Descend only into subtrees whose hashes differ and collect the leaf buckets that need syncing.",
+    "lines": [
+      "        compared++;",
+      "        if (a[node] == b[node]) return;",
+      "        if (node >= n) {",
+      "            out.add(node - n);",
+      "            return;",
+      "        }",
+      "        diff(a, b, 2 * node, n, out);",
+      "        diff(a, b, 2 * node + 1, n, out);"
+    ],
+    "distractors": [
+      "        if (a[node] != b[node]) return;",
+      "            out.add(node);"
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    static int compared = 0;\n\n    static long[] build(long[] leaves) {\n        int n = leaves.length;\n        long[] t = new long[2 * n];\n        for (int i = 0; i < n; i++) t[n + i] = leaves[i];\n        for (int i = n - 1; i > 0; i--) t[i] = (t[2 * i] * 1_000_003L + t[2 * i + 1]) ^ (i * 7919L);\n        return t;\n    }\n\n    static void diff(long[] a, long[] b, int node, int n, List<Integer> out) {\n        compared++;\n        if (a[node] == b[node]) return;\n        if (node >= n) {\n            out.add(node - n);\n            return;\n        }\n        diff(a, b, 2 * node, n, out);\n        diff(a, b, 2 * node + 1, n, out);\n    }\n\n    public static void main(String[] args) {\n        long[] bucketsA = {11, 22, 33, 44, 55, 66, 77, 88};\n        long[] bucketsB = {11, 22, 34, 44, 55, 66, 70, 88};\n        long[] ta = build(bucketsA), tb = build(bucketsB);\n        List<Integer> out = new ArrayList<>();\n        diff(ta, tb, 1, 8, out);\n        System.out.println(\"buckets to sync: \" + out);\n        System.out.println(\"nodes compared: \" + compared + \" of \" + (2 * 8 - 1));\n        compared = 0;\n        out.clear();\n        diff(ta, build(bucketsA.clone()), 1, 8, out);\n        System.out.println(\"identical replicas: \" + out + \" after \" + compared + \" comparison\");\n    }\n}\n",
+    "expectedOutput": "buckets to sync: [2, 6]\nnodes compared: 11 of 15\nidentical replicas: [] after 1 comparison\n",
+    "explanation": "A Merkle tree hashes each key range at the leaves and each parent hashes its children, so equal roots prove the replicas are identical with one comparison. When roots differ, replicas exchange child hashes and recurse only into mismatching subtrees, so the data transferred is proportional to the number of differences times tree depth, not to the dataset size. Dynamo, Cassandra (nodetool repair) and Riak use this for background anti-entropy to fix replicas that missed writes despite hinted handoff and read repair. MongoDB does not need it within a replica set because secondaries replay the primary's ordered oplog, but the same idea appears in tools that verify data consistency between clusters."
+  },
+  {
+    "id": "dist-19",
+    "track": "distributed",
+    "level": "expert",
+    "topic": "Causal consistency",
+    "title": "Causal session reads with afterClusterTime",
+    "kind": "blanks",
+    "prompt": "A causally consistent session remembers the highest operation time it has seen. Fill the gaps so a read on a lagging secondary waits for replication, and the session advances its time afterwards.",
+    "code": "static long sessionTime = 0;\n\nstatic void write(Node primary, String v) {\n    long op = primary.write(v);\n    sessionTime = Math.max(sessionTime, op);\n}\n\nstatic String readCausal(Node n) {\n    while (n.optime [[1]] sessionTime) n.applyNext();\n    sessionTime = [[2]];\n    return n.value;\n}",
+    "blanks": [
+      {
+        "options": [
+          ">",
+          "<",
+          "!="
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "n.optime",
+          "Math.max(sessionTime, n.optime)",
+          "0"
+        ],
+        "answer": 1
+      }
+    ],
+    "solution": "import java.util.*;\n\npublic class Main {\n    static class Node {\n        long optime = 0; String value = \"none\";\n        Deque<Object[]> pending = new ArrayDeque<>();\n        List<Node> followers = new ArrayList<>();\n        long write(String v) {\n            optime++; value = v;\n            for (Node f : followers) f.pending.add(new Object[]{optime, v});\n            return optime;\n        }\n        void applyNext() {\n            Object[] e = pending.poll();\n            optime = (Long) e[0]; value = (String) e[1];\n            System.out.println(\"  secondary waits, applies optime \" + optime);\n        }\n    }\n\n    static long sessionTime = 0;\n\n    static void write(Node primary, String v) {\n        long op = primary.write(v);\n        sessionTime = Math.max(sessionTime, op);\n    }\n\n    static String readCausal(Node n) {\n        while (n.optime < sessionTime) n.applyNext();\n        sessionTime = Math.max(sessionTime, n.optime);\n        return n.value;\n    }\n\n    public static void main(String[] args) {\n        Node p = new Node(), s = new Node();\n        p.followers.add(s);\n        write(p, \"v1\");\n        write(p, \"v2\");\n        write(p, \"v3\");\n        System.out.println(\"secondary optime before read: \" + s.optime);\n        System.out.println(\"causal read -> \" + readCausal(s) + \" (sessionTime \" + sessionTime + \")\");\n        System.out.println(\"naive read without waiting would have returned: none\");\n    }\n}\n",
+    "expectedOutput": "secondary optime before read: 0\n  secondary waits, applies optime 1\n  secondary waits, applies optime 2\n  secondary waits, applies optime 3\ncausal read -> v3 (sessionTime 3)\nnaive read without waiting would have returned: none\n",
+    "explanation": "In a causally consistent session the driver tracks the session's operationTime and clusterTime, and sends `afterClusterTime` with each read. A secondary that has not yet replicated to that optime blocks until it does, so the session always sees its own writes and never goes backwards (monotonic reads), even across different members. The session time only ever moves forward (max), which preserves causal order across subsequent operations. MongoDB guarantees this when sessions use readConcern \"majority\" and writeConcern \"majority\"; with weaker concerns rollbacks can break the causal guarantees."
+  },
+  {
+    "id": "dist-20",
+    "track": "distributed",
+    "level": "expert",
+    "topic": "Transactions",
+    "title": "2PC vs MongoDB distributed transactions",
+    "kind": "theory",
+    "prompt": "Explain two-phase commit, its failure modes, and how MongoDB implements cross-shard transactions.",
+    "question": "Explain two-phase commit and why it is called a blocking protocol. Then describe how MongoDB implements multi-shard transactions (coordinator, prepare, commit), what makes them more fault tolerant than textbook 2PC, and when you would avoid them in favour of a different design.",
+    "keyPoints": [
+      "2PC: coordinator sends prepare; participants persist and vote yes/no; if all yes, coordinator logs commit and tells everyone to commit, otherwise abort",
+      "Blocking: a participant that voted yes cannot unilaterally decide; if the coordinator crashes it holds locks until the coordinator recovers (in-doubt)",
+      "MongoDB: one shard acts as transaction coordinator; participants prepare (prepareTransaction) choosing a prepare timestamp, coordinator picks commit timestamp as max of prepare timestamps",
+      "Coordinator decision and participant prepare state are written with majority write concern to replica sets, so a failover elects a new primary that continues the protocol instead of blocking forever",
+      "Single-shard transactions skip 2PC; transactions have a runtime limit (transactionLifetimeLimitSeconds, default 60s) and hold resources, causing write conflicts and latency",
+      "Alternatives: model data so the atomic unit is one document, or use sagas/outbox with compensations for long-running cross-service flows"
+    ],
+    "modelAnswer": "In two-phase commit the coordinator first sends prepare; each participant durably records its changes and locks and votes yes or no. If all vote yes, the coordinator durably logs commit and tells participants to commit; any no or timeout leads to abort. It is blocking because once a participant votes yes it has given up the right to abort on its own: if the coordinator crashes after prepare, participants stay in doubt holding locks until it returns. MongoDB uses 2PC for transactions that write to more than one shard: the first shard touched becomes the coordinator, participants run prepareTransaction and return a prepare timestamp, and the coordinator commits at the max of those timestamps so the commit is a consistent snapshot. Each coordinator and participant is itself a replica set and writes its decision and prepare state with majority write concern, so if a primary fails a newly elected primary recovers the state and finishes the protocol, which removes the single-node blocking failure of textbook 2PC, although prepared transactions still block conflicting reads and writes while in progress. Transactions have a 60s default lifetime limit, cause write conflicts under contention and add latency, so I would first model the atomic unit as one document (embedding), and use sagas or an outbox with idempotent consumers for long-running or cross-service workflows.",
+    "hint": "What happens to a participant that voted yes when the coordinator disappears, and how do replica sets help?",
+    "explanation": "2PC gives atomicity across nodes but its weak point is the coordinator: in-doubt participants hold locks. MongoDB keeps the protocol but makes every role a replicated, majority-durable state machine, so failover continues the protocol rather than waiting for a dead node. Strong answers also explain when not to use distributed transactions at all, preferring document-level atomicity or sagas."
+  },
+  {
+    "id": "dist-21",
+    "track": "distributed",
+    "level": "expert",
+    "topic": "Leader election",
+    "title": "Split brain, terms and replica set elections",
+    "kind": "theory",
+    "prompt": "Explain how MongoDB replica sets elect a primary and why they do not suffer from split brain writes.",
+    "question": "A 5-member replica set is split by a network partition into 2 members (including the old primary) and 3 members. Walk through what happens: failure detection, election rules (terms, priority, oplog freshness), what the old primary does, what happens to writes it accepted, and how fencing applies.",
+    "keyPoints": [
+      "Members heartbeat every 2s; after electionTimeoutMillis (10s) without seeing the primary, an electable secondary in the 3-member side starts an election with a new, higher term",
+      "A candidate needs a majority of voting members (3 of 5); voters grant at most one vote per term and only to candidates whose oplog is at least as fresh; priority influences who stands and priority takeover",
+      "The old primary on the 2-member side cannot see a majority and steps down to secondary, so only one primary can accept majority writes",
+      "Writes the old primary accepted with w:1 before stepping down that did not replicate are rolled back when it rejoins (written to rollback files)",
+      "Terms act like fencing tokens: messages from an older term are rejected; but a deposed primary may briefly still serve w:1 writes or local reads, hence w:majority and linearizable reads",
+      "Odd number of voters (or an arbiter) avoids ties; even splits with no majority mean no primary at all"
+    ],
+    "modelAnswer": "Members exchange heartbeats every 2 seconds. On the 3-member side, once a secondary has not heard from the primary for electionTimeoutMillis (10s) it increments the term and requests votes. It needs 3 of 5 votes; each voter grants at most one vote per term, refuses candidates whose last oplog optime is behind its own, and priority decides who tends to stand (a higher-priority member that catches up later will trigger a priority takeover). One of the 3 becomes primary in the new term. On the 2-member side the old primary notices it can no longer reach a majority and steps down, so there is never more than one primary that can commit majority writes. However, between the partition and its step-down it may have acknowledged w:1 writes that never replicated; when the partition heals it sees the higher term, becomes a secondary, and rolls those writes back to a rollback directory. Terms are effectively fencing tokens: anything stamped with the older term is rejected. Clients avoid surprises by using w:\"majority\" (acknowledged writes survive) and readConcern \"linearizable\" or \"majority\" so they cannot read data from the deposed primary that will roll back.",
+    "hint": "Count votes on each side of the partition and think about what an old term means.",
+    "explanation": "Majority quorums make split brain on the write path impossible: two disjoint sides cannot both have a majority. The residual risk is the window before the old leader steps down, which is exactly what majority write concern and linearizable reads cover. Terms in MongoDB pv1 elections play the same role as fencing tokens in lock services."
+  },
+  {
+    "id": "dist-22",
+    "track": "distributed",
+    "level": "expert",
+    "topic": "Outbox & change streams",
+    "title": "Change streams, resume tokens and the outbox",
+    "kind": "theory",
+    "prompt": "Explain how you would reliably publish events from MongoDB to Kafka using the outbox pattern and change streams.",
+    "question": "Design reliable event publishing from a MongoDB-backed order service to Kafka. Explain the dual-write problem, how the outbox pattern and change streams with resume tokens solve it, what delivery guarantee you get, and what can still go wrong (oplog window, sharded clusters, ordering).",
+    "keyPoints": [
+      "Dual write problem: writing to the DB and publishing to Kafka separately can leave one done and not the other on a crash",
+      "Outbox: write the business document and an outbox event in one transaction (or embed the event in the same document) so they commit atomically",
+      "A relay tails a change stream on the outbox collection and publishes events; it persists the resume token after the publish succeeds",
+      "Delivery is at-least-once: replays after a crash produce duplicates, so consumers must be idempotent (dedupe by event id)",
+      "Resume tokens only work while the corresponding entry is still in the oplog; if the relay is down longer than the oplog window it cannot resume (ChangeStreamHistoryLost) and needs re-snapshot",
+      "Use fullDocument/majority-committed events (change streams only return majority-committed changes so no rollback); on sharded clusters mongos merges shard streams in cluster time order; per-key ordering preserved via Kafka partition key"
+    ],
+    "modelAnswer": "Calling insertOne and then producer.send is a dual write: a crash between them leaves an order with no event, or an event for an order that never committed. With the outbox pattern the order and an outbox document are written in the same MongoDB transaction (or the event is embedded in the order document itself, which is atomic without a transaction). A relay opens a change stream on the outbox collection; change streams only emit majority-committed changes, so it never publishes something that later rolls back. Each event carries a resume token; the relay publishes to Kafka, waits for the ack, then persists the token, and on restart passes it to resumeAfter or startAfter. That ordering gives at-least-once delivery, so consumers dedupe by event id, making it effectively-once end to end. Risks: if the relay is down longer than the oplog window the token is no longer resumable and you must rebuild from the outbox collection itself; on sharded clusters mongos merges per-shard streams by cluster time, which costs latency, and Kafka only preserves order per partition, so key messages by order id. Also clean up or TTL old outbox documents.",
+    "hint": "Where must the event be written so it commits atomically with the order, and when do you save the resume token?",
+    "explanation": "The outbox pattern turns an unsafe dual write into a single atomic local write plus an asynchronous, retryable relay. Change streams provide a durable, ordered, resumable feed built on the oplog, and resume tokens make the relay restartable. Correctness then depends on idempotent consumers and on staying within the oplog retention window."
+  }
+]

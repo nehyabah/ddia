@@ -1,0 +1,629 @@
+[
+  {
+    "id": "res-01",
+    "track": "resilience",
+    "level": "beginner",
+    "topic": "Rate limiting",
+    "title": "Fixed window counter",
+    "kind": "parsons",
+    "prompt": "Arrange `allow(now)` for a fixed window rate limiter: at most `limit` requests per `windowMs`, with the counter reset whenever a new window starts. The clock is injected as `now`.",
+    "lines": [
+      "        boolean allow(long now) {",
+      "            long window = now / windowMs;",
+      "            if (window != currentWindow) count = 0;",
+      "            currentWindow = window;",
+      "            if (count >= limit) return false;",
+      "            count++;",
+      "            return true;",
+      "        }"
+    ],
+    "distractors": [
+      "            if (count > limit) return false;",
+      "            long window = now % windowMs;"
+    ],
+    "solution": "public class Main {\n    static class FixedWindowLimiter {\n        final long windowMs;\n        final int limit;\n        long currentWindow = -1;\n        int count = 0;\n        FixedWindowLimiter(long windowMs, int limit) { this.windowMs = windowMs; this.limit = limit; }\n        boolean allow(long now) {\n            long window = now / windowMs;\n            if (window != currentWindow) count = 0;\n            currentWindow = window;\n            if (count >= limit) return false;\n            count++;\n            return true;\n        }\n    }\n    public static void main(String[] args) {\n        FixedWindowLimiter rl = new FixedWindowLimiter(1000, 3);\n        long[] times = {0, 100, 200, 300, 999, 1000, 1001};\n        StringBuilder sb = new StringBuilder();\n        for (long t : times) sb.append(t).append(rl.allow(t) ? \":ok \" : \":deny \");\n        System.out.println(sb.toString().trim());\n    }\n}\n",
+    "expectedOutput": "0:ok 100:ok 200:ok 300:deny 999:deny 1000:ok 1001:ok",
+    "explanation": "The window index is `now / windowMs`, so every request in the same second shares one counter, and the counter resets to zero when a request lands in a new window. The check is `count >= limit` before incrementing, so exactly `limit` requests pass. It is the cheapest limiter (one integer per key) and maps neatly onto a MongoDB or Redis document keyed by `user:window` with an atomic `$inc`. Its weakness shows at the boundary: 3 requests at t=999 and 3 more at t=1000 means 6 requests in 2 ms, double the intended rate. Sliding windows and token buckets fix that."
+  },
+  {
+    "id": "res-02",
+    "track": "resilience",
+    "level": "beginner",
+    "topic": "Rate limiting",
+    "title": "Leaky bucket meter",
+    "kind": "blanks",
+    "prompt": "Fill the gaps in a leaky bucket: each request adds one unit of water, the bucket drains at a constant rate, and a request that would overflow the capacity is rejected.",
+    "code": "        boolean offer(long now) {\n            double leaked = (now - last) * leakPerMs;\n            water = Math.[[1]](0, water - leaked);\n            last = now;\n            if (water + 1 > [[2]]) return false;\n            water += 1;\n            return true;\n        }",
+    "blanks": [
+      {
+        "options": [
+          "max",
+          "min",
+          "abs"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "capacity",
+          "leakPerMs",
+          "water"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "public class Main {\n    static class LeakyBucket {\n        final double capacity, leakPerMs;\n        double water = 0;\n        long last = 0;\n        LeakyBucket(double capacity, double leakPerSec) {\n            this.capacity = capacity;\n            this.leakPerMs = leakPerSec / 1000.0;\n        }\n        boolean offer(long now) {\n            double leaked = (now - last) * leakPerMs;\n            water = Math.max(0, water - leaked);\n            last = now;\n            if (water + 1 > capacity) return false;\n            water += 1;\n            return true;\n        }\n    }\n    public static void main(String[] args) {\n        LeakyBucket b = new LeakyBucket(2, 1);\n        long[] times = {0, 0, 0, 500, 1000, 1000, 3000};\n        StringBuilder sb = new StringBuilder();\n        for (long t : times) sb.append(t).append(b.offer(t) ? \":ok \" : \":drop \");\n        System.out.println(sb.toString().trim());\n    }\n}\n",
+    "expectedOutput": "0:ok 0:ok 0:drop 500:drop 1000:ok 1000:drop 3000:ok",
+    "explanation": "The bucket level drains linearly with elapsed time but can never go below empty, hence `Math.max(0, ...)`. A request is accepted only if adding one unit keeps the level within `capacity`. A token bucket allows a burst up to its capacity and then a steady rate. A leaky bucket used as a queue instead smooths output to a constant rate, which suits a downstream that cannot absorb bursts, such as a MongoDB primary under write load. The clock is a parameter, so tests are deterministic."
+  },
+  {
+    "id": "res-03",
+    "track": "resilience",
+    "level": "beginner",
+    "topic": "Retries",
+    "title": "Capped exponential backoff",
+    "kind": "parsons",
+    "prompt": "Arrange the retry loop: call `op`, and on failure sleep `base * 2^attempt` milliseconds capped at `capMs`, giving up after `maxAttempts`. Sleeping goes through a fake clock.",
+    "lines": [
+      "        for (int attempt = 0; ; attempt++) {",
+      "            try {",
+      "                return op.call(attempt);",
+      "            } catch (Exception e) {",
+      "                if (attempt + 1 >= maxAttempts) throw e;",
+      "                long delay = Math.min(capMs, baseMs * (1L << attempt));",
+      "                System.out.println(\"attempt \" + attempt + \" failed, sleeping \" + delay + \"ms\");",
+      "                clock.sleep(delay);",
+      "            }",
+      "        }"
+    ],
+    "distractors": [
+      "                long delay = baseMs * (1L << attempt);",
+      "                if (attempt >= maxAttempts) throw e;"
+    ],
+    "solution": "public class Main {\n    static class FakeClock {\n        long now = 0;\n        void sleep(long ms) { now += ms; }\n    }\n    interface Op { String call(int attempt) throws Exception; }\n    static String retry(Op op, int maxAttempts, long baseMs, long capMs, FakeClock clock) throws Exception {\n        for (int attempt = 0; ; attempt++) {\n            try {\n                return op.call(attempt);\n            } catch (Exception e) {\n                if (attempt + 1 >= maxAttempts) throw e;\n                long delay = Math.min(capMs, baseMs * (1L << attempt));\n                System.out.println(\"attempt \" + attempt + \" failed, sleeping \" + delay + \"ms\");\n                clock.sleep(delay);\n            }\n        }\n    }\n    public static void main(String[] args) throws Exception {\n        FakeClock clock = new FakeClock();\n        String r = retry(a -> {\n            if (a < 4) throw new Exception(\"timeout\");\n            return \"ok\";\n        }, 6, 100, 500, clock);\n        System.out.println(r + \" at t=\" + clock.now + \"ms\");\n    }\n}\n",
+    "expectedOutput": "attempt 0 failed, sleeping 100ms\nattempt 1 failed, sleeping 200ms\nattempt 2 failed, sleeping 400ms\nattempt 3 failed, sleeping 500ms\nok at t=1200ms",
+    "explanation": "Each failed attempt doubles the wait (100, 200, 400, ...), so a struggling dependency gets more and more time to recover, and the cap stops the delay from growing without limit (the fourth wait is 500 rather than 800). The `attempt + 1 >= maxAttempts` check rethrows on the last attempt instead of sleeping for nothing. Injecting the clock makes the schedule testable without real sleeps. In production you would add jitter so that many clients do not retry at the same moments. MongoDB drivers make a single immediate retry for retryable reads and writes and leave longer backoff to the application."
+  },
+  {
+    "id": "res-04",
+    "track": "resilience",
+    "level": "beginner",
+    "topic": "Rate limiting",
+    "title": "Token bucket vs fixed window vs leaky",
+    "kind": "theory",
+    "prompt": "Compare the three classic rate-limiting algorithms.",
+    "question": "Explain how a token bucket, a leaky bucket and a fixed window counter each work, how they treat bursts, and when you would choose each.",
+    "keyPoints": [
+      "Token bucket: tokens refill at rate r up to capacity b; each request spends a token; allows bursts up to b, then a sustained rate r",
+      "Leaky bucket: requests fill a bucket that drains at a constant rate; smooths output; excess overflows and is dropped or queued",
+      "Fixed window: a counter per time window, reset at boundaries; cheap, but allows up to 2x the limit across a window boundary",
+      "State cost: fixed window is one counter; token bucket is tokens plus a last-refill timestamp; both O(1) per key",
+      "Choice: token bucket for APIs that tolerate bursts, leaky bucket to protect a downstream that needs steady load, fixed window for simple cheap quotas",
+      "Refill is computed lazily from elapsed time on each request rather than by a background timer"
+    ],
+    "modelAnswer": "A token bucket holds up to b tokens and refills at r tokens per second, computed lazily from the elapsed time on each request. A request proceeds if a token is available, so clients can burst up to b and then sustain r. A leaky bucket treats requests as water draining at a fixed rate. It enforces a smooth output rate and drops or queues anything that would overflow, so it is good for protecting a downstream, such as a database primary, that cannot absorb spikes. A fixed window counter increments a counter keyed by the current window (say, the current minute) and rejects requests once it hits the limit. It is the cheapest option, but a client can send the full limit at the end of one window and again at the start of the next, getting double the rate. All three need O(1) state per key. I would use a token bucket for public API quotas where bursts are fine, a leaky bucket or queue in front of fragile backends, and a fixed window for coarse quotas where boundary bursts do not matter.",
+    "hint": "Think about what each one does with 100 requests arriving in the same millisecond.",
+    "explanation": "The token bucket separates burst size (capacity) from sustained rate (refill rate), which is why it is the default for API gateways. The leaky bucket gives a constant output rate. Fixed windows have the boundary problem, which sliding window logs and counters fix. Interviewers often follow up by asking how to make any of these work across many app servers sharing one store, for example a MongoDB document updated with an atomic `$inc` or `findOneAndUpdate`."
+  },
+  {
+    "id": "res-05",
+    "track": "resilience",
+    "level": "beginner",
+    "topic": "Retries",
+    "title": "Only retry what is safe",
+    "kind": "blanks",
+    "prompt": "Fill the gaps so a client retries only requests that are both idempotent and failed with a transient error.",
+    "code": "    static boolean isRetryable(String op, int status) {\n        boolean idempotent =\n            op.equals(\"GET\") || op.equals([[1]]);\n        boolean transientErr =\n            status == 503 || status == [[2]];\n        return idempotent [[3]] transientErr;\n    }",
+    "blanks": [
+      {
+        "options": [
+          "\"PUT\"",
+          "\"POST\"",
+          "\"PATCH\""
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "429",
+          "400",
+          "404"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "&&",
+          "||",
+          "^"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "public class Main {\n    static boolean isRetryable(String op, int status) {\n        boolean idempotent =\n            op.equals(\"GET\") || op.equals(\"PUT\");\n        boolean transientErr =\n            status == 503 || status == 429;\n        return idempotent && transientErr;\n    }\n    public static void main(String[] args) {\n        String[] ops = {\"GET\", \"PUT\", \"POST\", \"GET\", \"PUT\"};\n        int[] codes = {503, 429, 503, 400, 404};\n        for (int i = 0; i < ops.length; i++) {\n            System.out.println(ops[i] + \" \" + codes[i] + \" -> \" + (isRetryable(ops[i], codes[i]) ? \"retry\" : \"fail fast\"));\n        }\n    }\n}\n",
+    "expectedOutput": "GET 503 -> retry\nPUT 429 -> retry\nPOST 503 -> fail fast\nGET 400 -> fail fast\nPUT 404 -> fail fast",
+    "explanation": "A retry is only safe when repeating the operation cannot change the outcome (idempotent: GET, PUT, DELETE), and only useful when the failure is transient (503 overloaded, 429 throttled, timeouts). Retrying a 400 just repeats a bug, and retrying a POST may charge a card twice. Both conditions must hold, hence `&&`. MongoDB solves the non-idempotent case for single-document writes: with retryable writes the driver attaches the session id (`lsid`) and a `txnNumber`, so the server recognises a retried insert and returns the original result instead of applying it again. To make an HTTP POST safe you need the same idea, an idempotency key."
+  },
+  {
+    "id": "res-06",
+    "track": "resilience",
+    "level": "intermediate",
+    "topic": "Rate limiting",
+    "title": "Token bucket with lazy refill",
+    "kind": "parsons",
+    "prompt": "Arrange `tryAcquire(now)`: refill tokens from the elapsed time (capped at capacity), then spend one token if one is available.",
+    "lines": [
+      "        boolean tryAcquire(long now) {",
+      "            long elapsed = now - last;",
+      "            tokens = Math.min(capacity, tokens + elapsed * refillPerMs);",
+      "            last = now;",
+      "            if (tokens < 1.0) return false;",
+      "            tokens -= 1.0;",
+      "            return true;",
+      "        }"
+    ],
+    "distractors": [
+      "            tokens = tokens + elapsed * refillPerMs;",
+      "            if (tokens <= 1.0) return false;"
+    ],
+    "solution": "public class Main {\n    static class TokenBucket {\n        final double capacity, refillPerMs;\n        double tokens;\n        long last;\n        TokenBucket(double capacity, double refillPerSec, long now) {\n            this.capacity = capacity;\n            this.refillPerMs = refillPerSec / 1000.0;\n            this.tokens = capacity;\n            this.last = now;\n        }\n        boolean tryAcquire(long now) {\n            long elapsed = now - last;\n            tokens = Math.min(capacity, tokens + elapsed * refillPerMs);\n            last = now;\n            if (tokens < 1.0) return false;\n            tokens -= 1.0;\n            return true;\n        }\n    }\n    public static void main(String[] args) {\n        TokenBucket b = new TokenBucket(3, 2, 0);\n        long[] times = {0, 0, 0, 0, 250, 500, 500, 2000, 2000, 2000, 2000};\n        StringBuilder sb = new StringBuilder();\n        for (long t : times) sb.append(t).append(b.tryAcquire(t) ? \":ok \" : \":deny \");\n        System.out.println(sb.toString().trim());\n    }\n}\n",
+    "expectedOutput": "0:ok 0:ok 0:ok 0:deny 250:deny 500:ok 500:deny 2000:ok 2000:ok 2000:ok 2000:deny",
+    "explanation": "No background timer is needed: on each call the bucket credits `elapsed * rate` tokens, capped at capacity so an idle client cannot save up an unlimited burst. Updating `last` on every call, including denials, keeps the credit accurate. The first three calls drain the initial burst, the fourth is denied, and after a long idle period the bucket refills only to 3. Storing just `tokens` and `last` per key makes this easy to keep in a shared store. The read-modify-write then needs to be atomic, for example a compare-and-set on a version, or a single `findOneAndUpdate` with an update pipeline in MongoDB."
+  },
+  {
+    "id": "res-07",
+    "track": "resilience",
+    "level": "intermediate",
+    "topic": "MongoDB retryable writes",
+    "title": "Why retryable writes are safe",
+    "kind": "theory",
+    "prompt": "Explain MongoDB retryable writes and retryable reads.",
+    "question": "A network error hits right after the driver sends an insert to the primary, so the client does not know whether it was applied. Explain how MongoDB retryable writes make the automatic retry safe, what their limits are, and how retryable reads differ.",
+    "keyPoints": [
+      "The driver attaches a logical session id (lsid) and an increasing txnNumber to each retryable write",
+      "The server records the outcome per (lsid, txnNumber) in config.transactions, replicated through the oplog, so a retry with the same pair returns the stored result instead of re-executing",
+      "The driver retries once, on retryable errors (network errors, NotWritablePrimary, errors labelled RetryableWriteError), after selecting a server again, which covers a primary failover",
+      "Only some operations qualify: single-document writes, insertMany, bulkWrite without multi-document updates or deletes, findAndModify; updateMany and deleteMany are not retryable",
+      "retryWrites=true is the default in modern drivers; retryable reads retry once on network or not-primary errors, which is safe because reads have no side effects",
+      "Application-level retries beyond the single retry still need idempotency, or transactions retried by error label"
+    ],
+    "modelAnswer": "With retryable writes the driver runs each write in a logical session and tags it with the session id (lsid) and a txnNumber that increases with each write. The server keeps the outcome of the latest txnNumber per session in config.transactions, which is replicated through the oplog. If the driver resends the same (lsid, txnNumber) after a network error, or after a failover to a new primary, the server sees that it has already executed the write and returns the recorded result instead of inserting twice. The driver retries exactly once, after server selection finds a writable primary, and only for retryable errors such as network errors, NotWritablePrimary or anything with the RetryableWriteError label. Only operations with a well-defined single result qualify: single-document inserts, updates and deletes, findAndModify, and bulk inserts. Multi-document updateMany and deleteMany are not retryable. Retryable reads are simpler: reads have no side effects, so the driver just retries once on a transient error. Anything beyond that one retry, such as during a long outage, is up to the application and needs its own idempotency or a transaction retried on TransientTransactionError.",
+    "hint": "What two values let the server recognise that it has seen this exact write before?",
+    "explanation": "Retryable writes give an exactly-once effect on top of at-least-once delivery: the driver may send the write twice, but the (lsid, txnNumber) dedup record turns the second send into a no-op that returns the first result. This is the same pattern as an idempotency key table, built into the database and replicated so it survives elections. Knowing which operations are excluded (multi-document updates and deletes) is a common SDE3 follow-up."
+  },
+  {
+    "id": "res-08",
+    "track": "resilience",
+    "level": "intermediate",
+    "topic": "Retries",
+    "title": "Full jitter vs equal jitter",
+    "kind": "blanks",
+    "prompt": "Fill the gaps to compute AWS-style full jitter (uniform in [0, ceiling)) and equal jitter (half fixed, half random) with a seeded Random.",
+    "code": "    static long fullJitter(int attempt, Random rnd) {\n        long ceiling = Math.min(CAP_MS,\n            BASE_MS * (1L [[1]] attempt));\n        return (long) (rnd.[[2]]() * ceiling);\n    }\n\n    static long equalJitter(int attempt, Random rnd) {\n        long ceiling = Math.min(CAP_MS,\n            BASE_MS * (1L << attempt));\n        long half = ceiling / 2;\n        return half + (long) (rnd.nextDouble() * [[3]]);\n    }",
+    "blanks": [
+      {
+        "options": [
+          "<<",
+          ">>",
+          "*"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "nextDouble",
+          "nextGaussian",
+          "nextInt"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "half",
+          "ceiling",
+          "attempt"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.util.Random;\n\npublic class Main {\n    static final long BASE_MS = 100, CAP_MS = 2000;\n    static long fullJitter(int attempt, Random rnd) {\n        long ceiling = Math.min(CAP_MS,\n            BASE_MS * (1L << attempt));\n        return (long) (rnd.nextDouble() * ceiling);\n    }\n\n    static long equalJitter(int attempt, Random rnd) {\n        long ceiling = Math.min(CAP_MS,\n            BASE_MS * (1L << attempt));\n        long half = ceiling / 2;\n        return half + (long) (rnd.nextDouble() * half);\n    }\n    public static void main(String[] args) {\n        Random r1 = new Random(42), r2 = new Random(42);\n        for (int a = 0; a < 6; a++) {\n            System.out.println(\"attempt \" + a + \": full=\" + fullJitter(a, r1) + \" equal=\" + equalJitter(a, r2));\n        }\n    }\n}\n",
+    "expectedOutput": "attempt 0: full=72 equal=86\nattempt 1: full=136 equal=168\nattempt 2: full=123 equal=261\nattempt 3: full=221 equal=510\nattempt 4: full=1064 equal=1332\nattempt 5: full=1806 equal=1903",
+    "explanation": "Without jitter, every client that failed at the same moment also retries at the same moments, so retries arrive in synchronised waves (the thundering herd). Full jitter picks uniformly between 0 and the exponential ceiling, which spreads load best and usually finishes the work fastest. Equal jitter keeps at least half the backoff, guaranteeing a minimum wait while still desynchronising clients. `nextGaussian` would give negative and clustered values, which is the wrong distribution. Seeding the Random makes the schedule reproducible in tests."
+  },
+  {
+    "id": "res-09",
+    "track": "resilience",
+    "level": "intermediate",
+    "topic": "Circuit breaker",
+    "title": "Circuit breaker state machine",
+    "kind": "parsons",
+    "prompt": "Arrange the breaker: OPEN rejects requests until the cool-down elapses, then lets a trial through in HALF_OPEN. A success closes it; a failed trial or `threshold` consecutive failures open it.",
+    "lines": [
+      "        boolean allowRequest(long now) {",
+      "            if (state == State.OPEN && now - openedAt >= coolDownMs) {",
+      "                state = State.HALF_OPEN;",
+      "            }",
+      "            return state != State.OPEN;",
+      "        }",
+      "        void onResult(boolean ok, long now) {",
+      "            if (ok) {",
+      "                state = State.CLOSED; failures = 0;",
+      "            } else if (state == State.HALF_OPEN || ++failures >= threshold) {",
+      "                state = State.OPEN; openedAt = now; failures = 0;",
+      "            }",
+      "        }"
+    ],
+    "distractors": [
+      "            return state == State.CLOSED;",
+      "            } else if (++failures >= threshold) {"
+    ],
+    "solution": "public class Main {\n    enum State { CLOSED, OPEN, HALF_OPEN }\n    static class Breaker {\n        State state = State.CLOSED;\n        int failures = 0;\n        long openedAt = 0;\n        final int threshold;\n        final long coolDownMs;\n        Breaker(int threshold, long coolDownMs) { this.threshold = threshold; this.coolDownMs = coolDownMs; }\n        boolean allowRequest(long now) {\n            if (state == State.OPEN && now - openedAt >= coolDownMs) {\n                state = State.HALF_OPEN;\n            }\n            return state != State.OPEN;\n        }\n        void onResult(boolean ok, long now) {\n            if (ok) {\n                state = State.CLOSED; failures = 0;\n            } else if (state == State.HALF_OPEN || ++failures >= threshold) {\n                state = State.OPEN; openedAt = now; failures = 0;\n            }\n        }\n    }\n    public static void main(String[] args) {\n        Breaker b = new Breaker(3, 1000);\n        long[] ts = {0, 10, 20, 500, 1100, 1500, 2200, 2300};\n        boolean[] ok = {false, false, false, true, false, true, true, true};\n        for (int i = 0; i < ts.length; i++) {\n            if (!b.allowRequest(ts[i])) {\n                System.out.println(\"t=\" + ts[i] + \" rejected fast (\" + b.state + \")\");\n                continue;\n            }\n            b.onResult(ok[i], ts[i]);\n            System.out.println(\"t=\" + ts[i] + \" \" + (ok[i] ? \"ok\" : \"fail\") + \" -> \" + b.state);\n        }\n    }\n}\n",
+    "expectedOutput": "t=0 fail -> CLOSED\nt=10 fail -> CLOSED\nt=20 fail -> OPEN\nt=500 rejected fast (OPEN)\nt=1100 fail -> OPEN\nt=1500 rejected fast (OPEN)\nt=2200 ok -> CLOSED\nt=2300 ok -> CLOSED",
+    "explanation": "CLOSED passes traffic and counts failures. After `threshold` failures it trips to OPEN and fails fast, so callers stop wasting threads and timeouts on a dead dependency and the dependency gets time to recover. After the cool-down, the next request moves it to HALF_OPEN as a probe: success closes the circuit, and failure reopens it immediately without waiting for three more failures. Without the HALF_OPEN check, a bad probe would count as only one failure. Breakers complement the MongoDB driver, which already monitors servers and fails server selection after `serverSelectionTimeoutMS`; a breaker in the app stops request threads piling up while they wait for that timeout."
+  },
+  {
+    "id": "res-10",
+    "track": "resilience",
+    "level": "intermediate",
+    "topic": "Bulkheads",
+    "title": "Semaphore bulkhead",
+    "kind": "blanks",
+    "prompt": "Fill the gaps so at most two calls run against the dependency at once, and a third caller waits briefly and is then rejected instead of queueing forever.",
+    "code": "    static final Semaphore bulkhead =\n        new Semaphore([[1]]);\n\n    static String call(String name) throws Exception {\n        if (!bulkhead.[[2]](10, TimeUnit.MILLISECONDS)) {\n            return name + \": rejected, bulkhead full\";\n        }\n        return name + \": admitted\";\n    }\n\n    static void done() { bulkhead.[[3]](); }",
+    "blanks": [
+      {
+        "options": [
+          "2",
+          "0",
+          "Integer.MAX_VALUE"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "tryAcquire",
+          "acquire",
+          "drainPermits"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "release",
+          "acquire",
+          "drainPermits"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.util.concurrent.Semaphore;\nimport java.util.concurrent.TimeUnit;\n\npublic class Main {\n    static final Semaphore bulkhead =\n        new Semaphore(2);\n\n    static String call(String name) throws Exception {\n        if (!bulkhead.tryAcquire(10, TimeUnit.MILLISECONDS)) {\n            return name + \": rejected, bulkhead full\";\n        }\n        return name + \": admitted\";\n    }\n\n    static void done() { bulkhead.release(); }\n    public static void main(String[] args) throws Exception {\n        System.out.println(call(\"a\"));\n        System.out.println(call(\"b\"));\n        System.out.println(call(\"c\"));\n        done();\n        System.out.println(call(\"d\"));\n        System.out.println(\"free permits: \" + bulkhead.availablePermits());\n    }\n}\n",
+    "expectedOutput": "a: admitted\nb: admitted\nc: rejected, bulkhead full\nd: admitted\nfree permits: 0",
+    "explanation": "A bulkhead gives each dependency its own bounded pool of concurrency, so a slow dependency can use up only its own permits rather than every request thread in the service. `tryAcquire` with a short timeout turns overload into a fast, explicit rejection, whereas plain `acquire` would queue without limit. Permits must be released when the call finishes. The MongoDB driver connection pool is the same idea: `maxPoolSize` caps concurrent connections per server, and `waitQueueTimeoutMS` (in newer drivers, `timeoutMS`) limits how long a thread waits for a connection before erroring."
+  },
+  {
+    "id": "res-11",
+    "track": "resilience",
+    "level": "intermediate",
+    "topic": "Idempotency",
+    "title": "Idempotency key dedup table",
+    "kind": "parsons",
+    "prompt": "Arrange `charge`: if the idempotency key has been seen before, return the stored result; otherwise apply the charge, record the result under the key and return it.",
+    "lines": [
+      "    static String charge(String idempotencyKey, int amount) {",
+      "        String prior = dedup.get(idempotencyKey);",
+      "        if (prior != null) return prior + \" (replayed)\";",
+      "        balance -= amount;",
+      "        String receipt = \"charged \" + amount + \", balance \" + balance;",
+      "        dedup.put(idempotencyKey, receipt);",
+      "        return receipt;",
+      "    }"
+    ],
+    "distractors": [
+      "        if (prior == null) return prior + \" (replayed)\";",
+      "        dedup.put(idempotencyKey, \"done\");"
+    ],
+    "solution": "import java.util.HashMap;\nimport java.util.Map;\n\npublic class Main {\n    static final Map<String, String> dedup = new HashMap<>();\n    static int balance = 100;\n    static String charge(String idempotencyKey, int amount) {\n        String prior = dedup.get(idempotencyKey);\n        if (prior != null) return prior + \" (replayed)\";\n        balance -= amount;\n        String receipt = \"charged \" + amount + \", balance \" + balance;\n        dedup.put(idempotencyKey, receipt);\n        return receipt;\n    }\n    public static void main(String[] args) {\n        System.out.println(charge(\"k-1\", 30));\n        System.out.println(charge(\"k-1\", 30));\n        System.out.println(charge(\"k-2\", 10));\n        System.out.println(\"final balance \" + balance);\n    }\n}\n",
+    "expectedOutput": "charged 30, balance 70\ncharged 30, balance 70 (replayed)\ncharged 10, balance 60\nfinal balance 60",
+    "explanation": "The client generates one key per logical operation and reuses it on every retry, so the server can turn at-least-once delivery into an exactly-once effect. Storing the full response rather than just \"done\" lets the retry receive the same answer as the original. In production the key insert and the side effect must be atomic. For example, insert into a MongoDB collection with a unique index on the key inside the same transaction as the balance update, so a crash cannot leave the charge applied without the key. MongoDB retryable writes do exactly this internally with `(lsid, txnNumber)` in `config.transactions`."
+  },
+  {
+    "id": "res-12",
+    "track": "resilience",
+    "level": "intermediate",
+    "topic": "Delivery semantics",
+    "title": "At-least-once vs exactly-once",
+    "kind": "theory",
+    "prompt": "Discuss delivery guarantees and how to get exactly-once effects.",
+    "question": "Explain the difference between at-most-once, at-least-once and exactly-once delivery. Why is exactly-once delivery impossible over an unreliable network, and how do real systems, including MongoDB, achieve exactly-once effects?",
+    "keyPoints": [
+      "At-most-once: send once and never retry; messages may be lost",
+      "At-least-once: retry until acknowledged; messages may be duplicated, because a lost ack looks the same as a lost request",
+      "Exactly-once delivery is impossible end to end, because the sender cannot know whether the receiver processed a request whose ack was lost",
+      "Exactly-once effect = at-least-once delivery + idempotent or deduplicated processing on the receiver",
+      "Techniques: idempotency keys in a dedup table (unique index), naturally idempotent operations (set instead of increment), storing processed offsets atomically with results",
+      "MongoDB: retryable writes dedup by lsid + txnNumber; transactions retry the commit on UnknownTransactionCommitResult; change stream consumers resume from resume tokens"
+    ],
+    "modelAnswer": "At-most-once sends a message once and never retries, so failures lose data. At-least-once retries until it sees an acknowledgement, so it never loses data but can duplicate it. True exactly-once delivery is impossible over an unreliable network: if the acknowledgement is lost, the sender cannot tell whether the request was processed, so it must either risk a loss or risk a duplicate. What systems actually offer is an exactly-once effect: deliver at least once and make processing idempotent. You do that with idempotency keys recorded in a dedup table with a unique index and written atomically with the side effect, by designing operations to be naturally idempotent (setting a value rather than incrementing it), or by storing the consumer offset in the same transaction as the output. MongoDB retryable writes are a built-in example: the (lsid, txnNumber) pair lets the server recognise and skip a resent write. For transactions, an UnknownTransactionCommitResult error means you retry the commit, which is safe because commitTransaction is idempotent for the same transaction.",
+    "hint": "If the ack is lost, can the sender tell whether the receiver processed the request?",
+    "explanation": "The two-generals argument shows that the sender cannot tell a lost request from a lost response, so if you want no loss, retries, and therefore duplicates, are unavoidable. Exactly-once is therefore an end-to-end property: the receiver deduplicates. Interviewers want to hear \"at-least-once plus idempotency\", with a concrete mechanism and where the dedup state lives."
+  },
+  {
+    "id": "res-13",
+    "track": "resilience",
+    "level": "advanced",
+    "topic": "Rate limiting",
+    "title": "Sliding window log",
+    "kind": "parsons",
+    "prompt": "Arrange `allow(now)` for a sliding window log: evict timestamps older than the window, reject if `limit` timestamps remain, otherwise record this request.",
+    "lines": [
+      "        boolean allow(long now) {",
+      "            while (!log.isEmpty() && log.peekFirst() <= now - windowMs) {",
+      "                log.pollFirst();",
+      "            }",
+      "            if (log.size() >= limit) return false;",
+      "            log.addLast(now);",
+      "            return true;",
+      "        }"
+    ],
+    "distractors": [
+      "                log.pollLast();",
+      "            if (log.size() > limit) return false;"
+    ],
+    "solution": "import java.util.ArrayDeque;\nimport java.util.Deque;\n\npublic class Main {\n    static class SlidingLog {\n        final Deque<Long> log = new ArrayDeque<>();\n        final long windowMs;\n        final int limit;\n        SlidingLog(long windowMs, int limit) { this.windowMs = windowMs; this.limit = limit; }\n        boolean allow(long now) {\n            while (!log.isEmpty() && log.peekFirst() <= now - windowMs) {\n                log.pollFirst();\n            }\n            if (log.size() >= limit) return false;\n            log.addLast(now);\n            return true;\n        }\n    }\n    public static void main(String[] args) {\n        SlidingLog rl = new SlidingLog(1000, 3);\n        long[] times = {0, 300, 600, 900, 1000, 1299, 1300, 1601};\n        StringBuilder sb = new StringBuilder();\n        for (long t : times) sb.append(t).append(rl.allow(t) ? \":ok \" : \":deny \");\n        System.out.println(sb.toString().trim());\n    }\n}\n",
+    "expectedOutput": "0:ok 300:ok 600:ok 900:deny 1000:ok 1299:deny 1300:ok 1601:ok",
+    "explanation": "The log keeps one timestamp per accepted request, oldest at the front, so eviction pops from the head until everything left falls within the last `windowMs`. That gives an exact limit over any rolling window with no boundary burst: t=1299 is denied because 300, 600 and 1000 are still in the window. The cost is O(limit) memory per key, which is why large-scale limiters approximate it with a sliding window counter. In a shared store this would be a sorted set (Redis) or an array updated with `$push` and `$pull` by timestamp (MongoDB), and the evict-count-add sequence has to be atomic."
+  },
+  {
+    "id": "res-14",
+    "track": "resilience",
+    "level": "advanced",
+    "topic": "Rate limiting",
+    "title": "Sliding window counter",
+    "kind": "blanks",
+    "prompt": "Fill the gaps in the sliding window counter: estimate the rolling count as the previous window weighted by its remaining overlap, plus the current window.",
+    "code": "    boolean allow(long now) {\n        long window = now / windowMs;\n        if (window != curWindow) {\n            prevCount =\n                (window == curWindow + 1) ? [[1]] : 0;\n            curCount = 0;\n            curWindow = window;\n        }\n        double frac = (now % windowMs) / (double) windowMs;\n        double est = prevCount * ([[2]]) + curCount;\n        if (est [[3]] limit) return false;\n        curCount++;\n        return true;\n    }",
+    "blanks": [
+      {
+        "options": [
+          "curCount",
+          "prevCount",
+          "limit"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "1 - frac",
+          "frac",
+          "1 + frac"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          ">=",
+          "<",
+          "=="
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "public class Main {\n    static final long windowMs = 1000;\n    static final int limit = 4;\n    static long curWindow = -1;\n    static int prevCount = 0, curCount = 0;\n\n    boolean allow(long now) {\n        long window = now / windowMs;\n        if (window != curWindow) {\n            prevCount =\n                (window == curWindow + 1) ? curCount : 0;\n            curCount = 0;\n            curWindow = window;\n        }\n        double frac = (now % windowMs) / (double) windowMs;\n        double est = prevCount * (1 - frac) + curCount;\n        if (est >= limit) return false;\n        curCount++;\n        return true;\n    }\n    public static void main(String[] args) {\n        Main rl = new Main();\n        long[] times = {100, 200, 300, 400, 500, 1250, 1260, 1500, 1800, 2900};\n        StringBuilder sb = new StringBuilder();\n        for (long t : times) sb.append(t).append(rl.allow(t) ? \":ok \" : \":deny \");\n        System.out.println(sb.toString().trim());\n    }\n}\n",
+    "expectedOutput": "100:ok 200:ok 300:ok 400:ok 500:deny 1250:ok 1260:ok 1500:deny 1800:ok 2900:ok",
+    "explanation": "When a new window starts, the finished window count becomes `prevCount`; if a whole window was skipped, it is 0. At fraction `frac` into the current window, the rolling window still overlaps `1 - frac` of the previous one, so the estimate is `prevCount * (1 - frac) + curCount`, assuming traffic in the previous window was spread evenly. Like a fixed window it needs only two counters per key, but it removes most of the boundary burst: at t=1500 the estimate is 4*0.5+2 = 4, so the request is denied. Large API gateways typically use this, keeping the two counters in a shared store with atomic increments."
+  },
+  {
+    "id": "res-15",
+    "track": "resilience",
+    "level": "advanced",
+    "topic": "MongoDB transactions",
+    "title": "Retry on TransientTransactionError",
+    "kind": "parsons",
+    "prompt": "Arrange the transaction retry loop: rerun the whole transaction only when the error carries the `TransientTransactionError` label, up to `maxAttempts`. Any other error propagates immediately.",
+    "lines": [
+      "    static String runWithRetry(int maxAttempts) {",
+      "        for (int attempt = 1; ; attempt++) {",
+      "            try {",
+      "                return runTransaction();",
+      "            } catch (MongoException e) {",
+      "                System.out.println(\"attempt \" + attempt + \": \" + e.getMessage());",
+      "                if (!e.hasErrorLabel(\"TransientTransactionError\") || attempt >= maxAttempts) throw e;",
+      "            }",
+      "        }",
+      "    }"
+    ],
+    "distractors": [
+      "                if (attempt >= maxAttempts) throw e;",
+      "                return runWithRetry(maxAttempts);"
+    ],
+    "solution": "import java.util.ArrayDeque;\nimport java.util.Deque;\nimport java.util.Set;\n\npublic class Main {\n    static class MongoException extends RuntimeException {\n        final Set<String> labels;\n        MongoException(String msg, String... labels) { super(msg); this.labels = Set.of(labels); }\n        boolean hasErrorLabel(String l) { return labels.contains(l); }\n    }\n    static final Deque<MongoException> failures = new ArrayDeque<>();\n    static int commits = 0;\n    static String runTransaction() {\n        if (!failures.isEmpty()) throw failures.poll();\n        commits++;\n        return \"committed (commits=\" + commits + \")\";\n    }\n    static String runWithRetry(int maxAttempts) {\n        for (int attempt = 1; ; attempt++) {\n            try {\n                return runTransaction();\n            } catch (MongoException e) {\n                System.out.println(\"attempt \" + attempt + \": \" + e.getMessage());\n                if (!e.hasErrorLabel(\"TransientTransactionError\") || attempt >= maxAttempts) throw e;\n            }\n        }\n    }\n    public static void main(String[] args) {\n        failures.add(new MongoException(\"WriteConflict\", \"TransientTransactionError\"));\n        failures.add(new MongoException(\"NotWritablePrimary during election\", \"TransientTransactionError\"));\n        System.out.println(runWithRetry(5));\n        failures.add(new MongoException(\"DuplicateKey\"));\n        try {\n            runWithRetry(5);\n        } catch (MongoException e) {\n            System.out.println(\"gave up: \" + e.getMessage());\n        }\n    }\n}\n",
+    "expectedOutput": "attempt 1: WriteConflict\nattempt 2: NotWritablePrimary during election\ncommitted (commits=1)\nattempt 1: DuplicateKey\ngave up: DuplicateKey",
+    "explanation": "MongoDB adds the `TransientTransactionError` label to errors where the whole transaction was aborted and can safely be rerun from the start (write conflicts, a primary stepping down, network errors before commit), so the application retries the entire transaction body. A DuplicateKey error has no label: retrying would fail the same way, so it propagates at once. A limit on attempts (or a deadline) stops endless retries. The driver `withTransaction` helper implements this loop plus the separate commit retry on `UnknownTransactionCommitResult`, within a 120-second overall time limit."
+  },
+  {
+    "id": "res-16",
+    "track": "resilience",
+    "level": "advanced",
+    "topic": "Retries",
+    "title": "Retry storms and how to stop them",
+    "kind": "theory",
+    "prompt": "Discuss retry amplification and its mitigations.",
+    "question": "A downstream service slows down and the whole system collapses into a retry storm. Explain how retries amplify load across layers, and describe the techniques (backoff, jitter, retry budgets, circuit breakers, hedged requests) that prevent it, including the trade-offs of hedging.",
+    "keyPoints": [
+      "Retry amplification: retries at each of N layers multiply, e.g. 3 retries at each of 3 layers gives up to 27x load on the bottom service",
+      "Metastable failure / thundering herd: synchronised retries keep the system overloaded even after the trigger has gone",
+      "Exponential backoff with full jitter spreads retries out and desynchronises them",
+      "Retry budgets cap retries at a fraction of normal traffic (e.g. 10%) per client; retry at only one layer",
+      "Circuit breakers fail fast when the error rate is high; honour Retry-After / 429 and never retry non-transient errors",
+      "Hedged requests: send a second request after the p95 latency to cut tail latency; only for idempotent reads, and budgeted (e.g. at most 5% extra) because they add load"
+    ],
+    "modelAnswer": "If each layer of a call chain retries three times, a failure at the bottom of a three-layer chain can produce 3^3 = 27 times the normal load, exactly when the service is weakest. Synchronised retries then keep it overloaded after the original trigger has gone, which is a metastable failure. The first defence is exponential backoff with full jitter, so retries are spread out and clients stop retrying in lockstep. Next, cap total retries with a retry budget (for example, retries may not exceed 10% of requests over a rolling window) and retry at only one layer, normally the outermost or the one closest to the failure. Circuit breakers stop calls entirely when the error rate is high, and clients should honour 429 and Retry-After and never retry non-transient errors. Hedged requests trade the other way: after the p95 latency you send a duplicate request to another replica and take the first answer, cutting tail latency for a small amount of extra load. They are only safe for idempotent reads, such as reads from MongoDB secondaries, and they must be budgeted and must cancel the slower request, or they become a retry storm themselves. MongoDB drivers already retry reads and writes once, so application retries should take that into account.",
+    "hint": "Multiply the retry counts across layers, then think about what each client does at the same moment.",
+    "explanation": "The core insight is that retries are load, and they arrive exactly when capacity is lowest. Backoff with jitter fixes the timing, budgets and breakers cap the volume, and retrying at a single layer prevents multiplication. Hedging trades a limited amount of extra load for lower tail latency, which is why it must be restricted to idempotent operations and a small percentage of requests."
+  },
+  {
+    "id": "res-17",
+    "track": "resilience",
+    "level": "advanced",
+    "topic": "Retries",
+    "title": "Retry budget",
+    "kind": "blanks",
+    "prompt": "Fill the gaps in a retry budget that allows retries only while they stay within `ratio` of the requests seen.",
+    "code": "        void onRequest() { [[1]]++; }\n\n        boolean canRetry() {\n            if (retries + 1 > ratio * [[2]]) return false;\n            retries++;\n            return [[3]];\n        }",
+    "blanks": [
+      {
+        "options": [
+          "requests",
+          "retries",
+          "ratio"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "requests",
+          "retries",
+          "10"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "true",
+          "false",
+          "retries > 0"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "public class Main {\n    static class RetryBudget {\n        final double ratio;\n        int requests = 0, retries = 0;\n        RetryBudget(double ratio) { this.ratio = ratio; }\n        void onRequest() { requests++; }\n\n        boolean canRetry() {\n            if (retries + 1 > ratio * requests) return false;\n            retries++;\n            return true;\n        }\n    }\n    public static void main(String[] args) {\n        RetryBudget budget = new RetryBudget(0.1);\n        int allowed = 0, denied = 0;\n        for (int i = 0; i < 50; i++) {\n            budget.onRequest();\n            if (budget.canRetry()) allowed++; else denied++;\n        }\n        System.out.println(\"requests=\" + budget.requests + \" retries=\" + allowed + \" denied=\" + denied);\n        System.out.println(\"naive 3 retries each would add \" + (50 * 3) + \" extra calls\");\n    }\n}\n",
+    "expectedOutput": "requests=50 retries=5 denied=45\nnaive 3 retries each would add 150 extra calls",
+    "explanation": "During an outage every request fails, so a naive client with three retries quadruples the traffic to the failing service. A retry budget counts original requests and allows retries only while they stay under a fixed ratio (here 10%), so at most about 1.1x normal load reaches the dependency however bad things get. When the service is healthy and failures are rare, the budget is never hit, and individual transient errors are still retried. Real implementations (gRPC, Envoy, Finagle) use a rolling window or a token bucket that deposits a fraction of a token per request, so the budget recovers over time."
+  },
+  {
+    "id": "res-18",
+    "track": "resilience",
+    "level": "advanced",
+    "topic": "Timeouts & deadlines",
+    "title": "Deadline propagation",
+    "kind": "parsons",
+    "prompt": "Arrange `callService`: compute the remaining budget from the request deadline, fail fast if it is spent, cap the per-call timeout at the remaining budget, and simulate the call on a fake clock.",
+    "lines": [
+      "        long remaining = deadline - clock.now;",
+      "        if (remaining <= 0) throw new DeadlineExceeded(name + \": no budget left\");",
+      "        long timeout = Math.min(remaining, perCallCapMs);",
+      "        if (costMs > timeout) {",
+      "            clock.now += timeout;",
+      "            throw new DeadlineExceeded(name + \": timed out after \" + timeout + \"ms\");",
+      "        }",
+      "        clock.now += costMs;",
+      "        return name + \" ok, \" + (deadline - clock.now) + \"ms left\";"
+    ],
+    "distractors": [
+      "        long timeout = perCallCapMs;",
+      "        long remaining = deadline;"
+    ],
+    "solution": "public class Main {\n    static class FakeClock { long now = 0; }\n    static final FakeClock clock = new FakeClock();\n    static final long perCallCapMs = 200;\n    static class DeadlineExceeded extends RuntimeException {\n        DeadlineExceeded(String m) { super(m); }\n    }\n    static String callService(String name, long deadline, long costMs) {\n        long remaining = deadline - clock.now;\n        if (remaining <= 0) throw new DeadlineExceeded(name + \": no budget left\");\n        long timeout = Math.min(remaining, perCallCapMs);\n        if (costMs > timeout) {\n            clock.now += timeout;\n            throw new DeadlineExceeded(name + \": timed out after \" + timeout + \"ms\");\n        }\n        clock.now += costMs;\n        return name + \" ok, \" + (deadline - clock.now) + \"ms left\";\n    }\n    static void handle(long budgetMs) {\n        long deadline = clock.now + budgetMs;\n        System.out.println(\"request with \" + budgetMs + \"ms budget\");\n        try {\n            System.out.println(\"  \" + callService(\"auth\", deadline, 40));\n            System.out.println(\"  \" + callService(\"mongo-find\", deadline, 180));\n            System.out.println(\"  \" + callService(\"pricing\", deadline, 50));\n        } catch (DeadlineExceeded e) {\n            System.out.println(\"  504: \" + e.getMessage());\n        }\n    }\n    public static void main(String[] args) {\n        handle(400);\n        handle(200);\n    }\n}\n",
+    "expectedOutput": "request with 400ms budget\n  auth ok, 360ms left\n  mongo-find ok, 180ms left\n  pricing ok, 130ms left\nrequest with 200ms budget\n  auth ok, 160ms left\n  504: mongo-find: timed out after 160ms",
+    "explanation": "A deadline is an absolute point in time, set once at the edge. Every hop computes its remaining budget from it instead of using a fixed timeout, so downstream work stops as soon as the caller would give up anyway. With a 200 ms budget the find gets only 160 ms, times out, and pricing is never called, so no work is wasted on a response nobody will read. In MongoDB you pass the remaining budget down as `maxTimeMS` on the operation (or use the client-side operation timeout `timeoutMS` in newer drivers), so the server also kills the query when the budget runs out instead of running it to completion."
+  },
+  {
+    "id": "res-19",
+    "track": "resilience",
+    "level": "advanced",
+    "topic": "Load shedding",
+    "title": "Shedding, backpressure and degradation",
+    "kind": "theory",
+    "prompt": "Discuss protecting a service under overload.",
+    "question": "Your service receives 3x its capacity during a traffic spike. Explain load shedding, backpressure and graceful degradation, how they differ, and how health checks (liveness vs readiness) should behave so the load balancer and orchestrator do not make things worse.",
+    "keyPoints": [
+      "Load shedding: reject excess work early and cheaply (e.g. 503/429 at admission, bounded queues, dropping by priority or queue time) to keep goodput high for the rest",
+      "Backpressure: propagate \"slow down\" upstream with bounded queues, blocking or credit-based flow control rather than unbounded buffering",
+      "Unbounded queues turn overload into huge latency and out-of-memory errors; shed based on queue wait time or concurrency limits, ideally adaptive (e.g. AIMD, Little's law)",
+      "Graceful degradation: serve reduced functionality, such as cached or stale data, fewer recommendations, or reads from secondaries, instead of failing completely",
+      "Liveness should only check that the process is not stuck; readiness can report overload so traffic is shifted; deep dependency checks in liveness cause restart cascades",
+      "Prioritise critical traffic and drop work whose client deadline has already passed"
+    ],
+    "modelAnswer": "Load shedding means deliberately rejecting the excess, cheaply and as early as possible, typically at admission with a concurrency limit or bounded queue that returns 503 or 429. It should preferably drop low-priority work or requests whose deadline has already passed. This keeps goodput near capacity instead of letting every request time out. Backpressure is the cooperative version: bounded queues and flow control push the \"slow down\" signal back to producers (for example, a consumer pausing reads from a stream) instead of buffering in memory until latency explodes or the process runs out of memory. Graceful degradation keeps the core path working by turning off expensive extras, serving cached or stale results, or reading from MongoDB secondaries with an acceptable read preference. Health checks need care. Liveness should only report whether the process itself is stuck: if it checks the database, a slow MongoDB makes the orchestrator restart every pod at once and remove all capacity. Readiness can fail when the instance is saturated so that the load balancer shifts traffic, but you need a guard so that all instances do not go unready at the same time. Adaptive concurrency limits, such as AIMD on latency, work better than static thresholds.",
+    "hint": "What happens to latency and goodput if every request is queued instead of rejected?",
+    "explanation": "Overload management is about goodput: a service that successfully serves 100% of its capacity and rejects the rest beats one that accepts everything and times out on all of it. Shedding rejects work, backpressure slows producers, and degradation does less work per request. Badly designed health checks are a classic cause of cascading failure, which senior interviewers like to probe."
+  },
+  {
+    "id": "res-20",
+    "track": "resilience",
+    "level": "expert",
+    "topic": "MongoDB transactions",
+    "title": "Commit retry on unknown result",
+    "kind": "blanks",
+    "prompt": "Fill the gaps so `commitWithRetry` retries `commitTransaction` only when its outcome is unknown. This is safe because commit is idempotent for the same transaction.",
+    "code": "    static void commitWithRetry(Session s) {\n        while (true) {\n            try {\n                s.commitTransaction();\n                System.out.println(\"commit acknowledged\");\n                return;\n            } catch (MongoException e) {\n                if (e.hasErrorLabel([[1]])) {\n                    System.out.println(\"retry commit\");\n                    [[2]];\n                }\n                throw e;\n            }\n        }\n    }",
+    "blanks": [
+      {
+        "options": [
+          "\"UnknownTransactionCommitResult\"",
+          "\"TransientTransactionError\"",
+          "\"RetryableWriteError\""
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "continue",
+          "break",
+          "return"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.util.Set;\n\npublic class Main {\n    static class MongoException extends RuntimeException {\n        final Set<String> labels;\n        MongoException(String msg, String... labels) { super(msg); this.labels = Set.of(labels); }\n        boolean hasErrorLabel(String l) { return labels.contains(l); }\n    }\n    static class Session {\n        int commitCalls = 0, applied = 0;\n        void commitTransaction() {\n            commitCalls++;\n            if (applied == 0) applied++;\n            if (commitCalls == 1) throw new MongoException(\"network error\", \"UnknownTransactionCommitResult\");\n            if (commitCalls == 2) throw new MongoException(\"writeConcern wtimeout\", \"UnknownTransactionCommitResult\");\n        }\n    }\n    static void commitWithRetry(Session s) {\n        while (true) {\n            try {\n                s.commitTransaction();\n                System.out.println(\"commit acknowledged\");\n                return;\n            } catch (MongoException e) {\n                if (e.hasErrorLabel(\"UnknownTransactionCommitResult\")) {\n                    System.out.println(\"retry commit\");\n                    continue;\n                }\n                throw e;\n            }\n        }\n    }\n    public static void main(String[] args) {\n        Session s = new Session();\n        commitWithRetry(s);\n        System.out.println(\"commit calls=\" + s.commitCalls + \" applied=\" + s.applied);\n    }\n}\n",
+    "expectedOutput": "retry commit\nretry commit\ncommit acknowledged\ncommit calls=3 applied=1",
+    "explanation": "If a network error or a write concern timeout (`wtimeout`) hits during `commitTransaction`, the transaction may or may not have committed, and MongoDB labels the error `UnknownTransactionCommitResult`. You must not rerun the transaction body, which could apply it twice; you retry only the commit, which is idempotent because the server recognises the same transaction (lsid + txnNumber) and reports the original outcome. That is why the simulated server applies the change exactly once despite three commit calls. `TransientTransactionError` is the other label and means the opposite: the transaction was aborted, so the whole body is rerun. The driver `withTransaction` helper combines both loops."
+  },
+  {
+    "id": "res-21",
+    "track": "resilience",
+    "level": "expert",
+    "topic": "Rate limiting",
+    "title": "Distributed limiter with compare-and-set",
+    "kind": "parsons",
+    "prompt": "Arrange `allow` for a rate limiter shared by many app servers: read the counter document, decide, and write back with a compare-and-set on its version, re-reading on conflict so two nodes cannot both take the last slot.",
+    "lines": [
+      "        long window = now / windowMs;",
+      "        while (true) {",
+      "            Doc cur = store.readForUpdate(key);",
+      "            int count = cur.window() == window ? cur.count() : 0;",
+      "            if (count >= limit) return false;",
+      "            Doc next = new Doc(window, count + 1, cur.version() + 1);",
+      "            if (store.compareAndSet(key, cur.version(), next)) return true;",
+      "        }"
+    ],
+    "distractors": [
+      "            store.docs.put(key, next); return true;",
+      "            if (store.compareAndSet(key, next.version(), next)) return true;"
+    ],
+    "solution": "import java.util.HashMap;\nimport java.util.Map;\n\npublic class Main {\n    record Doc(long window, int count, long version) {}\n    static class SharedStore {\n        final Map<String, Doc> docs = new HashMap<>();\n        Runnable hook = null;\n        int casFailures = 0;\n        Doc read(String k) { return docs.getOrDefault(k, new Doc(-1, 0, 0)); }\n        Doc readForUpdate(String k) {\n            Doc d = read(k);\n            if (hook != null) { Runnable h = hook; hook = null; h.run(); }\n            return d;\n        }\n        boolean compareAndSet(String k, long expectedVersion, Doc next) {\n            if (read(k).version() != expectedVersion) { casFailures++; return false; }\n            docs.put(k, next);\n            return true;\n        }\n    }\n    static final SharedStore store = new SharedStore();\n    static boolean allow(String key, long now, long windowMs, int limit) {\n        long window = now / windowMs;\n        while (true) {\n            Doc cur = store.readForUpdate(key);\n            int count = cur.window() == window ? cur.count() : 0;\n            if (count >= limit) return false;\n            Doc next = new Doc(window, count + 1, cur.version() + 1);\n            if (store.compareAndSet(key, cur.version(), next)) return true;\n        }\n    }\n    public static void main(String[] args) {\n        System.out.println(\"A1: \" + allow(\"user:42\", 0, 1000, 2));\n        store.hook = () -> System.out.println(\"B1 sneaks in: \" + allow(\"user:42\", 5, 1000, 2));\n        System.out.println(\"A2: \" + allow(\"user:42\", 5, 1000, 2));\n        System.out.println(\"casFailures=\" + store.casFailures + \" count=\" + store.read(\"user:42\").count());\n        System.out.println(\"A3 next window: \" + allow(\"user:42\", 1000, 1000, 2));\n    }\n}\n",
+    "expectedOutput": "A1: true\nB1 sneaks in: true\nA2: false\ncasFailures=1 count=2\nA3 next window: true",
+    "explanation": "With several app servers sharing one counter, a plain read-then-write loses updates: nodes A and B both read count=1 and both write count=2, so three requests pass a limit of two. The version check makes the write conditional, so A's write fails after B sneaks in; A re-reads, sees count=2 and correctly denies. In MongoDB you could express this as `updateOne({_id, version}, {$set: ...})` and check `modifiedCount`. Better still, put the logic in one atomic `findOneAndUpdate` with a filter like `{_id, window, count: {$lt: limit}}`, an `$inc` and an upsert for a new window, so there is no client-side loop at all. Under heavy contention on a hot key, CAS retries pile up, which is why large systems shard counters or give each node a local token allowance."
+  },
+  {
+    "id": "res-22",
+    "track": "resilience",
+    "level": "expert",
+    "topic": "Timeouts & deadlines",
+    "title": "Tuning MongoDB driver timeouts",
+    "kind": "theory",
+    "prompt": "Design the timeout and connection pool configuration for a MongoDB-backed service.",
+    "question": "An API with a 500 ms SLO talks to a MongoDB replica set. Walk through the driver settings you would tune (serverSelectionTimeoutMS, maxPoolSize, waitQueueTimeoutMS / timeoutMS, maxTimeMS, socket and connect timeouts, writeConcern wtimeout), how they interact during a primary election, and what an ambiguous wtimeout error means for the write.",
+    "keyPoints": [
+      "serverSelectionTimeoutMS (default 30 s) limits how long an operation waits for a suitable server, e.g. a primary during an election (often around 10-12 s); set it within the request budget, or fail fast and degrade",
+      "maxPoolSize caps connections per server (default 100) and acts as a bulkhead; waitQueueTimeoutMS or timeoutMS limits the wait for a connection, so pool exhaustion surfaces as fast errors rather than piled-up threads",
+      "Per-operation limits: maxTimeMS makes the server abort the query; the client-side operation timeout timeoutMS in newer drivers covers the whole operation, including retries, server selection and pool wait, ideally derived from the propagated request deadline",
+      "connectTimeoutMS and socketTimeoutMS: avoid infinite socket timeouts, but do not set the socket timeout below normal query time, or healthy slow queries cause reconnect churn",
+      "wtimeout on w:majority means replication was not confirmed in time, not that the write failed; the write is not rolled back and may still commit, so treat it as unknown and reconcile or retry idempotently",
+      "Retryable writes and reads retry once after an election; with a short serverSelectionTimeoutMS the request may still succeed within its budget"
+    ],
+    "modelAnswer": "I would derive every timeout from the 500 ms request deadline instead of using the 30-second defaults. serverSelectionTimeoutMS controls how long an operation waits for a suitable server. During an election there is no primary for several seconds, and with the 30-second default every request thread blocks, so I lower it substantially and degrade (serve stale reads from secondaries, or fail fast) rather than queue. maxPoolSize is a bulkhead per server. I size it from the expected concurrency (Little's law: throughput times latency) and limit the wait for a connection with waitQueueTimeoutMS, or in newer drivers with the client-side operation timeout timeoutMS, which covers server selection, connection checkout, the operation and its single automatic retry, and which I set from the remaining request budget. On the server side, maxTimeMS stops expensive queries from consuming resources after the client has given up. I keep connectTimeoutMS modest and avoid a socketTimeoutMS shorter than legitimate query times, which would cause reconnect storms. Finally, a wtimeout on a w:majority write only means the acknowledgement did not arrive in time. The write was applied on the primary and may still replicate, so the outcome is unknown and must be handled idempotently (retryable writes, idempotency keys, or reading the data back), never assumed to have failed.",
+    "hint": "For each setting, ask what a request thread is doing while that timer runs during an election.",
+    "explanation": "Driver defaults favour eventually succeeding (30-second server selection) over meeting a latency SLO, so a production service needs settings aligned with its deadline. The connection pool is a bulkhead, server selection is where election downtime shows up, and maxTimeMS or timeoutMS carry the deadline to the server. The wtimeout ambiguity is the same \"unknown outcome\" problem as a lost ack, and it is solved by idempotency and retryable writes."
+  }
+]

@@ -5,7 +5,7 @@ import { Icon, Ring } from "./ui";
 
 export type Grade = {
   score: number; verdict: string; covered: string[]; missed: string[]; mistakes: string[];
-  tip: string; modelAnswer: string; xp?: number; newBadges?: Badge[]; used?: number; limit?: number;
+  tip: string; modelAnswer: string; passed?: boolean; passScore?: number; xp?: number; newBadges?: Badge[]; used?: number; limit?: number;
 };
 
 type Status = { enabled: boolean; used: number; limit: number };
@@ -15,9 +15,9 @@ let statusCache: Status | null = null;
  * Free-text answer box graded by Claude on the server against the item's reference material.
  * Controlled (answer/onAnswer) or self-contained.
  */
-export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, hideInput, title }: {
-  kind: "card" | "drill" | "java"; id: string | number; placeholder?: string;
-  answer?: string; onAnswer?: (s: string) => void; hideInput?: boolean; title?: string;
+export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, hideInput, title, onGraded }: {
+  kind: "card" | "drill" | "java" | "puzzle"; id: string | number; placeholder?: string;
+  answer?: string; onAnswer?: (s: string) => void; hideInput?: boolean; title?: string; onGraded?: (g: Grade) => void;
 }) {
   const { reward } = useProfile();
   const [own, setOwn] = useState("");
@@ -38,6 +38,7 @@ export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, h
     try {
       const g = await api.post<Grade>("/ai/grade", { kind, id: String(id), answer });
       setGrade(g);
+      onGraded?.(g);
       if (g.used != null && g.limit != null) { statusCache = { enabled: true, used: g.used, limit: g.limit }; setStatus(statusCache); }
       reward(g.xp ?? 0, g.newBadges);
     } catch (e) {

@@ -1,0 +1,645 @@
+[
+  {
+    "id": "conc-01",
+    "track": "concurrency",
+    "level": "beginner",
+    "topic": "Threads",
+    "title": "Start and join two worker threads",
+    "kind": "parsons",
+    "prompt": "Start two threads that each fill half of an array, then wait for both to finish before summing.",
+    "explanation": "start() schedules the thread; join() blocks the caller until that thread terminates. join() also creates a happens-before edge, so main is guaranteed to see every write the workers made to the array. Forgetting join() would let main sum a partially filled array. MongoDB drivers do the same kind of fan-out when a client issues parallel reads, and must wait for all of them before merging results.",
+    "lines": [
+      "        Thread a = new Thread(() -> fill(data, 0, 5));",
+      "        Thread b = new Thread(() -> fill(data, 5, 10));",
+      "        a.start();",
+      "        b.start();",
+      "        a.join();",
+      "        b.join();",
+      "        int sum = 0;",
+      "        for (int v : data) sum += v;"
+    ],
+    "distractors": [
+      "        a.run();"
+    ],
+    "solution": "public class Main {\n    static void fill(int[] d, int from, int to) {\n        for (int i = from; i < to; i++) d[i] = i + 1;\n    }\n    public static void main(String[] args) throws InterruptedException {\n        int[] data = new int[10];\n        Thread a = new Thread(() -> fill(data, 0, 5));\n        Thread b = new Thread(() -> fill(data, 5, 10));\n        a.start();\n        b.start();\n        a.join();\n        b.join();\n        int sum = 0;\n        for (int v : data) sum += v;\n        System.out.println(\"sum=\" + sum);\n    }\n}\n",
+    "expectedOutput": "sum=55\n"
+  },
+  {
+    "id": "conc-02",
+    "track": "concurrency",
+    "level": "beginner",
+    "topic": "Locks",
+    "title": "A synchronized counter",
+    "kind": "parsons",
+    "prompt": "Make the counter safe to increment from many threads using the intrinsic lock.",
+    "explanation": "count++ is a read-modify-write of three steps, so two threads can read the same value and lose an update. Marking both methods synchronized makes them take the object's intrinsic monitor, which gives mutual exclusion and visibility of the latest value. The getter must be synchronized too, otherwise a reader may see a stale value. In MongoDB, single-document updates are atomic for the same reason: the storage engine serialises writers to one document.",
+    "lines": [
+      "class Counter {",
+      "    private int count = 0;",
+      "    public synchronized void increment() {",
+      "        count++;",
+      "    }",
+      "    public synchronized int get() {",
+      "        return count;",
+      "    }",
+      "}"
+    ],
+    "distractors": [
+      "    public void increment() {"
+    ],
+    "solution": "import java.util.concurrent.*;\n\nclass Counter {\n    private int count = 0;\n    public synchronized void increment() {\n        count++;\n    }\n    public synchronized int get() {\n        return count;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        Counter c = new Counter();\n        ExecutorService pool = Executors.newFixedThreadPool(4);\n        for (int i = 0; i < 4; i++) {\n            pool.submit(() -> { for (int j = 0; j < 10000; j++) c.increment(); });\n        }\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        System.out.println(c.get());\n    }\n}\n",
+    "expectedOutput": "40000\n"
+  },
+  {
+    "id": "conc-03",
+    "track": "concurrency",
+    "level": "beginner",
+    "topic": "Visibility",
+    "title": "Make the stop flag visible",
+    "kind": "blanks",
+    "prompt": "A worker loops until another thread asks it to stop. Fill the gaps so the stop request is guaranteed to be seen.",
+    "explanation": "Without volatile, the JIT may hoist the read of running out of the loop and the worker spins forever. A volatile write happens-before every later volatile read of the same field, so the worker sees false promptly. volatile gives visibility and ordering, not atomicity, so it suits flags but not counters. join() then waits for the worker to exit cleanly.",
+    "code": "static [[1]] boolean running = true;\n\nstatic void demo() throws InterruptedException {\n    Thread worker = new Thread(() -> {\n        long n = 0;\n        while (running) n++;\n        System.out.println(\"stopped\");\n    });\n    worker.start();\n    Thread.sleep(50);\n    running = [[2]];\n    worker.[[3]]();\n}",
+    "blanks": [
+      {
+        "options": [
+          "volatile",
+          "final",
+          "transient",
+          "static"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "true",
+          "false",
+          "null"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "interrupt",
+          "run",
+          "join",
+          "notify"
+        ],
+        "answer": 2
+      }
+    ],
+    "solution": "public class Main {\nstatic volatile boolean running = true;\n\nstatic void demo() throws InterruptedException {\n    Thread worker = new Thread(() -> {\n        long n = 0;\n        while (running) n++;\n        System.out.println(\"stopped\");\n    });\n    worker.start();\n    Thread.sleep(50);\n    running = false;\n    worker.join();\n}\n    public static void main(String[] args) throws Exception {\n        demo();\n        System.out.println(\"main done\");\n    }\n}\n",
+    "expectedOutput": "stopped\nmain done\n"
+  },
+  {
+    "id": "conc-04",
+    "track": "concurrency",
+    "level": "intermediate",
+    "topic": "Atomics",
+    "title": "A CAS retry loop for a bounded max",
+    "kind": "parsons",
+    "prompt": "Using compareAndSet, update `peak` to the larger of its current value and `candidate`, retrying on contention.",
+    "explanation": "compareAndSet atomically swaps the value only if it still equals what we read; if another thread changed it in between, we re-read and retry. Returning early when the stored value is already larger avoids a useless write. This is optimistic concurrency: no lock is held, and conflicts are detected and retried. WiredTiger uses the same idea, applying updates optimistically and returning a write conflict that MongoDB retries internally.",
+    "lines": [
+      "    static void recordPeak(AtomicInteger peak, int candidate) {",
+      "        while (true) {",
+      "            int current = peak.get();",
+      "            if (candidate <= current) return;",
+      "            if (peak.compareAndSet(current, candidate)) return;",
+      "        }",
+      "    }"
+    ],
+    "distractors": [
+      "            peak.set(candidate);"
+    ],
+    "solution": "import java.util.concurrent.*;\nimport java.util.concurrent.atomic.*;\n\npublic class Main {\n    static void recordPeak(AtomicInteger peak, int candidate) {\n        while (true) {\n            int current = peak.get();\n            if (candidate <= current) return;\n            if (peak.compareAndSet(current, candidate)) return;\n        }\n    }\n    public static void main(String[] args) throws Exception {\n        AtomicInteger peak = new AtomicInteger(0);\n        ExecutorService pool = Executors.newFixedThreadPool(4);\n        for (int t = 0; t < 4; t++) {\n            final int off = t;\n            pool.submit(() -> { for (int i = 0; i < 1000; i++) recordPeak(peak, i * 4 + off); });\n        }\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        System.out.println(\"peak=\" + peak.get());\n    }\n}\n",
+    "expectedOutput": "peak=3999\n"
+  },
+  {
+    "id": "conc-05",
+    "track": "concurrency",
+    "level": "intermediate",
+    "topic": "wait/notify",
+    "title": "Guarded wait in a while loop",
+    "kind": "parsons",
+    "prompt": "Implement a one-slot mailbox: take() waits until a message is present, using wait/notifyAll on the intrinsic lock.",
+    "explanation": "wait() must be called while holding the monitor and must sit in a while loop, because a thread can wake spuriously or find that another consumer already took the item. notifyAll wakes every waiter so the right one can re-check its condition. Using if instead of while is the classic bug. Higher-level tools like BlockingQueue wrap exactly this pattern.",
+    "lines": [
+      "    synchronized String take() throws InterruptedException {",
+      "        while (msg == null) {",
+      "            wait();",
+      "        }",
+      "        String m = msg;",
+      "        msg = null;",
+      "        notifyAll();",
+      "        return m;",
+      "    }"
+    ],
+    "distractors": [
+      "        if (msg == null) {"
+    ],
+    "solution": "class Mailbox {\n    private String msg;\n    synchronized void put(String m) throws InterruptedException {\n        while (msg != null) wait();\n        msg = m;\n        notifyAll();\n    }\n    synchronized String take() throws InterruptedException {\n        while (msg == null) {\n            wait();\n        }\n        String m = msg;\n        msg = null;\n        notifyAll();\n        return m;\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        Mailbox box = new Mailbox();\n        StringBuilder got = new StringBuilder();\n        Thread consumer = new Thread(() -> {\n            try { for (int i = 0; i < 3; i++) got.append(box.take()); }\n            catch (InterruptedException e) { Thread.currentThread().interrupt(); }\n        });\n        consumer.start();\n        for (String s : new String[]{\"a\", \"b\", \"c\"}) box.put(s);\n        consumer.join();\n        System.out.println(got);\n    }\n}\n",
+    "expectedOutput": "abc\n"
+  },
+  {
+    "id": "conc-06",
+    "track": "concurrency",
+    "level": "intermediate",
+    "topic": "Coordination",
+    "title": "Wait for all shards with a CountDownLatch",
+    "kind": "blanks",
+    "prompt": "Main must wait until three shard-scan tasks have finished before printing the total.",
+    "explanation": "A CountDownLatch starts at N; each task calls countDown() in a finally block, and await() blocks until the count reaches zero. Using finally guarantees the latch is released even if a task throws, preventing main from hanging forever. A latch is one-shot: it cannot be reset, unlike a CyclicBarrier. This is how a mongos-style router might scatter a query to shards and gather once all have replied.",
+    "code": "CountDownLatch done = new CountDownLatch([[1]]);\nAtomicInteger total = new AtomicInteger();\nfor (int s = 1; s <= 3; s++) {\n    final int shard = s;\n    pool.submit(() -> {\n        try { total.addAndGet(shard * 10); }\n        finally { done.[[2]](); }\n    });\n}\ndone.[[3]]();\nSystem.out.println(\"total=\" + total.get());",
+    "blanks": [
+      {
+        "options": [
+          "0",
+          "1",
+          "3",
+          "4"
+        ],
+        "answer": 2
+      },
+      {
+        "options": [
+          "await",
+          "countDown",
+          "reset",
+          "release"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "await",
+          "join",
+          "countDown",
+          "wait"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.util.concurrent.*;\nimport java.util.concurrent.atomic.*;\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        ExecutorService pool = Executors.newFixedThreadPool(3);\nCountDownLatch done = new CountDownLatch(3);\nAtomicInteger total = new AtomicInteger();\nfor (int s = 1; s <= 3; s++) {\n    final int shard = s;\n    pool.submit(() -> {\n        try { total.addAndGet(shard * 10); }\n        finally { done.countDown(); }\n    });\n}\ndone.await();\nSystem.out.println(\"total=\" + total.get());\n        pool.shutdown();\n    }\n}\n",
+    "expectedOutput": "total=60\n"
+  },
+  {
+    "id": "conc-07",
+    "track": "concurrency",
+    "level": "intermediate",
+    "topic": "Producer-consumer",
+    "title": "Producer-consumer with a BlockingQueue",
+    "kind": "parsons",
+    "prompt": "The consumer drains a bounded BlockingQueue until it sees the poison pill `-1`, summing the values.",
+    "explanation": "put() blocks when the queue is full and take() blocks when it is empty, giving back-pressure with no explicit locking. A poison pill is a sentinel value that tells the consumer to stop cleanly. The bounded capacity keeps a fast producer from exhausting memory. The MongoDB Java driver uses bounded wait queues in the same spirit when a pool is saturated.",
+    "lines": [
+      "        Thread consumer = new Thread(() -> {",
+      "            try {",
+      "                int v;",
+      "                while ((v = q.take()) != -1) sum[0] += v;",
+      "            } catch (InterruptedException e) {",
+      "                Thread.currentThread().interrupt();",
+      "            }",
+      "        });"
+    ],
+    "distractors": [
+      "                while ((v = q.poll()) != -1) sum[0] += v;"
+    ],
+    "solution": "import java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        BlockingQueue<Integer> q = new ArrayBlockingQueue<>(2);\n        int[] sum = new int[1];\n        Thread consumer = new Thread(() -> {\n            try {\n                int v;\n                while ((v = q.take()) != -1) sum[0] += v;\n            } catch (InterruptedException e) {\n                Thread.currentThread().interrupt();\n            }\n        });\n        consumer.start();\n        for (int i = 1; i <= 100; i++) q.put(i);\n        q.put(-1);\n        consumer.join();\n        System.out.println(\"sum=\" + sum[0]);\n    }\n}\n",
+    "expectedOutput": "sum=5050\n"
+  },
+  {
+    "id": "conc-08",
+    "track": "concurrency",
+    "level": "intermediate",
+    "topic": "Concurrent collections",
+    "title": "Atomic word counts with ConcurrentHashMap",
+    "kind": "blanks",
+    "prompt": "Several threads count words into a shared map. Fill the gaps so every update is atomic.",
+    "explanation": "merge(key, 1, Integer::sum) performs the get-add-put atomically for that key, so no counts are lost. A get followed by put would race. ConcurrentHashMap locks per bin rather than the whole map, so writers to different keys rarely contend. This mirrors MongoDB's document-level concurrency: writers to different documents proceed in parallel, while `$inc` on one document is atomic.",
+    "code": "ConcurrentHashMap<String, Integer> counts =\n        new [[1]]<>();\nfor (String w : words) {\n    pool.submit(() -> counts.[[2]](w, 1, [[3]]));\n}",
+    "blanks": [
+      {
+        "options": [
+          "HashMap",
+          "ConcurrentHashMap",
+          "TreeMap",
+          "Hashtable"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "put",
+          "putIfAbsent",
+          "merge",
+          "replace"
+        ],
+        "answer": 2
+      },
+      {
+        "options": [
+          "Integer::sum",
+          "Integer::max",
+          "Math::abs"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.util.*;\nimport java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        List<String> words = new ArrayList<>();\n        for (int i = 0; i < 300; i++) words.add(i % 3 == 0 ? \"mongo\" : \"db\");\n        ExecutorService pool = Executors.newFixedThreadPool(4);\nConcurrentHashMap<String, Integer> counts =\n        new ConcurrentHashMap<>();\nfor (String w : words) {\n    pool.submit(() -> counts.merge(w, 1, Integer::sum));\n}\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        System.out.println(new TreeMap<>(counts));\n    }\n}\n",
+    "expectedOutput": "{db=200, mongo=100}\n"
+  },
+  {
+    "id": "conc-09",
+    "track": "concurrency",
+    "level": "intermediate",
+    "topic": "Lazy init",
+    "title": "Thread-safe lazy singleton: the holder idiom",
+    "kind": "blanks",
+    "prompt": "Make the expensive Config load lazily and exactly once, without any explicit locking.",
+    "explanation": "The JVM initialises a class at most once, under its own lock, the first time it is used. Putting the instance in a nested static Holder class means it is created only when get() first touches Holder. Class initialisation also publishes the object safely to every thread. This avoids the double-checked-locking pitfalls (which need volatile) and costs nothing after the first call.",
+    "code": "class Config {\n    static int loads = 0;\n    private Config() { loads++; }\n    private static class [[1]] {\n        static final Config INSTANCE = new [[2]]();\n    }\n    static Config get() { return Holder.[[3]]; }\n}",
+    "blanks": [
+      {
+        "options": [
+          "Holder",
+          "Main",
+          "Config",
+          "Lazy"
+        ],
+        "answer": 0
+      },
+      {
+        "options": [
+          "Holder",
+          "Config",
+          "Object"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "get()",
+          "INSTANCE",
+          "loads",
+          "class"
+        ],
+        "answer": 1
+      }
+    ],
+    "solution": "import java.util.concurrent.*;\n\nclass Config {\n    static int loads = 0;\n    private Config() { loads++; }\n    private static class Holder {\n        static final Config INSTANCE = new Config();\n    }\n    static Config get() { return Holder.INSTANCE; }\n}\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        ExecutorService pool = Executors.newFixedThreadPool(8);\n        for (int i = 0; i < 100; i++) pool.submit(Config::get);\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        System.out.println(\"loads=\" + Config.loads);\n        System.out.println(Config.get() == Config.get());\n    }\n}\n",
+    "expectedOutput": "loads=1\ntrue\n"
+  },
+  {
+    "id": "conc-10",
+    "track": "concurrency",
+    "level": "intermediate",
+    "topic": "Executors",
+    "title": "Raw threads vs ExecutorService",
+    "kind": "theory",
+    "prompt": "Explain why production code uses executors instead of creating threads directly.",
+    "explanation": "Executors separate task submission from execution policy, reuse threads, and bound resources. They return Futures for results and errors, and support orderly shutdown. Tuning pool size against CPU or I/O load is a key design choice. The MongoDB Java driver internally uses bounded pools and background executors for monitoring servers rather than spawning a thread per operation.",
+    "question": "Why would you use an ExecutorService instead of `new Thread(...)` per task in a server, and how do you size the pool?",
+    "keyPoints": [
+      "Thread creation is expensive; pools reuse threads",
+      "Bounding threads prevents resource exhaustion under load",
+      "Futures carry results and exceptions back to the caller",
+      "Decouples task submission from execution policy (queueing, rejection)",
+      "Lifecycle: shutdown/awaitTermination for graceful stop",
+      "Sizing: about cores for CPU-bound work, more for I/O-bound (cores * (1 + wait/compute))"
+    ],
+    "modelAnswer": "Creating a thread per task is costly and unbounded: a traffic spike can create thousands of threads and exhaust memory or the scheduler. An ExecutorService keeps a pool of reusable workers fed from a queue, so you control concurrency, queue length, and what happens on overload via a rejection policy. submit() returns a Future, which carries back the result or exception, something a raw Thread cannot do cleanly. It also gives a lifecycle: shutdown() and awaitTermination() let in-flight work finish. For CPU-bound work you size the pool near the number of cores; for I/O-bound work, like waiting on MongoDB round trips, you use more threads, roughly cores * (1 + wait time / compute time). Java 21 virtual threads change this sizing story for blocking I/O.",
+    "hint": "Think about cost, bounding, results/errors, and lifecycle."
+  },
+  {
+    "id": "conc-11",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Conditions",
+    "title": "Bounded buffer with ReentrantLock and Condition",
+    "kind": "parsons",
+    "prompt": "Implement put() for a bounded buffer: wait on `notFull` while the buffer is full, then add and signal `notEmpty`.",
+    "explanation": "A ReentrantLock can have several Condition objects, so producers and consumers wait in separate queues and signal only the side that can make progress. await() releases the lock while waiting and re-acquires it before returning, so the while loop re-checks the condition safely. unlock() belongs in finally so an exception never leaves the lock held. This is essentially how ArrayBlockingQueue is built.",
+    "lines": [
+      "    void put(int x) throws InterruptedException {",
+      "        lock.lock();",
+      "        try {",
+      "            while (items.size() == cap) notFull.await();",
+      "            items.addLast(x);",
+      "            notEmpty.signal();",
+      "        } finally {",
+      "            lock.unlock();",
+      "        }",
+      "    }"
+    ],
+    "distractors": [
+      "            if (items.size() == cap) notFull.await();",
+      "            notFull.signal();"
+    ],
+    "solution": "import java.util.*;\nimport java.util.concurrent.locks.*;\n\nclass Buffer {\n    private final Deque<Integer> items = new ArrayDeque<>();\n    private final int cap = 2;\n    private final ReentrantLock lock = new ReentrantLock();\n    private final Condition notFull = lock.newCondition();\n    private final Condition notEmpty = lock.newCondition();\n    void put(int x) throws InterruptedException {\n        lock.lock();\n        try {\n            while (items.size() == cap) notFull.await();\n            items.addLast(x);\n            notEmpty.signal();\n        } finally {\n            lock.unlock();\n        }\n    }\n    int take() throws InterruptedException {\n        lock.lock();\n        try {\n            while (items.isEmpty()) notEmpty.await();\n            int x = items.removeFirst();\n            notFull.signal();\n            return x;\n        } finally {\n            lock.unlock();\n        }\n    }\n}\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        Buffer b = new Buffer();\n        Thread p = new Thread(() -> {\n            try { for (int i = 1; i <= 50; i++) b.put(i); } catch (InterruptedException e) { }\n        });\n        p.start();\n        long sum = 0;\n        for (int i = 0; i < 50; i++) sum += b.take();\n        p.join();\n        System.out.println(\"sum=\" + sum);\n    }\n}\n",
+    "expectedOutput": "sum=1275\n"
+  },
+  {
+    "id": "conc-12",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Semaphore",
+    "title": "Cap concurrent connections with a Semaphore",
+    "kind": "parsons",
+    "prompt": "Limit a pool to 3 concurrent checkouts: acquire a permit before using a connection and always release it.",
+    "explanation": "A Semaphore with N permits lets at most N threads into the guarded section; the rest block in acquire(). Releasing in finally guarantees a permit is returned even if the query throws, otherwise the pool slowly leaks capacity until everything hangs. The MongoDB Java driver enforces maxPoolSize the same way: callers wait (up to maxWaitTime / timeoutMS) for a connection permit. The demo tracks the high-water mark to prove the cap is never exceeded.",
+    "lines": [
+      "    static void query(Semaphore permits) throws InterruptedException {",
+      "        permits.acquire();",
+      "        try {",
+      "            int now = inUse.incrementAndGet();",
+      "            maxSeen.accumulateAndGet(now, Math::max);",
+      "            Thread.sleep(5);",
+      "            inUse.decrementAndGet();",
+      "        } finally {",
+      "            permits.release();",
+      "        }",
+      "    }"
+    ],
+    "distractors": [
+      "        permits.release();"
+    ],
+    "solution": "import java.util.concurrent.*;\nimport java.util.concurrent.atomic.*;\n\npublic class Main {\n    static final AtomicInteger inUse = new AtomicInteger();\n    static final AtomicInteger maxSeen = new AtomicInteger();\n    static void query(Semaphore permits) throws InterruptedException {\n        permits.acquire();\n        try {\n            int now = inUse.incrementAndGet();\n            maxSeen.accumulateAndGet(now, Math::max);\n            Thread.sleep(5);\n            inUse.decrementAndGet();\n        } finally {\n            permits.release();\n        }\n    }\n    public static void main(String[] args) throws Exception {\n        Semaphore permits = new Semaphore(3);\n        ExecutorService pool = Executors.newFixedThreadPool(10);\n        for (int i = 0; i < 40; i++) pool.submit(() -> { query(permits); return null; });\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        System.out.println(\"max concurrent <= 3: \" + (maxSeen.get() <= 3));\n    }\n}\n",
+    "expectedOutput": "max concurrent <= 3: true\n"
+  },
+  {
+    "id": "conc-13",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Read-write locks",
+    "title": "A read-mostly cache with ReadWriteLock",
+    "kind": "blanks",
+    "prompt": "Many threads read a routing table and rarely update it. Fill the gaps to allow parallel reads but exclusive writes.",
+    "explanation": "A ReentrantReadWriteLock lets any number of readers hold the read lock together, while the write lock is exclusive of both readers and writers. This pays off when reads vastly outnumber writes, such as a cached shard routing table refreshed occasionally. Every lock() must be paired with unlock() in finally. For extremely hot reads, StampedLock's optimistic reads or copy-on-write snapshots can avoid even the read-lock cost.",
+    "code": "private final ReadWriteLock rw =\n        new [[1]]();\n\nString route(String key) {\n    rw.[[2]]().lock();\n    try { return table.get(key); }\n    finally { rw.readLock().unlock(); }\n}\n\nvoid update(String key, String shard) {\n    rw.[[3]]().lock();\n    try { table.put(key, shard); }\n    finally { rw.writeLock().unlock(); }\n}",
+    "blanks": [
+      {
+        "options": [
+          "ReentrantLock",
+          "ReentrantReadWriteLock",
+          "StampedLock",
+          "Semaphore"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "writeLock",
+          "readLock",
+          "lock",
+          "tryLock"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "readLock",
+          "writeLock",
+          "newCondition"
+        ],
+        "answer": 1
+      }
+    ],
+    "solution": "import java.util.*;\nimport java.util.concurrent.*;\nimport java.util.concurrent.locks.*;\n\nclass Router {\n    private final Map<String, String> table = new HashMap<>();\nprivate final ReadWriteLock rw =\n        new ReentrantReadWriteLock();\n\nString route(String key) {\n    rw.readLock().lock();\n    try { return table.get(key); }\n    finally { rw.readLock().unlock(); }\n}\n\nvoid update(String key, String shard) {\n    rw.writeLock().lock();\n    try { table.put(key, shard); }\n    finally { rw.writeLock().unlock(); }\n}\n}\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        Router r = new Router();\n        r.update(\"users\", \"shardA\");\n        ExecutorService pool = Executors.newFixedThreadPool(4);\n        List<Future<String>> fs = new ArrayList<>();\n        for (int i = 0; i < 4; i++) fs.add(pool.submit(() -> r.route(\"users\")));\n        r.update(\"orders\", \"shardB\");\n        for (Future<String> f : fs) System.out.println(f.get());\n        System.out.println(r.route(\"orders\"));\n        pool.shutdown();\n    }\n}\n",
+    "expectedOutput": "shardA\nshardA\nshardA\nshardA\nshardB\n"
+  },
+  {
+    "id": "conc-14",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Futures",
+    "title": "Fan out with invokeAll",
+    "kind": "blanks",
+    "prompt": "Submit one count task per shard, wait for them all, and add up the results.",
+    "explanation": "invokeAll submits every Callable and blocks until all complete, returning Futures in the same order as the input. Future.get() then returns each result or rethrows the task's exception wrapped in ExecutionException. This is the scatter-gather pattern a router uses to run a count across shards. invokeAny is the opposite: it returns the first successful result and cancels the rest.",
+    "code": "List<Callable<Integer>> tasks = new ArrayList<>();\nfor (int s = 0; s < 4; s++) {\n    final int shard = s;\n    tasks.add(() -> (shard + 1) * 100);\n}\nList<[[1]]<Integer>> results = pool.[[2]](tasks);\nint total = 0;\nfor (Future<Integer> f : results) total += f.[[3]]();\nSystem.out.println(\"count=\" + total);",
+    "blanks": [
+      {
+        "options": [
+          "Callable",
+          "Future",
+          "Runnable",
+          "Thread"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "invokeAny",
+          "submit",
+          "invokeAll",
+          "execute"
+        ],
+        "answer": 2
+      },
+      {
+        "options": [
+          "get",
+          "join",
+          "call",
+          "isDone"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.util.*;\nimport java.util.concurrent.*;\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        ExecutorService pool = Executors.newFixedThreadPool(4);\nList<Callable<Integer>> tasks = new ArrayList<>();\nfor (int s = 0; s < 4; s++) {\n    final int shard = s;\n    tasks.add(() -> (shard + 1) * 100);\n}\nList<Future<Integer>> results = pool.invokeAll(tasks);\nint total = 0;\nfor (Future<Integer> f : results) total += f.get();\nSystem.out.println(\"count=\" + total);\n        pool.shutdown();\n    }\n}\n",
+    "expectedOutput": "count=1000\n"
+  },
+  {
+    "id": "conc-15",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Deadlock",
+    "title": "Avoid deadlock by ordering locks",
+    "kind": "parsons",
+    "prompt": "Transfer between two accounts without deadlock: always lock the account with the smaller id first.",
+    "explanation": "Deadlock needs a cycle in the wait-for graph; if every thread acquires locks in one global order, no cycle can form. Here transfer(a,b) and transfer(b,a) both lock the lower id first, so they serialise instead of deadlocking. Other options are tryLock with timeouts or a single coarse lock. Databases face the same problem: MongoDB multi-document transactions detect write conflicts and abort one side rather than wait forever.",
+    "lines": [
+      "    static void transfer(Account from, Account to, int amt) {",
+      "        Account first = from.id < to.id ? from : to;",
+      "        Account second = from.id < to.id ? to : from;",
+      "        synchronized (first) {",
+      "            synchronized (second) {",
+      "                from.balance -= amt;",
+      "                to.balance += amt;",
+      "            }",
+      "        }",
+      "    }"
+    ],
+    "distractors": [
+      "        synchronized (from) {"
+    ],
+    "solution": "import java.util.concurrent.*;\n\nclass Account {\n    final int id; int balance;\n    Account(int id, int balance) { this.id = id; this.balance = balance; }\n}\n\npublic class Main {\n    static void transfer(Account from, Account to, int amt) {\n        Account first = from.id < to.id ? from : to;\n        Account second = from.id < to.id ? to : from;\n        synchronized (first) {\n            synchronized (second) {\n                from.balance -= amt;\n                to.balance += amt;\n            }\n        }\n    }\n    public static void main(String[] args) throws Exception {\n        Account a = new Account(1, 1000), b = new Account(2, 1000);\n        ExecutorService pool = Executors.newFixedThreadPool(2);\n        pool.submit(() -> { for (int i = 0; i < 10000; i++) transfer(a, b, 1); });\n        pool.submit(() -> { for (int i = 0; i < 10000; i++) transfer(b, a, 2); });\n        pool.shutdown();\n        pool.awaitTermination(10, TimeUnit.SECONDS);\n        System.out.println(\"a=\" + a.balance + \" b=\" + b.balance + \" total=\" + (a.balance + b.balance));\n    }\n}\n",
+    "expectedOutput": "a=11000 b=-9000 total=2000\n"
+  },
+  {
+    "id": "conc-16",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Thread confinement",
+    "title": "Per-thread formatters with ThreadLocal",
+    "kind": "blanks",
+    "prompt": "SimpleDateFormat is not thread-safe. Give each pool thread its own instance instead of sharing one.",
+    "explanation": "ThreadLocal.withInitial gives each thread a lazily created private copy, so there is no shared mutable state and no locking. This is thread confinement: data that is never shared needs no synchronisation. In pools, threads are reused, so remove() should be called when a value holds request-specific state, or it leaks into the next task. With virtual threads, prefer passing values explicitly or using scoped values because there may be millions of threads.",
+    "code": "static final ThreadLocal<SimpleDateFormat> FMT =\n        ThreadLocal.[[1]](() ->\n            new SimpleDateFormat(\"yyyy-MM-dd\"));\n\nstatic String format(Date d) {\n    return FMT.[[2]]().format(d);\n}",
+    "blanks": [
+      {
+        "options": [
+          "of",
+          "withInitial",
+          "newInstance",
+          "create"
+        ],
+        "answer": 1
+      },
+      {
+        "options": [
+          "get",
+          "set",
+          "remove",
+          "initialValue"
+        ],
+        "answer": 0
+      }
+    ],
+    "solution": "import java.text.*;\nimport java.util.*;\nimport java.util.concurrent.*;\n\npublic class Main {\nstatic final ThreadLocal<SimpleDateFormat> FMT =\n        ThreadLocal.withInitial(() ->\n            new SimpleDateFormat(\"yyyy-MM-dd\"));\n\nstatic String format(Date d) {\n    return FMT.get().format(d);\n}\n    public static void main(String[] args) throws Exception {\n        TimeZone.setDefault(TimeZone.getTimeZone(\"UTC\"));\n        ExecutorService pool = Executors.newFixedThreadPool(4);\n        List<Future<String>> fs = new ArrayList<>();\n        for (int i = 0; i < 8; i++) {\n            final long day = i;\n            fs.add(pool.submit(() -> format(new Date(day * 86_400_000L))));\n        }\n        for (Future<String> f : fs) System.out.println(f.get());\n        pool.shutdown();\n    }\n}\n",
+    "expectedOutput": "1970-01-01\n1970-01-02\n1970-01-03\n1970-01-04\n1970-01-05\n1970-01-06\n1970-01-07\n1970-01-08\n"
+  },
+  {
+    "id": "conc-17",
+    "track": "concurrency",
+    "level": "expert",
+    "topic": "CompletableFuture",
+    "title": "Compose async calls with CompletableFuture",
+    "kind": "parsons",
+    "prompt": "Look up a user, then (dependently) fetch their orders, fetch a promo in parallel, combine both, and fall back on failure.",
+    "explanation": "thenCompose chains a call that itself returns a future, flattening it instead of producing a nested future. allOf waits for independent futures running in parallel, and join() is safe afterwards because they are complete. exceptionally converts a failure anywhere upstream into a fallback value. This is the shape of reactive MongoDB driver code: dependent queries chained, independent ones run concurrently.",
+    "lines": [
+      "        CompletableFuture<Integer> orders = CompletableFuture",
+      "            .supplyAsync(() -> lookupUser(\"u1\"), pool)",
+      "            .thenCompose(id -> CompletableFuture.supplyAsync(() -> countOrders(id), pool));",
+      "        CompletableFuture<Integer> promo = CompletableFuture.supplyAsync(() -> 5, pool);",
+      "        String summary = CompletableFuture.allOf(orders, promo)",
+      "            .thenApply(v -> \"orders=\" + orders.join() + \" promo=\" + promo.join())",
+      "            .exceptionally(ex -> \"fallback\")",
+      "            .join();"
+    ],
+    "distractors": [
+      "            .thenApply(id -> CompletableFuture.supplyAsync(() -> countOrders(id), pool));"
+    ],
+    "solution": "import java.util.concurrent.*;\n\npublic class Main {\n    static int lookupUser(String name) { return 42; }\n    static int countOrders(int id) { return id / 2; }\n    public static void main(String[] args) {\n        ExecutorService pool = Executors.newFixedThreadPool(4);\n        CompletableFuture<Integer> orders = CompletableFuture\n            .supplyAsync(() -> lookupUser(\"u1\"), pool)\n            .thenCompose(id -> CompletableFuture.supplyAsync(() -> countOrders(id), pool));\n        CompletableFuture<Integer> promo = CompletableFuture.supplyAsync(() -> 5, pool);\n        String summary = CompletableFuture.allOf(orders, promo)\n            .thenApply(v -> \"orders=\" + orders.join() + \" promo=\" + promo.join())\n            .exceptionally(ex -> \"fallback\")\n            .join();\n        System.out.println(summary);\n        String failed = CompletableFuture.<String>supplyAsync(() -> { throw new IllegalStateException(); }, pool)\n            .exceptionally(ex -> \"fallback\").join();\n        System.out.println(failed);\n        pool.shutdown();\n    }\n}\n",
+    "expectedOutput": "orders=21 promo=5\nfallback\n"
+  },
+  {
+    "id": "conc-18",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Java memory model",
+    "title": "Happens-before and the Java Memory Model",
+    "kind": "theory",
+    "prompt": "Explain what the JMM guarantees and how happens-before edges are created.",
+    "explanation": "The JMM defines when a write by one thread is guaranteed visible to another. Without a happens-before edge, compilers and CPUs may reorder or cache, and a reader can see stale or partially constructed state. Locks, volatile, thread start/join, and final fields create the edges. Safe publication is the practical consequence.",
+    "question": "What is the happens-before relation in the Java Memory Model, which actions create it, and what goes wrong without it?",
+    "keyPoints": [
+      "Without synchronisation, threads may see stale values due to caching and reordering",
+      "Happens-before means writes before A are visible to actions after B",
+      "Unlock of a monitor happens-before subsequent lock of the same monitor",
+      "volatile write happens-before subsequent volatile read of that field",
+      "Thread.start and Thread.join (and executor submit/Future.get) create edges",
+      "final fields are safely published after construction; data races vs race conditions"
+    ],
+    "modelAnswer": "The Java Memory Model specifies which values a read may see when threads share memory; compilers and CPUs are allowed to reorder and cache unless a happens-before relation forbids it. If action A happens-before B, then everything A's thread did before A is visible to B's thread after B. Edges come from program order within a thread, unlocking a monitor before a later lock of the same monitor, a volatile write before a later read of the same field, Thread.start() before the started thread's actions, and a thread's actions before another thread returns from join(). Concurrency utilities extend this: submitting to an executor happens-before the task runs, and the task completes before Future.get() returns. Final fields are guaranteed visible once the constructor finishes, if this does not escape. Without these edges you get data races: a reader may see a stale flag, or a reference to an object whose fields are still default values, as in broken double-checked locking.",
+    "hint": "Think about locks, volatile, start/join and what \"safe publication\" means."
+  },
+  {
+    "id": "conc-19",
+    "track": "concurrency",
+    "level": "advanced",
+    "topic": "Synchronizers",
+    "title": "CountDownLatch vs CyclicBarrier vs Semaphore",
+    "kind": "theory",
+    "prompt": "Compare the three classic synchronizers and when to use each.",
+    "explanation": "Each synchronizer answers a different question: wait for events, wait for peers, or limit access. Picking the right one keeps coordination code tiny and correct. The MongoDB Java driver's connection pool is a semaphore-like limit on checked-out connections, with a bounded wait time.",
+    "question": "Compare CountDownLatch, CyclicBarrier and Semaphore. Give a concrete use case for each, including one from a database driver.",
+    "keyPoints": [
+      "CountDownLatch: one or more threads wait for N events; one-shot, cannot reset",
+      "CyclicBarrier: N parties wait for each other, reusable across phases, optional barrier action",
+      "Semaphore: limits concurrent access with N permits; acquire/release",
+      "Latch counted down by any thread; barrier parties themselves wait",
+      "Use case: driver connection pool maxPoolSize behaves like a semaphore with wait timeout",
+      "Release in finally to avoid leaking permits; barrier breaks if a party is interrupted"
+    ],
+    "modelAnswer": "A CountDownLatch is a one-shot gate: it starts at N, any thread can count it down, and waiters proceed once it hits zero; it suits \"start once all services are up\" or gathering shard responses. A CyclicBarrier makes a fixed set of N threads wait for one another at a rendezvous point, and it resets automatically so it can be reused for each phase of an iterative computation; it can run a barrier action when the last party arrives, and it breaks for everyone if one party is interrupted or times out. A Semaphore holds N permits and limits how many threads can be inside a section at once, so it is a natural fit for resource pools. The MongoDB Java driver's connection pool behaves this way: at most maxPoolSize connections are checked out, and further callers wait up to a timeout before failing. With any of them, release or count down in finally to avoid hangs and leaked capacity.",
+    "hint": "One waits for events, one waits for peers, one limits access."
+  },
+  {
+    "id": "conc-20",
+    "track": "concurrency",
+    "level": "expert",
+    "topic": "Lock-free",
+    "title": "Lock-free vs blocking algorithms",
+    "kind": "theory",
+    "prompt": "Discuss the trade-offs between CAS-based lock-free structures and lock-based ones.",
+    "explanation": "Lock-free code gives progress guarantees and avoids context switches, but it is harder to write and can waste CPU under heavy contention. Locks are simpler and can be fairer. WiredTiger mixes both: lock-free skip lists and hazard pointers for in-memory pages, optimistic concurrency with write conflicts for documents, and short latches for structural changes.",
+    "question": "Compare lock-free (CAS-based) and blocking (lock-based) concurrency. When is each better, and how does a storage engine like WiredTiger use these ideas?",
+    "keyPoints": [
+      "Lock-free: CAS retry loops, no thread can block others indefinitely (system-wide progress)",
+      "No context switches/priority inversion/deadlock, good at low-moderate contention",
+      "Under high contention, retries burn CPU; ABA problem; hard to design and verify",
+      "Locks: simpler reasoning, compound invariants over many fields, can park waiters",
+      "Mitigations: LongAdder/striping to reduce contention, backoff",
+      "WiredTiger: optimistic concurrency with write conflicts and retries, lock-free in-memory structures, short latches; document-level concurrency in MongoDB"
+    ],
+    "modelAnswer": "A lock-free algorithm updates shared state with atomic compare-and-set in a retry loop, so a stalled or descheduled thread can never stop others making progress; there is no deadlock, no priority inversion and no context switch on the fast path. Its costs are complexity, subtle bugs such as ABA, and wasted CPU when many threads keep failing their CAS under high contention, where striping like LongAdder or backoff helps. Blocking algorithms use locks, which are easier to reason about, protect invariants spanning several fields, and park waiting threads instead of spinning, which is better under heavy contention or long critical sections. WiredTiger, MongoDB's storage engine, leans optimistic: concurrent writers to different documents proceed in parallel, and two writers to the same document produce a write conflict that one side retries, rather than holding long locks. Internally it uses lock-free structures such as skip lists for in-memory updates and hazard pointers for page eviction, with short latches only around structural changes. The general rule is: optimistic and lock-free when conflicts are rare and operations short, locks when conflicts are common or the critical section is complex.",
+    "hint": "Think progress guarantees, contention, and what WiredTiger does on a write conflict."
+  },
+  {
+    "id": "conc-21",
+    "track": "concurrency",
+    "level": "expert",
+    "topic": "Virtual threads",
+    "title": "Java 21 virtual threads",
+    "kind": "theory",
+    "prompt": "Explain what virtual threads change for I/O-bound services and what pitfalls remain.",
+    "explanation": "Virtual threads make thread-per-request cheap again by multiplexing many virtual threads onto a few carrier threads, unmounting on blocking I/O. They do not make CPU work faster and do not remove the need to bound downstream resources such as a database connection pool. Pinning and ThreadLocal-heavy code are the main pitfalls.",
+    "question": "What are Java 21 virtual threads, how do they differ from platform threads, and what should you watch out for when using them with a database driver like MongoDB's?",
+    "keyPoints": [
+      "Lightweight threads scheduled by the JVM onto a small pool of carrier (platform) threads",
+      "Blocking I/O unmounts the virtual thread, freeing the carrier; millions are possible",
+      "Simple blocking thread-per-request code with async-like scalability; do not pool them",
+      "No speedup for CPU-bound work",
+      "Pinning: synchronized blocks / native frames could pin the carrier (Java 21); prefer ReentrantLock",
+      "Still need to limit downstream concurrency, e.g. connection pool size or a Semaphore",
+      "ThreadLocal caches become expensive with many threads"
+    ],
+    "modelAnswer": "Virtual threads are lightweight threads managed by the JVM rather than the OS: many virtual threads are multiplexed onto a small ForkJoinPool of carrier platform threads. When a virtual thread blocks on I/O, it unmounts and the carrier runs another one, so you can write simple blocking, thread-per-request code and still handle hundreds of thousands of concurrent requests. They are cheap, so you create one per task with Executors.newVirtualThreadPerTaskExecutor() rather than pooling them. They do not speed up CPU-bound work, which is still limited by cores. In Java 21, blocking inside synchronized or native code pins the carrier, so hot paths should use ReentrantLock (JDK 24 removed most synchronized pinning). Crucially, cheap threads do not mean cheap downstream resources: if 100k virtual threads all query MongoDB, they will queue on the driver's connection pool (maxPoolSize), so you still bound concurrency with the pool or a Semaphore. Heavy ThreadLocal caching also scales badly with millions of threads.",
+    "hint": "Carrier threads, unmounting on I/O, pinning, and the connection pool still being the limit."
+  },
+  {
+    "id": "conc-22",
+    "track": "concurrency",
+    "level": "expert",
+    "topic": "Database concurrency",
+    "title": "Document-level concurrency in MongoDB",
+    "kind": "theory",
+    "prompt": "Explain how MongoDB handles concurrent writes to the same and different documents.",
+    "explanation": "MongoDB with WiredTiger uses document-level concurrency control: intent locks at higher levels and optimistic MVCC at the document level. Single-document updates are atomic; same-document conflicts are retried. Application patterns like conditional updates and $inc map directly onto the CAS ideas from Java.",
+    "question": "How does MongoDB (WiredTiger) handle many clients writing concurrently? Contrast writes to different documents with writes to the same document, and say how an application should do a safe read-modify-write.",
+    "keyPoints": [
+      "Document-level concurrency: writes to different documents proceed in parallel",
+      "Intent locks (IX/IS) at database/collection level; exclusive only for DDL-like operations",
+      "WiredTiger MVCC with snapshots: readers do not block writers",
+      "Same-document concurrent writes cause a write conflict; one is retried internally",
+      "Single-document operations are atomic; use $inc or findOneAndUpdate rather than read-then-write",
+      "Optimistic concurrency in apps: version field in the update filter (like CAS)",
+      "Multi-document transactions for cross-document invariants, with TransientTransactionError retries"
+    ],
+    "modelAnswer": "MongoDB takes intent locks at the global, database and collection levels, so ordinary reads and writes coexist, and pushes real concurrency control down to WiredTiger at the document level. WiredTiger uses multi-version concurrency control: readers work from a snapshot and are not blocked by writers, and writers to different documents proceed in parallel. When two operations modify the same document concurrently, WiredTiger detects a write conflict and MongoDB transparently retries one of them, which is optimistic concurrency rather than long-held locks. Every single-document write is atomic, so the safe way to do read-modify-write is to express it as one update, such as `$inc` or `findOneAndUpdate`, rather than reading, changing in the app and writing back. When the app must decide in code, it can use a version field in the update filter, which acts like compareAndSet: if the version changed, zero documents match and you retry. For invariants spanning several documents, multi-document transactions are available, and the client retries on TransientTransactionError.",
+    "hint": "Think intent locks, MVCC snapshots, write conflicts, and atomic single-document updates."
+  }
+]

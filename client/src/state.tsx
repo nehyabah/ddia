@@ -41,6 +41,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Active time: ping every 30 s while the tab is visible and the user interacted in the last minute.
+  useEffect(() => {
+    if (!profile) return;
+    let last = Date.now();
+    const mark = () => { last = Date.now(); };
+    const evs = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
+    evs.forEach((e) => window.addEventListener(e, mark, { passive: true }));
+    const h = setInterval(() => {
+      if (document.visibilityState === "visible" && Date.now() - last < 60_000) api.post("/activity/ping").catch(() => {});
+    }, 30_000);
+    return () => { clearInterval(h); evs.forEach((e) => window.removeEventListener(e, mark)); };
+  }, [!!profile]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     refresh();
     const onUnauth = () => setProfile(null);

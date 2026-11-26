@@ -6,6 +6,8 @@ import { db } from "../db.js";
 import { BADGES, addXP, localDay } from "../progress.js";
 import { HttpError, int, str } from "../http.js";
 import type { Challenge } from "../javaContent.js";
+import { PASS_SCORE, getPuzzle, markSolved } from "./puzzles.js";
+import { assertUnlocked } from "./study.js";
 
 export const ai = Router();
 
@@ -49,6 +51,7 @@ and do not reward length or buzzwords. Point out factual errors explicitly. Keep
 or off-topic, score 0 and say so.`;
 
 /** Reference material is always loaded server-side so the client can't alter what it's graded against. */
+let userIdForLock: number | null = null;
 function reference(kind: string, id: string): { question: string; reference: string } {
   if (kind === "card") {
     const r = db.prepare("SELECT k.title, k.bullets, c.title AS chapter FROM cards k JOIN chapters c ON c.id = k.chapter_id WHERE k.id = ?")
@@ -60,8 +63,9 @@ function reference(kind: string, id: string): { question: string; reference: str
     };
   }
   if (kind === "drill") {
-    const r = db.prepare("SELECT prompt, points FROM drills WHERE id = ?").get(int(id, "id")) as { prompt: string; points: string } | undefined;
+    const r = db.prepare("SELECT prompt, points, chapter_id FROM drills WHERE id = ?").get(int(id, "id")) as { prompt: string; points: string; chapter_id: number } | undefined;
     if (!r) throw new HttpError(404, "No such drill");
+    if (userIdForLock != null) assertUnlocked(userIdForLock, r.chapter_id);
     return { question: r.prompt, reference: "Key points a strong answer covers:\n" + (JSON.parse(r.points) as string[]).map((p) => `- ${p}`).join("\n") };
   }
   if (kind === "java") {
@@ -73,7 +77,12 @@ function reference(kind: string, id: string): { question: string; reference: str
       reference: `Root cause: ${c.options[c.answer]}\nExplanation: ${c.explanation}\nFix: ${c.fixNote}\nHow to catch it: ${c.debugTip}`,
     };
   }
-  throw new HttpError(400, "kind must be card, drill or java");
+  if (kind === "puzzle") {
+    const p = getPuzzle(id);
+    if (p.kind !== "theory") throw new HttpError(400, "Only theory puzzles are graded in writing");
+    return { question: `${p.prompt}\n${p.question}`, reference: "Key points a strong answer covers:\n" + (p.keyPoints ?? []).map((k) => `- ${k}`).join("\n") + `\n\nModel answer: ${p.modelAnswer}` };
+  }
+  throw new HttpError(400, "kind must be card, drill, java or puzzle");
 }
 
 ai.get("/ai/status", (req, res) => {
@@ -90,7 +99,9 @@ ai.post("/ai/grade", async (req, res) => {
   if (answer.length < 15) throw new HttpError(400, "Write a bit more before asking for a grade");
   const used = (db.prepare("SELECT COUNT(*) AS n FROM ai_grades WHERE user_id = ? AND day = ?").get(u, localDay()) as { n: number }).n;
   if (used >= DAILY_LIMIT) throw new HttpError(429, `Daily AI grading limit reached (${DAILY_LIMIT}). It resets tomorrow.`);
+  userIdForLock = u;
   const ref = reference(kind, id);
+  userIdForLock = null;
 
   let result: GradeResult;
   try {
@@ -121,9 +132,15 @@ ai.post("/ai/grade", async (req, res) => {
   result.score = Math.max(0, Math.min(10, Math.round(result.score)));
   db.prepare("INSERT INTO ai_grades (user_id, kind, ref_id, answer, score, result, day, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .run(u, kind, id, answer, result.score, JSON.stringify(result), localDay(), Date.now());
-  const xp = result.score * 2;
+  let xp = result.score * 2;
   const badges = addXP(u, xp, `ai:${kind}`);
-  res.json({ ...result, xp, newBadges: badges.map((b) => ({ id: b, label: BADGES[b] ?? b })), used: used + 1, limit: DAILY_LIMIT });
+  const passed = result.score >= PASS_SCORE;
+  if (kind === "puzzle" && passed) {
+    const prior = (db.prepare("SELECT COUNT(*) AS n FROM ai_grades WHERE user_id = ? AND kind = 'puzzle' AND ref_id = ?").get(u, id) as { n: number }).n;
+    const r = markSolved(u, getPuzzle(id), prior <= 1, result.score);
+    xp += r.xp; badges.push(...r.badges);
+  }
+  res.json({ ...result, passed, passScore: PASS_SCORE, xp, newBadges: badges.map((b) => ({ id: b, label: BADGES[b] ?? b })), used: used + 1, limit: DAILY_LIMIT });
 });
 
 ai.get("/ai/history", (req, res) => {
@@ -131,4 +148,11 @@ ai.get("/ai/history", (req, res) => {
   const rows = db.prepare("SELECT answer, score, result, created_at FROM ai_grades WHERE user_id = ? AND kind = ? AND ref_id = ? ORDER BY id DESC LIMIT 5")
     .all(req.userId, kind, id) as { answer: string; score: number; result: string; created_at: number }[];
   res.json(rows.map((r) => ({ ...(JSON.parse(r.result) as GradeResult), answer: r.answer, score: r.score, createdAt: r.created_at })));
+});
+
+/** Best AI score so far for one item; drills and theory puzzles unlock "Next" at PASS_SCORE. */
+ai.get("/ai/best", (req, res) => {
+  const kind = String(req.query.kind ?? ""), id = String(req.query.id ?? "");
+  const r = db.prepare("SELECT MAX(score) AS best FROM ai_grades WHERE user_id = ? AND kind = ? AND ref_id = ?").get(req.userId, kind, id) as { best: number | null };
+  res.json({ best: r.best, passScore: PASS_SCORE, enabled: enabled(), passed: !enabled() || (r.best ?? 0) >= PASS_SCORE });
 });
