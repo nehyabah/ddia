@@ -1067,3 +1067,53 @@ body{letter-spacing:0}
 h1,h2,h3{letter-spacing:-.02em}
 .coach-orb{width:36px;height:36px;flex:none;object-fit:contain}
 .tile-stat .ic3{width:40px;height:40px;flex:none}@media (max-width:520px){.tile-stat .ic3{width:34px;height:34px}}
+
+/* ---------- lighter type: Poppins tops out at semi-bold ---------- */
+h1,h2,h3,h4,b,strong,.hero h2,.node .num,.tile-stat .v,.s2-num,.welcome h1,.mx-s,.cc-streak b,.readyhero .rh-v,.ringwrap .lab{font-weight:600}
+.w-avatar,.primary,.ghost{font-weight:500}
+.eyebrow,.w-date,.steplabel,.section-h{font-weight:600}
+
+/* ---------- welcome extras ---------- */
+.w-sub{margin:6px 0 0;color:var(--muted);font-size:.92rem;line-height:1.45}
+.w-emoji{display:inline-block;transform-origin:70% 70%}
+.w-emoji.wave{animation:wave 1.6s ease-in-out .3s 2}
+@keyframes wave{0%,100%{transform:rotate(0)}15%{transform:rotate(14deg)}30%{transform:rotate(-8deg)}45%{transform:rotate(14deg)}60%{transform:rotate(-4deg)}75%{transform:rotate(10deg)}}
+.welcome{align-items:flex-start}
+
+/* ---------- warm-up card ---------- */
+.warmup{margin:12px 0 4px;transition:border-color .3s}
+.warmup.is-ok{border-color:color-mix(in srgb,var(--teal) 45%,transparent)}
+.warmup.is-bad{border-color:color-mix(in srgb,var(--red) 35%,transparent)}
+.wu-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.wu-h .eyebrow{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.wu-count{font-size:.76rem;color:var(--muted)}
+.wu-run{color:var(--orange);animation:bump .4s ease}
+.wu-q{font-weight:500;margin:8px 0 10px;line-height:1.45}
+.wu-opts{display:grid;gap:6px}
+.wu-opt{text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--line2);background:color-mix(in srgb,var(--surface) 70%,transparent);font-size:.9rem;line-height:1.4;transition:transform .12s,background .2s,border-color .2s}
+.wu-opt:active:not(:disabled){transform:scale(.98)}
+.wu-opt.right{border-color:var(--teal);background:var(--tealSoft);animation:pop .35s ease}
+.wu-opt.wrong{border-color:var(--red);background:var(--redSoft);animation:shake .35s}
+.wu-opt.dim{opacity:.5}
+.wu-res{margin-top:10px;animation:pagein .3s ease}
+.wu-res p{margin:4px 0 6px;color:var(--muted)}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.03)}100%{transform:scale(1)}}
+
+/* ---------- welcome section (greeting + today's motivation) ---------- */
+.welcome{display:block;margin:4px 0 22px}
+.w-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 2px 14px}
+.w-hi{font-size:1.15rem;font-weight:600;letter-spacing:-.01em;margin-top:2px}
+.w-card{padding:20px}
+.w-card h1{margin:0;font-size:1.55rem;line-height:1.2;display:flex;align-items:center;gap:10px}
+.w-card .w-emoji{font-size:1.6rem}
+.w-card .w-sub{margin:8px 0 16px;font-size:.92rem}
+.w-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.w-stats span{display:grid;gap:0}
+.w-stats b{font-size:1.25rem;font-variant-numeric:tabular-nums}
+.w-stats small{font-size:.72rem;color:var(--muted)}
+.w-line{height:4px;border-radius:2px;background:var(--line);margin:14px 0 4px;overflow:hidden}
+.w-line i{display:block;height:100%;border-radius:2px;background:var(--accent);animation:s2-grow .8s cubic-bezier(.2,.8,.2,1)}
+.w-cta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px}
+.w-cta .primary{margin-top:6px}
+.w-cta .small{flex:1;min-width:140px}
+@media (max-width:420px){.w-card h1{font-size:1.35rem}.w-cta .primary{width:100%}}

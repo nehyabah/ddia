@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
 import { api, type ChapterSummary, type JavaOverview } from "../api";
 import { useLoad, useProfile } from "../state";
-import { Icon, Ring, type IconName } from "../components/ui";
+import { Icon, type IconName } from "../components/ui";
 import { Pic } from "../components/Art";
 import { ReadinessCard } from "./Readiness";
 import { HomePlan } from "./Prep";
 import { CommitCard } from "./Commitment";
+import { WarmUp, Welcome } from "./Momentum";
 
 const BADGE_ICON: Record<string, IconName> = {
   first: "check", combo5: "flame", combo10: "flame", perfect: "star", matcher: "puzzle", reader: "book",
@@ -13,10 +14,6 @@ const BADGE_ICON: Record<string, IconName> = {
   bughunter: "bug", eagle: "search", javaexpert: "code",
 };
 
-function greeting() {
-  const h = new Date().getHours();
-  return h < 5 ? "Burning the midnight oil" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-}
 
 export function Home() {
   const nav = useNavigate();
@@ -30,7 +27,6 @@ export function Home() {
   const book = chapters.filter((c) => !c.tag);
   const extra = chapters.filter((c) => c.tag);
   const next = chapters.find((c) => c.mastery < 80 && !c.locked);
-  const goalPct = Math.min(100, Math.round((profile.xpToday / profile.dailyGoal) * 100));
   const ddiaPct = Math.round(chapters.reduce((a, c) => a + c.mastery, 0) / chapters.length);
   const javaTotal = java ? java.levels.reduce((a, l) => a + l.count, 0) : 0;
   const javaPct = java && javaTotal ? Math.round(java.levels.reduce((a, l) => a + l.mastery * l.count, 0) / javaTotal) : 0;
@@ -45,8 +41,6 @@ export function Home() {
             to: `/chapter/${next.id}${next.cardsSeen < next.cardCount ? "/learn" : "/quiz"}`, sub: `Up next: ${next.title}` }
         : { label: "Hunt Java bugs", to: "/java/play", sub: "Every chapter is healthy. Time to sharpen your debugging." };
 
-  const goalLeft = Math.max(0, profile.dailyGoal - profile.xpToday);
-  const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 
   const node = (c: ChapterSummary) => {
     const cls = c.mastery >= 80 ? "up" : c.mastery > 0 ? "warn" : "";
@@ -77,30 +71,7 @@ export function Home() {
 
   return (
     <>
-      <header className="welcome">
-        <div>
-          <div className="w-date">{today}</div>
-          <h1>{greeting()}, {profile.user.username}</h1>
-        </div>
-        <Link to="/settings" className="w-avatar" aria-label="Your profile">{profile.user.username.slice(0, 1).toUpperCase()}</Link>
-      </header>
-      <section className="hero glass">
-        <div className="hero-art"><Pic name="target" plain /></div>
-        <div className="hero-main">
-          <h2>{goalPct >= 100 ? "Daily goal reached." : profile.xpToday === 0 ? "Pick up where you left off." : `${goalLeft} XP to today’s goal.`}</h2>
-          <p className="sub">{cta.sub}</p>
-          <div className="cta">
-            <button className="primary" onClick={() => nav(cta.to)}>{cta.label}<Icon name="arrow" /></button>
-            <button className="ghost" onClick={() => nav("/java/play")}><Icon name="bug" />Debug Java</button>
-          </div>
-        </div>
-        <div className="hero-goal" aria-label={`Today ${profile.xpToday} of ${profile.dailyGoal} XP`}>
-          <Ring value={goalPct} size={104} stroke={7}>
-            <span className="gv">{goalPct}<small>%</small></span>
-          </Ring>
-          <div className="gcap"><b>{profile.xpToday}</b> / {profile.dailyGoal} XP today</div>
-        </div>
-      </section>
+      <Welcome cta={cta} onGo={(to) => nav(to)} />
 
       <div className="tiles">
         <div className="tile-stat"><span className="ic3"><Pic name="fire" plain /></span><span><div className="v">{profile.streak}</div><div className="l">day streak</div></span></div>
@@ -109,6 +80,7 @@ export function Home() {
         <Link to="/java" className="tile-stat"><span className="ic3"><Pic name="computer" plain /></span><span><div className="v">{profile.javaDue}</div><div className="l">Java due</div></span></Link>
       </div>
 
+      <WarmUp />
       <CommitCard />
       <HomePlan />
       <ReadinessCard />

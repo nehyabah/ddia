@@ -187,3 +187,38 @@ plan.get("/mock", (req, res) => {
   const open = db.prepare("SELECT id, ends_at FROM mock_sessions WHERE user_id = ? AND finished_at IS NULL AND ends_at > ? ORDER BY id DESC LIMIT 1").get(req.userId, Date.now() - 3 * 3600000) as { id: number; ends_at: number } | undefined;
   res.json({ history: rows.map((r) => ({ id: r.id, startedAt: r.started_at, finishedAt: r.finished_at, total: r.total })), open: open ?? null });
 });
+
+/* ---------- warm-up: one quick question on Home to get going ---------- */
+import { schedule as srsSchedule } from "../progress.js";
+import { chapterLocks } from "./study.js";
+
+plan.get("/warmup", (req, res) => {
+  const u = req.userId!;
+  const locks = chapterLocks(u);
+  const open = [...locks.entries()].filter(([, l]) => !l.locked).map(([id]) => id);
+  if (!open.length) return res.json(null);
+  const inOpen = `q.chapter_id IN (${open.map(Number).join(",")})`;
+  const skip = String(req.query.skip ?? "").split(",").map(Number).filter(Boolean);
+  const notSkipped = skip.length ? ` AND q.id NOT IN (${skip.join(",")})` : "";
+  // due first, then never-seen, then anything in an unlocked chapter
+  const q = (db.prepare(`SELECT q.id, q.prompt, q.options, c.title chapter, c.tag, c.id cid FROM questions q JOIN chapters c ON c.id = q.chapter_id
+      JOIN question_srs s ON s.question_id = q.id AND s.user_id = ? WHERE ${inOpen} AND s.due_at <= ?${notSkipped} ORDER BY RANDOM() LIMIT 1`).get(u, Date.now())
+    ?? db.prepare(`SELECT q.id, q.prompt, q.options, c.title chapter, c.tag, c.id cid FROM questions q JOIN chapters c ON c.id = q.chapter_id
+      WHERE ${inOpen} AND q.boss = 0${notSkipped} AND NOT EXISTS (SELECT 1 FROM question_srs s WHERE s.user_id = ? AND s.question_id = q.id) ORDER BY RANDOM() LIMIT 1`).get(u)
+    ?? db.prepare(`SELECT q.id, q.prompt, q.options, c.title chapter, c.tag, c.id cid FROM questions q JOIN chapters c ON c.id = q.chapter_id WHERE ${inOpen}${notSkipped} ORDER BY RANDOM() LIMIT 1`).get()) as
+    { id: number; prompt: string; options: string; chapter: string; tag: string | null; cid: number } | undefined;
+  if (!q) return res.json(null);
+  const today = (db.prepare("SELECT COUNT(*) n FROM attempts WHERE user_id = ? AND day = ? AND mode = 'warmup'").get(u, localDay()) as { n: number }).n;
+  res.json({ id: q.id, prompt: q.prompt, options: JSON.parse(q.options), chapter: q.tag ?? `Ch ${q.cid}`, chapterTitle: q.chapter, answeredToday: today });
+});
+plan.post("/warmup/:id", (req, res) => {
+  const u = req.userId!;
+  const q = db.prepare("SELECT id, answer, explanation, chapter_id FROM questions WHERE id = ?").get(Number(req.params.id)) as { id: number; answer: number; explanation: string; chapter_id: number } | undefined;
+  if (!q) throw new HttpError(404, "No such question");
+  if (chapterLocks(u).get(q.chapter_id)?.locked) throw new HttpError(403, "That chapter is locked");
+  const correct = Number(req.body?.choice) === q.answer;
+  srsSchedule(u, q.id, correct, "warmup");
+  const xp = correct ? 5 : 1;
+  const badges = addXP(u, xp, "warmup");
+  res.json({ correct, answer: q.answer, explanation: q.explanation, xp, newBadges: badges.map((b) => ({ id: b, label: b })) });
+});
