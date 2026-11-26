@@ -128,9 +128,54 @@ function pickVoice(): SpeechSynthesisVoice | undefined {
   return pref.map((n) => vs.find((v) => v.name.includes(n))).find(Boolean) ?? vs.find((v) => v.localService) ?? vs[0];
 }
 /** Read text aloud (interviewer questions). Strips markdown/code marks so it sounds natural. */
+/* Natural voice (server, OpenAI) when configured; the phone's own voice otherwise. */
+let natural: boolean | null = null;
+let naturalP: Promise<boolean> | null = null;
+function naturalVoice(): Promise<boolean> {
+  if (natural != null) return Promise.resolve(natural);
+  naturalP ??= fetch("/api/tts/status", { credentials: "same-origin" }).then((r) => r.json()).then((d) => (natural = !!d.enabled)).catch(() => (natural = false));
+  return naturalP;
+}
+// One shared <audio> element, unlocked on the first tap so iOS lets it play later without a fresh gesture.
+let player: HTMLAudioElement | null = null;
+const audioUrls = new Map<string, string>();
+if (typeof window !== "undefined") {
+  const unlock = () => {
+    player ??= new Audio();
+    player.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+    player.play().catch(() => {});
+    window.removeEventListener("pointerdown", unlock);
+  };
+  window.addEventListener("pointerdown", unlock, { once: true });
+}
+
+/** Read text aloud (interviewer questions). Strips markdown/code marks so it sounds natural. */
 export function speak(text: string, onEnd?: () => void) {
-  if (!canSpeak || !voiceOn()) { onEnd?.(); return; }
+  if (!voiceOn()) { onEnd?.(); return; }
   const clean = text.replace(/```[\s\S]*?```/g, " (see the code on screen) ").replace(/[`*_#>]/g, "").replace(/\s+/g, " ").trim();
+  stopSpeaking();
+  naturalVoice().then(async (ok) => {
+    if (ok) {
+      try {
+        let url = audioUrls.get(clean);
+        if (!url) {
+          const r = await fetch("/api/tts", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: clean.slice(0, 2000) }) });
+          if (!r.ok) throw new Error(String(r.status));
+          url = URL.createObjectURL(await r.blob());
+          audioUrls.set(clean, url);
+        }
+        player ??= new Audio();
+        player.onended = () => onEnd?.();
+        player.src = url;
+        await player.play();
+        return;
+      } catch { /* fall back to the phone's voice */ }
+    }
+    browserSpeak(clean, onEnd);
+  });
+}
+function browserSpeak(clean: string, onEnd?: () => void) {
+  if (!canSpeak) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(clean);
   const v = pickVoice(); if (v) u.voice = v;
@@ -138,7 +183,10 @@ export function speak(text: string, onEnd?: () => void) {
   u.onend = () => onEnd?.();
   window.speechSynthesis.speak(u);
 }
-export function stopSpeaking() { if (canSpeak) window.speechSynthesis.cancel(); }
+export function stopSpeaking() {
+  if (player) { player.onended = null; player.pause(); }
+  if (canSpeak) window.speechSynthesis.cancel();
+}
 
 /** Small speaker toggle + "say it again" button. */
 export function SpeakButton({ text }: { text: string }) {
