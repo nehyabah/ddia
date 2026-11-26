@@ -34,42 +34,65 @@ export function MicButton({ value, onChange, onSpoken, disabled }: { value: stri
   const latest = useRef(value);
   latest.current = value;
 
-  useEffect(() => () => rec.current?.abort(), []);
+  useEffect(() => () => { try { rec.current?.abort(); } catch { /* ignore */ } }, []);
   if (!SR) return null;
+
+  // What has been heard so far in this recording: confirmed text + text still being recognised.
+  const heard = useRef({ final: "", live: "" });
+  const finished = useRef(true);
+
+  function write(final: string, live: string) {
+    const sep = base.current && !/\s$/.test(base.current) ? " " : "";
+    const text = (final + (live ? " " + live : "")).trim();
+    onChange(base.current + (text ? sep + text : ""));
+  }
+
+  /** End the recording now, keeping everything heard. Safe to call more than once. */
+  function finish() {
+    if (finished.current) return;
+    finished.current = true;
+    const r = rec.current; rec.current = null;
+    if (r) { r.onresult = null; r.onend = null; r.onerror = null; try { r.stop(); } catch { /* already stopped */ } setTimeout(() => { try { r.abort(); } catch { /* ignore */ } }, 600); }
+    const { final, live } = heard.current;
+    const text = (final + " " + live).trim();
+    write(text, "");
+    setOn(false); setInterim("");
+    const secs = Math.max(1, Math.round((Date.now() - started.current) / 1000));
+    const words = text ? text.split(/\s+/).length : 0;
+    total.current = { seconds: total.current.seconds + secs, words: total.current.words + words };
+    if (words) onSpoken?.(total.current);
+  }
 
   function start() {
     setErr(null);
     const r = new SR!();
     r.continuous = true; r.interimResults = true; r.lang = navigator.language || "en-GB";
     base.current = latest.current;
-    let finalText = "";
+    heard.current = { final: "", live: "" };
     r.onresult = (e) => {
-      let live = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      // Rebuild from all results each time: Safari re-sends earlier results, so appending would duplicate text.
+      let final = "", live = "";
+      for (let i = 0; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) finalText += res[0].transcript.trim() + " ";
+        if (res.isFinal) final += res[0].transcript.trim() + " ";
         else live += res[0].transcript;
       }
-      const sep = base.current && !/\s$/.test(base.current) ? " " : "";
-      onChange(base.current + (finalText ? sep + finalText.trimEnd() : ""));
+      heard.current = { final: final.trim(), live: live.trim() };
+      write(heard.current.final, "");
       setInterim(live);
     };
     r.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") setErr("Microphone blocked. Allow it in your browser or phone settings.");
       else if (e.error !== "no-speech" && e.error !== "aborted") setErr(`Voice input stopped (${e.error}).`);
+      finish();
     };
-    r.onend = () => {
-      setOn(false); setInterim("");
-      const secs = Math.round((Date.now() - started.current) / 1000);
-      const words = finalText.trim() ? finalText.trim().split(/\s+/).length : 0;
-      total.current = { seconds: total.current.seconds + secs, words: total.current.words + words };
-      if (words) onSpoken?.(total.current);
-    };
+    r.onend = () => finish(); // the browser stopped by itself (silence, time limit)
     rec.current = r;
+    finished.current = false;
     started.current = Date.now();
-    try { r.start(); setOn(true); } catch { setErr("Couldn't start the microphone."); }
+    try { r.start(); setOn(true); } catch { finished.current = true; setErr("Couldn't start the microphone."); }
   }
-  function stop() { rec.current?.stop(); }
+  function stop() { finish(); }
 
   return (
     <div className="mic">
