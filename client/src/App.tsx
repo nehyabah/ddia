@@ -1,8 +1,6 @@
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
 import { useProfile } from "./state";
-import { applyTheme, effectiveTheme } from "./theme";
-import { Icon, Ring, SvgDefs, type IconName } from "./components/ui";
+import { Icon, SvgDefs, type IconName } from "./components/ui";
 import { AuthPage } from "./pages/AuthPage";
 import { Home } from "./pages/Home";
 import { Chapter } from "./pages/Chapter";
@@ -31,22 +29,6 @@ import { MockPage, PrepHome } from "./pages/Prep";
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
 
 /** One-tap light/dark switch, kept in sync with Settings and with the OS when on "system". */
-function ThemeToggle() {
-  const [mode, setMode] = useState(effectiveTheme());
-  useEffect(() => {
-    const sync = () => setMode(effectiveTheme());
-    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
-    window.addEventListener("ddia:theme", sync);
-    mq?.addEventListener?.("change", sync);
-    return () => { window.removeEventListener("ddia:theme", sync); mq?.removeEventListener?.("change", sync); };
-  }, []);
-  const next = mode === "dark" ? "light" : "dark";
-  return (
-    <button className="stat themebtn" onClick={() => applyTheme(next)} aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}>
-      <Icon name={mode === "dark" ? "sun" : "moon"} />
-    </button>
-  );
-}
 
 function Shell() {
   const { profile } = useProfile();
@@ -66,13 +48,12 @@ function Shell() {
   // Treat nested routes (e.g. /chapter/3) as part of a tab on the bottom bar.
   const isActive = (i: NavItem, mobile: boolean) =>
     (i.end ? pathname === i.to : pathname.startsWith(i.to)) || (i.match ?? []).some((m) => pathname.startsWith(m) && (mobile || !items.some((x) => x.to === m)));
-  const levelPct = (profile.into / profile.need) * 100;
 
   return (
     <>
       <header className="topbar">
         <div className="in">
-          <Link to="/" className="brand"><span className="logo"><Icon name="logo" /></span><span className="word">DDIA</span></Link>
+          <Link to="/" className="brand"><span className="logo"><img src="/logo-app.png" alt="" /></span><span className="word">DDIA</span></Link>
           <nav className="tabs" aria-label="Main">
             {items.filter((i) => !i.mobileOnly).map((i) => (
               <NavLink key={i.to} to={i.to} end={i.end} className={() => (isActive(i, false) ? "active" : "")} title={i.label}>
@@ -81,17 +62,6 @@ function Shell() {
               </NavLink>
             ))}
           </nav>
-          <div className="hudchips">
-            <Link to="/search" className="topsearch" aria-label="Search"><Icon name="search" /></Link>
-            <ThemeToggle />
-            <span className={`stat flame ${profile.studiedToday ? "" : "cold"}`} title={`${profile.streak}-day streak (best ${profile.bestStreak})`}>
-              <Icon name="flame" />{profile.streak}
-            </span>
-            <Link to="/stats" className="stat lv" title={`${profile.xp} XP · ${profile.need - profile.into} XP to level ${profile.level + 1}`}>
-              <Ring value={levelPct} size={26} stroke={3.5}>{profile.level}</Ring>
-              {profile.xp.toLocaleString()} XP
-            </Link>
-          </div>
         </div>
       </header>
       <nav className="bottomnav" aria-label="Main">

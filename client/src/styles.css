@@ -897,3 +897,8 @@ button.themechip{cursor:pointer}
 .cochip.logo img{width:100%;height:100%;object-fit:contain;display:block}
 .coh2{display:flex;align-items:center;gap:12px}
 .task,.step-h,.qrow-h,.listrow,.focusrow{color:var(--ink)}
+/* top bar: brand only */
+.brand .logo{background:#2457D6;overflow:hidden;padding:3px}
+.brand .logo img{width:100%;height:100%;object-fit:contain;display:block}
+.topbar .in{justify-content:space-between}
+.pic img,.pic.plain img{filter:none}
