@@ -126,7 +126,7 @@ accountability.get("/accountability/reflections", (req, res) => {
 /** Daily: if a partner is set and you missed 2+ planned days in a row, let them know (once per streak of misses). */
 export async function partnerTick() {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return;
+  if (!key || !process.env.REPORT_FROM) return; // Resend test sender can only email the account owner
   const users = db.prepare("SELECT id, username, partner_name, partner_email, partner_alert_day FROM users WHERE partner_email IS NOT NULL AND study_days IS NOT NULL").all() as
     { id: number; username: string; partner_name: string | null; partner_email: string; partner_alert_day: string | null }[];
   for (const u of users) {

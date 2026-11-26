@@ -190,7 +190,7 @@ export async function sendReport(u: number, weeksAgo = 0) {
     body: JSON.stringify({
       from: process.env.REPORT_FROM ?? "DDIA <onboarding@resend.dev>",
       to: [r.user.email],
-      ...(() => { const p = db.prepare("SELECT partner_email FROM users WHERE id = ?").get(u) as { partner_email?: string | null } | undefined; return p?.partner_email ? { cc: [p.partner_email] } : {}; })(),
+      ...(() => { const p = db.prepare("SELECT partner_email FROM users WHERE id = ?").get(u) as { partner_email?: string | null } | undefined; return p?.partner_email && process.env.REPORT_FROM ? { cc: [p.partner_email] } : {}; })(),
       subject: `Your DDIA week: ${r.totals.activeMinutes} min, ${r.totals.xp} XP (${r.range.label})`,
       html: renderReportHtml(r, appUrl()),
     }),
