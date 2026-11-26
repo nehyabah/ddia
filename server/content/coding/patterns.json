@@ -1,0 +1,1990 @@
+[
+  {
+    "id": "code-21",
+    "title": "Subsets",
+    "level": "medium",
+    "topic": "Backtracking",
+    "pattern": "Backtracking",
+    "prompt": "Given an array of **distinct** integers `nums`, return all possible subsets (the power set). The result must not contain duplicate subsets; order does not matter.\n\n**Example:** `subsets([1,2,3])` -> `[[],[1],[2],[1,2],[3],[1,3],[2,3],[1,2,3]]`",
+    "fn": "subsets",
+    "starter": {
+      "js": "function subsets(nums) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<List<Integer>> subsets(int[] nums) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "three",
+        "call": "subsets([1,2,3]).map(s=>[...s].sort((a,b)=>a-b).join(',')).sort()",
+        "expected": [
+          "",
+          "1",
+          "1,2",
+          "1,2,3",
+          "1,3",
+          "2",
+          "2,3",
+          "3"
+        ]
+      },
+      {
+        "name": "single",
+        "call": "subsets([0]).map(s=>s.join(',')).sort()",
+        "expected": [
+          "",
+          "0"
+        ]
+      },
+      {
+        "name": "empty",
+        "call": "subsets([]).length",
+        "expected": 1
+      },
+      {
+        "name": "count five",
+        "call": "subsets([1,2,3,4,5]).length",
+        "expected": 32
+      },
+      {
+        "name": "negatives",
+        "call": "subsets([-1,2]).map(s=>[...s].sort((a,b)=>a-b).join(',')).sort()",
+        "expected": [
+          "",
+          "-1",
+          "-1,2",
+          "2"
+        ]
+      },
+      {
+        "name": "unique",
+        "call": "new Set(subsets([4,5,6,7]).map(s=>[...s].sort((a,b)=>a-b).join(','))).size",
+        "expected": 16
+      }
+    ],
+    "solution": {
+      "js": "function subsets(nums) {\n  const res = [], cur = [];\n  function bt(i) {\n    if (i === nums.length) { res.push(cur.slice()); return; }\n    bt(i + 1);\n    cur.push(nums[i]); bt(i + 1); cur.pop();\n  }\n  bt(0);\n  return res;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<List<Integer>> subsets(int[] nums) {\n    List<List<Integer>> res = new ArrayList<>();\n    bt(nums, 0, new ArrayList<>(), res);\n    return res;\n  }\n  private void bt(int[] nums, int i, List<Integer> cur, List<List<Integer>> res) {\n    if (i == nums.length) { res.add(new ArrayList<>(cur)); return; }\n    bt(nums, i + 1, cur, res);\n    cur.add(nums[i]); bt(nums, i + 1, cur, res); cur.remove(cur.size() - 1);\n  }\n}\n"
+    },
+    "complexity": "Time O(n * 2^n), space O(n) recursion (excluding output)",
+    "hints": [
+      "Each element is either in or out of a subset.",
+      "Recurse on index i with two branches: skip nums[i], or take it.",
+      "Copy the current path when you reach the end, then undo the choice (pop) on the way back."
+    ],
+    "keyPoints": [
+      "Include/exclude recursion yields exactly 2^n subsets",
+      "Copy the path on emit; mutate-and-undo otherwise",
+      "Iterative alternative: start with [[]] and append nums[i] to every existing subset",
+      "Bitmask enumeration also works for n <= 20"
+    ]
+  },
+  {
+    "id": "code-22",
+    "title": "Combination Sum",
+    "level": "medium",
+    "topic": "Backtracking",
+    "pattern": "Backtracking",
+    "prompt": "Given an array of **distinct** positive integers `candidates` and a `target`, return all unique combinations where the chosen numbers sum to `target`. The same number may be chosen unlimited times. Two combinations are the same if they use the same multiset of numbers. Order does not matter.\n\n**Example:** `combinationSum([2,3,6,7], 7)` -> `[[2,2,3],[7]]`",
+    "fn": "combinationSum",
+    "starter": {
+      "js": "function combinationSum(candidates, target) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<List<Integer>> combinationSum(int[] candidates, int target) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "classic",
+        "call": "combinationSum([2,3,6,7], 7).map(s=>[...s].sort((a,b)=>a-b).join(',')).sort()",
+        "expected": [
+          "2,2,3",
+          "7"
+        ]
+      },
+      {
+        "name": "three ways",
+        "call": "combinationSum([2,3,5], 8).map(s=>[...s].sort((a,b)=>a-b).join(',')).sort()",
+        "expected": [
+          "2,2,2,2",
+          "2,3,3",
+          "3,5"
+        ]
+      },
+      {
+        "name": "none",
+        "call": "combinationSum([2], 1)",
+        "expected": []
+      },
+      {
+        "name": "single one",
+        "call": "combinationSum([1], 2).map(s=>s.join(','))",
+        "expected": [
+          "1,1"
+        ]
+      },
+      {
+        "name": "unsorted input",
+        "call": "combinationSum([7,3,2], 7).map(s=>[...s].sort((a,b)=>a-b).join(',')).sort()",
+        "expected": [
+          "2,2,3",
+          "7"
+        ]
+      },
+      {
+        "name": "count",
+        "call": "combinationSum([2,3,5,7], 15).length",
+        "expected": 10
+      }
+    ],
+    "solution": {
+      "js": "function combinationSum(candidates, target) {\n  const res = [], cur = [];\n  const c = [...candidates].sort((a, b) => a - b);\n  function bt(start, remain) {\n    if (remain === 0) { res.push(cur.slice()); return; }\n    for (let i = start; i < c.length && c[i] <= remain; i++) {\n      cur.push(c[i]); bt(i, remain - c[i]); cur.pop();\n    }\n  }\n  bt(0, target);\n  return res;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<List<Integer>> combinationSum(int[] candidates, int target) {\n    int[] c = candidates.clone();\n    Arrays.sort(c);\n    List<List<Integer>> res = new ArrayList<>();\n    bt(c, 0, target, new ArrayList<>(), res);\n    return res;\n  }\n  private void bt(int[] c, int start, int remain, List<Integer> cur, List<List<Integer>> res) {\n    if (remain == 0) { res.add(new ArrayList<>(cur)); return; }\n    for (int i = start; i < c.length && c[i] <= remain; i++) {\n      cur.add(c[i]); bt(c, i, remain - c[i], cur, res); cur.remove(cur.size() - 1);\n    }\n  }\n}\n"
+    },
+    "complexity": "Time exponential, roughly O(N^(T/M + 1)) for target T and min candidate M; space O(T/M) recursion",
+    "hints": [
+      "To avoid permutations of the same combination, only pick candidates at index >= the last one picked.",
+      "Because reuse is allowed, recurse with the same index i, not i + 1.",
+      "Sort the candidates so you can break as soon as a candidate exceeds the remaining target."
+    ],
+    "keyPoints": [
+      "Start index prevents duplicate orderings",
+      "Recurse with i (not i+1) to allow reuse",
+      "Sorting enables early break pruning",
+      "Base case remain == 0 emits a copy"
+    ]
+  },
+  {
+    "id": "code-23",
+    "title": "N-Queens (Count Solutions)",
+    "level": "hard",
+    "topic": "Backtracking",
+    "pattern": "Backtracking",
+    "prompt": "Place `n` queens on an `n x n` chessboard so that no two attack each other (same row, column or diagonal). Return the **number** of distinct solutions.\n\n**Example 1:** `totalNQueens(4)` -> `2`\n\n**Example 2:** `totalNQueens(1)` -> `1`",
+    "fn": "totalNQueens",
+    "starter": {
+      "js": "function totalNQueens(n) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int totalNQueens(int n) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "n=1",
+        "call": "totalNQueens(1)",
+        "expected": 1
+      },
+      {
+        "name": "n=2",
+        "call": "totalNQueens(2)",
+        "expected": 0
+      },
+      {
+        "name": "n=3",
+        "call": "totalNQueens(3)",
+        "expected": 0
+      },
+      {
+        "name": "n=4",
+        "call": "totalNQueens(4)",
+        "expected": 2
+      },
+      {
+        "name": "n=5",
+        "call": "totalNQueens(5)",
+        "expected": 10
+      },
+      {
+        "name": "n=6",
+        "call": "totalNQueens(6)",
+        "expected": 4
+      },
+      {
+        "name": "n=8",
+        "call": "totalNQueens(8)",
+        "expected": 92
+      }
+    ],
+    "solution": {
+      "js": "function totalNQueens(n) {\n  const cols = new Set(), d1 = new Set(), d2 = new Set();\n  let count = 0;\n  function place(r) {\n    if (r === n) { count++; return; }\n    for (let c = 0; c < n; c++) {\n      if (cols.has(c) || d1.has(r - c) || d2.has(r + c)) continue;\n      cols.add(c); d1.add(r - c); d2.add(r + c);\n      place(r + 1);\n      cols.delete(c); d1.delete(r - c); d2.delete(r + c);\n    }\n  }\n  place(0);\n  return count;\n}\n",
+      "java": "class Solution {\n  private int count;\n  public int totalNQueens(int n) {\n    count = 0;\n    place(0, n, new boolean[n], new boolean[2 * n], new boolean[2 * n]);\n    return count;\n  }\n  private void place(int r, int n, boolean[] cols, boolean[] d1, boolean[] d2) {\n    if (r == n) { count++; return; }\n    for (int c = 0; c < n; c++) {\n      int a = r - c + n, b = r + c;\n      if (cols[c] || d1[a] || d2[b]) continue;\n      cols[c] = d1[a] = d2[b] = true;\n      place(r + 1, n, cols, d1, d2);\n      cols[c] = d1[a] = d2[b] = false;\n    }\n  }\n}\n"
+    },
+    "complexity": "Time O(n!) worst case with pruning, space O(n)",
+    "hints": [
+      "Place exactly one queen per row, so recurse row by row.",
+      "A column is identified by c, a diagonal by r - c, an anti-diagonal by r + c.",
+      "Keep three sets (or boolean arrays) for O(1) conflict checks, and undo on backtrack."
+    ],
+    "keyPoints": [
+      "One queen per row reduces the search to choosing a column per row",
+      "Diagonal keys r-c and r+c give O(1) attack checks",
+      "Undo state after recursion (classic backtracking)",
+      "Bitmask version: available = ~(cols|d1|d2) & ((1<<n)-1) is the fastest"
+    ]
+  },
+  {
+    "id": "code-24",
+    "title": "Partition to K Equal Sum Subsets",
+    "level": "hard",
+    "topic": "Backtracking",
+    "pattern": "Backtracking",
+    "prompt": "Given an array of positive integers `nums` and an integer `k`, return `true` if it is possible to divide the array into `k` non-empty subsets whose sums are all equal. (`nums.length <= 16`.)\n\n**Example 1:** `canPartitionKSubsets([4,3,2,3,5,2,1], 4)` -> `true` (5, 1+4, 2+3, 2+3)\n\n**Example 2:** `canPartitionKSubsets([1,2,3,4], 3)` -> `false`",
+    "fn": "canPartitionKSubsets",
+    "starter": {
+      "js": "function canPartitionKSubsets(nums, k) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public boolean canPartitionKSubsets(int[] nums, int k) {\n    // your code\n    return false;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "canPartitionKSubsets([4,3,2,3,5,2,1], 4)",
+        "expected": true
+      },
+      {
+        "name": "impossible",
+        "call": "canPartitionKSubsets([1,2,3,4], 3)",
+        "expected": false
+      },
+      {
+        "name": "k=1",
+        "call": "canPartitionKSubsets([5,1,9], 1)",
+        "expected": true
+      },
+      {
+        "name": "too big",
+        "call": "canPartitionKSubsets([10,1,1,1,1], 2)",
+        "expected": false
+      },
+      {
+        "name": "pairs",
+        "call": "canPartitionKSubsets([1,1,1,1,2,2,2,2], 4)",
+        "expected": true
+      },
+      {
+        "name": "divisible but no",
+        "call": "canPartitionKSubsets([2,2,2,2,3,4,5], 4)",
+        "expected": false
+      },
+      {
+        "name": "equal items",
+        "call": "canPartitionKSubsets([3,3,3,3,3,3], 3)",
+        "expected": true
+      }
+    ],
+    "solution": {
+      "js": "function canPartitionKSubsets(nums, k) {\n  const total = nums.reduce((a, b) => a + b, 0);\n  if (total % k !== 0) return false;\n  const target = total / k;\n  const a = [...nums].sort((x, y) => y - x);\n  if (a[0] > target) return false;\n  const buckets = new Array(k).fill(0);\n  function bt(i) {\n    if (i === a.length) return true;\n    for (let b = 0; b < k; b++) {\n      if (buckets[b] + a[i] > target) continue;\n      buckets[b] += a[i];\n      if (bt(i + 1)) return true;\n      buckets[b] -= a[i];\n      if (buckets[b] === 0) break; // empty bucket failed: others are symmetric\n    }\n    return false;\n  }\n  return bt(0);\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public boolean canPartitionKSubsets(int[] nums, int k) {\n    int total = 0;\n    for (int x : nums) total += x;\n    if (total % k != 0) return false;\n    int target = total / k;\n    int[] a = nums.clone();\n    Arrays.sort(a);\n    for (int i = 0, j = a.length - 1; i < j; i++, j--) { int t = a[i]; a[i] = a[j]; a[j] = t; }\n    if (a[0] > target) return false;\n    return bt(a, 0, new int[k], target);\n  }\n  private boolean bt(int[] a, int i, int[] buckets, int target) {\n    if (i == a.length) return true;\n    for (int b = 0; b < buckets.length; b++) {\n      if (buckets[b] + a[i] > target) continue;\n      buckets[b] += a[i];\n      if (bt(a, i + 1, buckets, target)) return true;\n      buckets[b] -= a[i];\n      if (buckets[b] == 0) break;\n    }\n    return false;\n  }\n}\n"
+    },
+    "complexity": "Time O(k^n) worst case (heavily pruned), space O(n + k); bitmask DP alternative is O(n * 2^n)",
+    "hints": [
+      "If the total is not divisible by k, the answer is immediately false.",
+      "Assign each number to one of k buckets, never letting a bucket exceed total / k.",
+      "Sort descending to fail fast, and if placing into an empty bucket fails, don't try other empty buckets (symmetry)."
+    ],
+    "keyPoints": [
+      "Divisibility and max-element checks prune trivially",
+      "Descending sort makes large items fail early",
+      "Symmetry pruning: skip equivalent empty buckets",
+      "Mention bitmask DP over subsets as the O(n * 2^n) alternative"
+    ]
+  },
+  {
+    "id": "code-25",
+    "title": "Climbing Stairs",
+    "level": "easy",
+    "topic": "Dynamic programming",
+    "pattern": "Dynamic programming",
+    "prompt": "You are climbing a staircase with `n` steps. Each time you can climb 1 or 2 steps. In how many distinct ways can you reach the top?\n\n**Example 1:** `climbStairs(2)` -> `2`\n\n**Example 2:** `climbStairs(3)` -> `3`",
+    "fn": "climbStairs",
+    "starter": {
+      "js": "function climbStairs(n) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int climbStairs(int n) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "one",
+        "call": "climbStairs(1)",
+        "expected": 1
+      },
+      {
+        "name": "two",
+        "call": "climbStairs(2)",
+        "expected": 2
+      },
+      {
+        "name": "three",
+        "call": "climbStairs(3)",
+        "expected": 3
+      },
+      {
+        "name": "five",
+        "call": "climbStairs(5)",
+        "expected": 8
+      },
+      {
+        "name": "ten",
+        "call": "climbStairs(10)",
+        "expected": 89
+      },
+      {
+        "name": "thirty",
+        "call": "climbStairs(30)",
+        "expected": 1346269
+      }
+    ],
+    "solution": {
+      "js": "function climbStairs(n) {\n  let a = 1, b = 1; // ways(0), ways(1)\n  for (let i = 2; i <= n; i++) [a, b] = [b, a + b];\n  return b;\n}\n",
+      "java": "class Solution {\n  public int climbStairs(int n) {\n    int a = 1, b = 1;\n    for (int i = 2; i <= n; i++) { int c = a + b; a = b; b = c; }\n    return b;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "The last move was either a 1-step or a 2-step.",
+      "ways(n) = ways(n-1) + ways(n-2): Fibonacci.",
+      "You only need the previous two values."
+    ],
+    "keyPoints": [
+      "Recurrence identical to Fibonacci",
+      "Rolling two variables gives O(1) space",
+      "Naive recursion is exponential; memoize or iterate",
+      "Matrix exponentiation gives O(log n) if asked"
+    ]
+  },
+  {
+    "id": "code-26",
+    "title": "House Robber",
+    "level": "easy",
+    "topic": "Dynamic programming",
+    "pattern": "Dynamic programming",
+    "prompt": "Houses along a street hold `nums[i]` money. You cannot rob two **adjacent** houses. Return the maximum amount you can rob.\n\n**Example 1:** `rob([1,2,3,1])` -> `4` (1 + 3)\n\n**Example 2:** `rob([2,7,9,3,1])` -> `12` (2 + 9 + 1)",
+    "fn": "rob",
+    "starter": {
+      "js": "function rob(nums) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int rob(int[] nums) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "ex1",
+        "call": "rob([1,2,3,1])",
+        "expected": 4
+      },
+      {
+        "name": "ex2",
+        "call": "rob([2,7,9,3,1])",
+        "expected": 12
+      },
+      {
+        "name": "empty",
+        "call": "rob([])",
+        "expected": 0
+      },
+      {
+        "name": "single",
+        "call": "rob([5])",
+        "expected": 5
+      },
+      {
+        "name": "skip two",
+        "call": "rob([2,1,1,2])",
+        "expected": 4
+      },
+      {
+        "name": "all equal",
+        "call": "rob([3,3,3,3,3])",
+        "expected": 9
+      }
+    ],
+    "solution": {
+      "js": "function rob(nums) {\n  let take = 0, skip = 0; // best with / without robbing the previous house\n  for (const x of nums) [take, skip] = [skip + x, Math.max(take, skip)];\n  return Math.max(take, skip);\n}\n",
+      "java": "class Solution {\n  public int rob(int[] nums) {\n    int take = 0, skip = 0;\n    for (int x : nums) { int t = skip + x; skip = Math.max(take, skip); take = t; }\n    return Math.max(take, skip);\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "At each house you either rob it (and skip the previous) or skip it.",
+      "best(i) = max(best(i-1), best(i-2) + nums[i]).",
+      "Keep just two rolling values."
+    ],
+    "keyPoints": [
+      "Classic take/skip DP",
+      "O(1) space with rolling variables",
+      "Handle empty and single-house inputs",
+      "Follow-up: circular street = run twice excluding first or last house"
+    ]
+  },
+  {
+    "id": "code-27",
+    "title": "Longest Increasing Subsequence",
+    "level": "medium",
+    "topic": "Dynamic programming",
+    "pattern": "Dynamic programming",
+    "prompt": "Return the length of the longest **strictly increasing** subsequence of `nums`.\n\n**Example:** `lengthOfLIS([10,9,2,5,3,7,101,18])` -> `4` (e.g. 2,3,7,101)\n\nAim for O(n log n).",
+    "fn": "lengthOfLIS",
+    "starter": {
+      "js": "function lengthOfLIS(nums) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int lengthOfLIS(int[] nums) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "lengthOfLIS([10,9,2,5,3,7,101,18])",
+        "expected": 4
+      },
+      {
+        "name": "mixed",
+        "call": "lengthOfLIS([0,1,0,3,2,3])",
+        "expected": 4
+      },
+      {
+        "name": "all equal",
+        "call": "lengthOfLIS([7,7,7,7])",
+        "expected": 1
+      },
+      {
+        "name": "empty",
+        "call": "lengthOfLIS([])",
+        "expected": 0
+      },
+      {
+        "name": "decreasing",
+        "call": "lengthOfLIS([5,4,3,2,1])",
+        "expected": 1
+      },
+      {
+        "name": "increasing",
+        "call": "lengthOfLIS([1,2,3,4,5,6])",
+        "expected": 6
+      },
+      {
+        "name": "negatives",
+        "call": "lengthOfLIS([-2,-1,-3,0,-4,1])",
+        "expected": 4
+      }
+    ],
+    "solution": {
+      "js": "function lengthOfLIS(nums) {\n  const tails = []; // tails[k] = smallest tail of an increasing subsequence of length k+1\n  for (const x of nums) {\n    let lo = 0, hi = tails.length;\n    while (lo < hi) {\n      const mid = (lo + hi) >> 1;\n      if (tails[mid] < x) lo = mid + 1; else hi = mid;\n    }\n    tails[lo] = x;\n  }\n  return tails.length;\n}\n",
+      "java": "class Solution {\n  public int lengthOfLIS(int[] nums) {\n    int[] tails = new int[nums.length];\n    int size = 0;\n    for (int x : nums) {\n      int lo = 0, hi = size;\n      while (lo < hi) {\n        int mid = (lo + hi) >>> 1;\n        if (tails[mid] < x) lo = mid + 1; else hi = mid;\n      }\n      tails[lo] = x;\n      if (lo == size) size++;\n    }\n    return size;\n  }\n}\n"
+    },
+    "complexity": "Time O(n log n), space O(n)",
+    "hints": [
+      "O(n^2) DP: dp[i] = 1 + max dp[j] over j < i with nums[j] < nums[i].",
+      "Faster: maintain tails[k] = smallest possible tail of an increasing subsequence of length k+1.",
+      "For each x, binary-search the first tail >= x and replace it (or append)."
+    ],
+    "keyPoints": [
+      "Know both the O(n^2) DP and O(n log n) patience-sorting approach",
+      "tails is sorted, enabling binary search",
+      "Lower bound (>=) gives strictly increasing; upper bound gives non-decreasing",
+      "tails is not itself an LIS, only its length is meaningful"
+    ]
+  },
+  {
+    "id": "code-28",
+    "title": "0/1 Knapsack",
+    "level": "medium",
+    "topic": "Dynamic programming",
+    "pattern": "Dynamic programming",
+    "prompt": "Given item `weights`, item `values`, and a bag `capacity`, return the maximum total value you can carry. Each item can be taken **at most once**.\n\n**Example:** `knapsack([1,3,4,5], [1,4,5,7], 7)` -> `9` (items of weight 3 and 4)",
+    "fn": "knapsack",
+    "starter": {
+      "js": "function knapsack(weights, values, capacity) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int knapsack(int[] weights, int[] values, int capacity) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "knapsack([1,3,4,5], [1,4,5,7], 7)",
+        "expected": 9
+      },
+      {
+        "name": "zero capacity",
+        "call": "knapsack([1,2], [10,20], 0)",
+        "expected": 0
+      },
+      {
+        "name": "nothing fits",
+        "call": "knapsack([5,6], [10,20], 4)",
+        "expected": 0
+      },
+      {
+        "name": "greedy fails",
+        "call": "knapsack([10,20,30], [60,100,120], 50)",
+        "expected": 220
+      },
+      {
+        "name": "no reuse",
+        "call": "knapsack([2], [5], 10)",
+        "expected": 5
+      },
+      {
+        "name": "all fit",
+        "call": "knapsack([1,1,1], [1,2,3], 3)",
+        "expected": 6
+      }
+    ],
+    "solution": {
+      "js": "function knapsack(weights, values, capacity) {\n  const dp = new Array(capacity + 1).fill(0);\n  for (let i = 0; i < weights.length; i++) {\n    for (let c = capacity; c >= weights[i]; c--) {\n      dp[c] = Math.max(dp[c], dp[c - weights[i]] + values[i]);\n    }\n  }\n  return dp[capacity];\n}\n",
+      "java": "class Solution {\n  public int knapsack(int[] weights, int[] values, int capacity) {\n    int[] dp = new int[capacity + 1];\n    for (int i = 0; i < weights.length; i++)\n      for (int c = capacity; c >= weights[i]; c--)\n        dp[c] = Math.max(dp[c], dp[c - weights[i]] + values[i]);\n    return dp[capacity];\n  }\n}\n"
+    },
+    "complexity": "Time O(n * W), space O(W)",
+    "hints": [
+      "dp[i][c] = best value using the first i items with capacity c.",
+      "Either skip item i (dp[i-1][c]) or take it (dp[i-1][c-w] + v).",
+      "Collapse to 1D by iterating capacity downward so each item is used once."
+    ],
+    "keyPoints": [
+      "2D recurrence take vs skip",
+      "Iterate capacity in reverse for 0/1 (forward would allow unlimited reuse)",
+      "Pseudo-polynomial: O(n*W) depends on capacity magnitude",
+      "Greedy by value/weight ratio is wrong for 0/1"
+    ]
+  },
+  {
+    "id": "code-29",
+    "title": "Word Break",
+    "level": "medium",
+    "topic": "Dynamic programming",
+    "pattern": "Dynamic programming",
+    "prompt": "Given a string `s` and a dictionary `wordDict`, return `true` if `s` can be segmented into a space-separated sequence of one or more dictionary words (words may be reused).\n\n**Example 1:** `wordBreak(\"leetcode\", [\"leet\",\"code\"])` -> `true`\n\n**Example 2:** `wordBreak(\"catsandog\", [\"cats\",\"dog\",\"sand\",\"and\",\"cat\"])` -> `false`",
+    "fn": "wordBreak",
+    "starter": {
+      "js": "function wordBreak(s, wordDict) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public boolean wordBreak(String s, List<String> wordDict) {\n    // your code\n    return false;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "leetcode",
+        "call": "wordBreak(\"leetcode\", [\"leet\",\"code\"])",
+        "expected": true
+      },
+      {
+        "name": "reuse",
+        "call": "wordBreak(\"applepenapple\", [\"apple\",\"pen\"])",
+        "expected": true
+      },
+      {
+        "name": "catsandog",
+        "call": "wordBreak(\"catsandog\", [\"cats\",\"dog\",\"sand\",\"and\",\"cat\"])",
+        "expected": false
+      },
+      {
+        "name": "empty dict",
+        "call": "wordBreak(\"a\", [])",
+        "expected": false
+      },
+      {
+        "name": "pathological",
+        "call": "wordBreak(\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaab\", [\"a\",\"aa\",\"aaa\",\"aaaa\"])",
+        "expected": false
+      },
+      {
+        "name": "multi split",
+        "call": "wordBreak(\"catsanddog\", [\"cat\",\"cats\",\"and\",\"sand\",\"dog\"])",
+        "expected": true
+      }
+    ],
+    "solution": {
+      "js": "function wordBreak(s, wordDict) {\n  const dict = new Set(wordDict);\n  const maxLen = Math.max(0, ...wordDict.map(w => w.length));\n  const dp = new Array(s.length + 1).fill(false);\n  dp[0] = true;\n  for (let i = 1; i <= s.length; i++) {\n    for (let j = Math.max(0, i - maxLen); j < i && !dp[i]; j++) {\n      if (dp[j] && dict.has(s.slice(j, i))) dp[i] = true;\n    }\n  }\n  return dp[s.length];\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public boolean wordBreak(String s, List<String> wordDict) {\n    Set<String> dict = new HashSet<>(wordDict);\n    int maxLen = 0;\n    for (String w : wordDict) maxLen = Math.max(maxLen, w.length());\n    boolean[] dp = new boolean[s.length() + 1];\n    dp[0] = true;\n    for (int i = 1; i <= s.length(); i++)\n      for (int j = Math.max(0, i - maxLen); j < i && !dp[i]; j++)\n        if (dp[j] && dict.contains(s.substring(j, i))) dp[i] = true;\n    return dp[s.length()];\n  }\n}\n"
+    },
+    "complexity": "Time O(n * L) substring checks (L = max word length), space O(n)",
+    "hints": [
+      "dp[i] = can the prefix s[0..i) be segmented?",
+      "dp[i] is true if some j < i has dp[j] true and s[j..i) is a word.",
+      "Bound j by the longest dictionary word to cut work."
+    ],
+    "keyPoints": [
+      "Prefix DP with a hash set",
+      "dp[0] = true as the empty-prefix base case",
+      "Naive recursion without memo is exponential (e.g. 'aaaa...b')",
+      "Trie can replace substring hashing"
+    ]
+  },
+  {
+    "id": "code-30",
+    "title": "Unique Paths with Obstacles",
+    "level": "medium",
+    "topic": "Dynamic programming",
+    "pattern": "Dynamic programming",
+    "prompt": "A robot starts at the top-left of an `m x n` grid and can move only right or down. Cells with `1` are obstacles. Return the number of unique paths to the bottom-right.\n\n**Example:** `uniquePathsWithObstacles([[0,0,0],[0,1,0],[0,0,0]])` -> `2`",
+    "fn": "uniquePathsWithObstacles",
+    "starter": {
+      "js": "function uniquePathsWithObstacles(grid) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int uniquePathsWithObstacles(int[][] grid) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "uniquePathsWithObstacles([[0,0,0],[0,1,0],[0,0,0]])",
+        "expected": 2
+      },
+      {
+        "name": "small",
+        "call": "uniquePathsWithObstacles([[0,1],[0,0]])",
+        "expected": 1
+      },
+      {
+        "name": "start blocked",
+        "call": "uniquePathsWithObstacles([[1,0],[0,0]])",
+        "expected": 0
+      },
+      {
+        "name": "end blocked",
+        "call": "uniquePathsWithObstacles([[0,0],[0,1]])",
+        "expected": 0
+      },
+      {
+        "name": "no obstacles 3x7",
+        "call": "uniquePathsWithObstacles(Array.from({length:3},()=>Array(7).fill(0)))",
+        "expected": 28
+      },
+      {
+        "name": "single cell",
+        "call": "uniquePathsWithObstacles([[0]])",
+        "expected": 1
+      },
+      {
+        "name": "wall",
+        "call": "uniquePathsWithObstacles([[0,0,0],[1,1,1],[0,0,0]])",
+        "expected": 0
+      }
+    ],
+    "solution": {
+      "js": "function uniquePathsWithObstacles(grid) {\n  const n = grid[0].length;\n  const dp = new Array(n).fill(0);\n  dp[0] = 1;\n  for (const row of grid) {\n    for (let c = 0; c < n; c++) {\n      if (row[c] === 1) dp[c] = 0;\n      else if (c > 0) dp[c] += dp[c - 1];\n    }\n  }\n  return dp[n - 1];\n}\n",
+      "java": "class Solution {\n  public int uniquePathsWithObstacles(int[][] grid) {\n    int n = grid[0].length;\n    int[] dp = new int[n];\n    dp[0] = 1;\n    for (int[] row : grid)\n      for (int c = 0; c < n; c++) {\n        if (row[c] == 1) dp[c] = 0;\n        else if (c > 0) dp[c] += dp[c - 1];\n      }\n    return dp[n - 1];\n  }\n}\n"
+    },
+    "complexity": "Time O(m * n), space O(n)",
+    "hints": [
+      "paths(r,c) = paths(r-1,c) + paths(r,c-1), or 0 on an obstacle.",
+      "Seed the start with 1 (and 0 if it is itself an obstacle).",
+      "A single row array suffices: dp[c] already holds the value from above."
+    ],
+    "keyPoints": [
+      "Grid DP summing from top and left",
+      "Obstacles zero out a cell",
+      "1D rolling array is O(n) space",
+      "Start or end blocked returns 0"
+    ]
+  },
+  {
+    "id": "code-31",
+    "title": "Number of Provinces",
+    "level": "easy",
+    "topic": "Union-find",
+    "pattern": "Union-find",
+    "prompt": "`isConnected` is an `n x n` adjacency matrix where `isConnected[i][j] = 1` means cities i and j are directly connected. A province is a group of directly or indirectly connected cities. Return the number of provinces.\n\n**Example:** `findCircleNum([[1,1,0],[1,1,0],[0,0,1]])` -> `2`",
+    "fn": "findCircleNum",
+    "starter": {
+      "js": "function findCircleNum(isConnected) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int findCircleNum(int[][] isConnected) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "findCircleNum([[1,1,0],[1,1,0],[0,0,1]])",
+        "expected": 2
+      },
+      {
+        "name": "isolated",
+        "call": "findCircleNum([[1,0,0],[0,1,0],[0,0,1]])",
+        "expected": 3
+      },
+      {
+        "name": "all one",
+        "call": "findCircleNum([[1,1,1],[1,1,1],[1,1,1]])",
+        "expected": 1
+      },
+      {
+        "name": "single",
+        "call": "findCircleNum([[1]])",
+        "expected": 1
+      },
+      {
+        "name": "transitive",
+        "call": "findCircleNum([[1,0,0,1],[0,1,1,0],[0,1,1,1],[1,0,1,1]])",
+        "expected": 1
+      },
+      {
+        "name": "two pairs",
+        "call": "findCircleNum([[1,1,0,0],[1,1,0,0],[0,0,1,1],[0,0,1,1]])",
+        "expected": 2
+      }
+    ],
+    "solution": {
+      "js": "function findCircleNum(isConnected) {\n  const n = isConnected.length;\n  const parent = Array.from({ length: n }, (_, i) => i);\n  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };\n  let count = n;\n  for (let i = 0; i < n; i++)\n    for (let j = i + 1; j < n; j++)\n      if (isConnected[i][j]) {\n        const a = find(i), b = find(j);\n        if (a !== b) { parent[a] = b; count--; }\n      }\n  return count;\n}\n",
+      "java": "class Solution {\n  private int[] parent;\n  private int find(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }\n  public int findCircleNum(int[][] isConnected) {\n    int n = isConnected.length, count = n;\n    parent = new int[n];\n    for (int i = 0; i < n; i++) parent[i] = i;\n    for (int i = 0; i < n; i++)\n      for (int j = i + 1; j < n; j++)\n        if (isConnected[i][j] == 1) {\n          int a = find(i), b = find(j);\n          if (a != b) { parent[a] = b; count--; }\n        }\n    return count;\n  }\n}\n"
+    },
+    "complexity": "Time O(n^2 * alpha(n)), space O(n)",
+    "hints": [
+      "Start with n components, one per city.",
+      "Each successful union of two different roots reduces the count by one.",
+      "Use path compression in find to keep trees shallow."
+    ],
+    "keyPoints": [
+      "Union-find counts components incrementally",
+      "Only count unions that merge different roots",
+      "Path compression + union by rank gives near-constant ops",
+      "DFS/BFS is an equally valid O(n^2) alternative"
+    ]
+  },
+  {
+    "id": "code-32",
+    "title": "Redundant Connection",
+    "level": "medium",
+    "topic": "Union-find",
+    "pattern": "Union-find",
+    "prompt": "A tree with nodes `1..n` had one extra undirected edge added, so `edges` (length n) contains exactly one cycle. Return the edge that can be removed to restore a tree. If several answers exist, return the one that appears **last** in `edges`.\n\n**Example:** `findRedundantConnection([[1,2],[1,3],[2,3]])` -> `[2,3]`",
+    "fn": "findRedundantConnection",
+    "starter": {
+      "js": "function findRedundantConnection(edges) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] findRedundantConnection(int[][] edges) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "triangle",
+        "call": "findRedundantConnection([[1,2],[1,3],[2,3]])",
+        "expected": [
+          2,
+          3
+        ]
+      },
+      {
+        "name": "square",
+        "call": "findRedundantConnection([[1,2],[2,3],[3,4],[1,4],[1,5]])",
+        "expected": [
+          1,
+          4
+        ]
+      },
+      {
+        "name": "late cycle",
+        "call": "findRedundantConnection([[1,2],[2,3],[3,4],[4,5],[5,1]])",
+        "expected": [
+          5,
+          1
+        ]
+      },
+      {
+        "name": "mid",
+        "call": "findRedundantConnection([[3,4],[1,2],[2,4],[3,5],[2,5]])",
+        "expected": [
+          2,
+          5
+        ]
+      },
+      {
+        "name": "two nodes",
+        "call": "findRedundantConnection([[1,2],[2,1]])",
+        "expected": [
+          2,
+          1
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function findRedundantConnection(edges) {\n  const n = edges.length + 1;\n  const parent = Array.from({ length: n }, (_, i) => i);\n  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };\n  for (const [u, v] of edges) {\n    const a = find(u), b = find(v);\n    if (a === b) return [u, v];\n    parent[a] = b;\n  }\n  return [];\n}\n",
+      "java": "class Solution {\n  private int[] parent;\n  private int find(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }\n  public int[] findRedundantConnection(int[][] edges) {\n    parent = new int[edges.length + 1];\n    for (int i = 0; i < parent.length; i++) parent[i] = i;\n    for (int[] e : edges) {\n      int a = find(e[0]), b = find(e[1]);\n      if (a == b) return e;\n      parent[a] = b;\n    }\n    return new int[0];\n  }\n}\n"
+    },
+    "complexity": "Time O(n * alpha(n)), space O(n)",
+    "hints": [
+      "Process edges in order, unioning endpoints.",
+      "If both endpoints already share a root, this edge closes a cycle.",
+      "Since there is exactly one cycle, the first such edge in order is also the last cycle edge."
+    ],
+    "keyPoints": [
+      "Union-find detects cycles in undirected graphs online",
+      "First edge whose endpoints are already connected is the answer",
+      "Near-linear time",
+      "Directed variant (Redundant Connection II) needs in-degree handling"
+    ]
+  },
+  {
+    "id": "code-33",
+    "title": "Accounts Merge",
+    "level": "medium",
+    "topic": "Union-find",
+    "pattern": "Union-find",
+    "prompt": "Each `accounts[i]` is `[name, email1, email2, ...]`. Two accounts belong to the same person if they share any email (same name guaranteed). Merge them and return each person as `[name, ...sortedEmails]` (emails deduplicated). Accounts may be returned in any order.\n\n**Example:** `accountsMerge([[\"John\",\"a@x\",\"b@x\"],[\"John\",\"c@x\",\"a@x\"],[\"Mary\",\"m@x\"]])` -> `[[\"John\",\"a@x\",\"b@x\",\"c@x\"],[\"Mary\",\"m@x\"]]`",
+    "fn": "accountsMerge",
+    "starter": {
+      "js": "function accountsMerge(accounts) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public List<List<String>> accountsMerge(List<List<String>> accounts) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "accountsMerge([[\"John\",\"a@x\",\"b@x\"],[\"John\",\"c@x\",\"a@x\"],[\"Mary\",\"m@x\"]]).map(a=>a.join(' ')).sort()",
+        "expected": [
+          "John a@x b@x c@x",
+          "Mary m@x"
+        ]
+      },
+      {
+        "name": "same name distinct",
+        "call": "accountsMerge([[\"John\",\"j1@x\"],[\"John\",\"j2@x\"]]).map(a=>a.join(' ')).sort()",
+        "expected": [
+          "John j1@x",
+          "John j2@x"
+        ]
+      },
+      {
+        "name": "chain",
+        "call": "accountsMerge([[\"A\",\"1\",\"2\"],[\"A\",\"3\",\"4\"],[\"A\",\"2\",\"3\"]]).map(a=>a.join(' ')).sort()",
+        "expected": [
+          "A 1 2 3 4"
+        ]
+      },
+      {
+        "name": "single",
+        "call": "accountsMerge([[\"Z\",\"z@x\"]])",
+        "expected": [
+          [
+            "Z",
+            "z@x"
+          ]
+        ]
+      },
+      {
+        "name": "dup email in account",
+        "call": "accountsMerge([[\"B\",\"b@x\",\"b@x\"]])",
+        "expected": [
+          [
+            "B",
+            "b@x"
+          ]
+        ]
+      },
+      {
+        "name": "count",
+        "call": "accountsMerge([[\"G\",\"g1\",\"g2\"],[\"K\",\"k1\"],[\"G\",\"g3\",\"g1\"],[\"H\",\"h1\"],[\"K\",\"k2\",\"k1\"]]).length",
+        "expected": 3
+      }
+    ],
+    "solution": {
+      "js": "function accountsMerge(accounts) {\n  const parent = new Map(), owner = new Map();\n  const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };\n  for (const [name, ...emails] of accounts) {\n    for (const e of emails) { if (!parent.has(e)) parent.set(e, e); owner.set(e, name); }\n    for (const e of emails.slice(1)) parent.set(find(e), find(emails[0]));\n  }\n  const groups = new Map();\n  for (const e of parent.keys()) {\n    const r = find(e);\n    if (!groups.has(r)) groups.set(r, []);\n    groups.get(r).push(e);\n  }\n  return [...groups.values()].map(g => [owner.get(g[0]), ...g.sort()]);\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  private Map<String, String> parent = new HashMap<>();\n  private String find(String x) {\n    while (!parent.get(x).equals(x)) { parent.put(x, parent.get(parent.get(x))); x = parent.get(x); }\n    return x;\n  }\n  public List<List<String>> accountsMerge(List<List<String>> accounts) {\n    Map<String, String> owner = new HashMap<>();\n    for (List<String> acc : accounts) {\n      for (int i = 1; i < acc.size(); i++) { parent.putIfAbsent(acc.get(i), acc.get(i)); owner.put(acc.get(i), acc.get(0)); }\n      for (int i = 2; i < acc.size(); i++) parent.put(find(acc.get(i)), find(acc.get(1)));\n    }\n    Map<String, List<String>> groups = new HashMap<>();\n    for (String e : parent.keySet()) groups.computeIfAbsent(find(e), k -> new ArrayList<>()).add(e);\n    List<List<String>> res = new ArrayList<>();\n    for (List<String> g : groups.values()) {\n      Collections.sort(g);\n      List<String> row = new ArrayList<>();\n      row.add(owner.get(g.get(0)));\n      row.addAll(g);\n      res.add(row);\n    }\n    return res;\n  }\n}\n"
+    },
+    "complexity": "Time O(E log E) for E total emails (sorting dominates), space O(E)",
+    "hints": [
+      "Treat each email as a node; union all emails within the same account.",
+      "Afterwards, group emails by their root.",
+      "Remember which name owns each email, then sort each group."
+    ],
+    "keyPoints": [
+      "Nodes are emails, not accounts",
+      "Union every email to the account's first email",
+      "Group by root, sort, prepend name",
+      "Same name does not imply same person; only shared emails merge"
+    ]
+  },
+  {
+    "id": "code-34",
+    "title": "Koko Eating Bananas",
+    "level": "medium",
+    "topic": "Binary search",
+    "pattern": "Binary search on the answer",
+    "prompt": "Koko has `piles` of bananas and `h` hours. Each hour she picks one pile and eats `k` bananas from it (or the whole pile if fewer). Return the minimum integer speed `k` to finish within `h` hours. (`h >= piles.length`.)\n\n**Example:** `minEatingSpeed([3,6,7,11], 8)` -> `4`",
+    "fn": "minEatingSpeed",
+    "starter": {
+      "js": "function minEatingSpeed(piles, h) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int minEatingSpeed(int[] piles, int h) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "minEatingSpeed([3,6,7,11], 8)",
+        "expected": 4
+      },
+      {
+        "name": "tight",
+        "call": "minEatingSpeed([30,11,23,4,20], 5)",
+        "expected": 30
+      },
+      {
+        "name": "loose",
+        "call": "minEatingSpeed([30,11,23,4,20], 6)",
+        "expected": 23
+      },
+      {
+        "name": "single pile",
+        "call": "minEatingSpeed([1000000000], 2)",
+        "expected": 500000000
+      },
+      {
+        "name": "lots of time",
+        "call": "minEatingSpeed([5,5,5], 100)",
+        "expected": 1
+      },
+      {
+        "name": "one each",
+        "call": "minEatingSpeed([1,1,1,1], 4)",
+        "expected": 1
+      }
+    ],
+    "solution": {
+      "js": "function minEatingSpeed(piles, h) {\n  let lo = 1, hi = Math.max(...piles);\n  while (lo < hi) {\n    const k = Math.floor((lo + hi) / 2);\n    let hours = 0;\n    for (const p of piles) hours += Math.ceil(p / k);\n    if (hours <= h) hi = k; else lo = k + 1;\n  }\n  return lo;\n}\n",
+      "java": "class Solution {\n  public int minEatingSpeed(int[] piles, int h) {\n    int lo = 1, hi = 0;\n    for (int p : piles) hi = Math.max(hi, p);\n    while (lo < hi) {\n      int k = lo + (hi - lo) / 2;\n      long hours = 0;\n      for (int p : piles) hours += (p + (long) k - 1) / k;\n      if (hours <= h) hi = k; else lo = k + 1;\n    }\n    return lo;\n  }\n}\n"
+    },
+    "complexity": "Time O(n log M) where M = max pile, space O(1)",
+    "hints": [
+      "If speed k works, any faster speed also works: feasibility is monotonic.",
+      "Binary search k over [1, max(piles)].",
+      "Hours needed at speed k = sum of ceil(pile / k)."
+    ],
+    "keyPoints": [
+      "Binary search over the answer space, not the array",
+      "Monotonic predicate: feasible(k) implies feasible(k+1)",
+      "Use long for hour sums in Java to avoid overflow",
+      "Find the leftmost feasible value (lo < hi, hi = mid)"
+    ]
+  },
+  {
+    "id": "code-35",
+    "title": "Capacity to Ship Packages Within D Days",
+    "level": "medium",
+    "topic": "Binary search",
+    "pattern": "Binary search on the answer",
+    "prompt": "Packages with `weights` must be shipped **in order** within `days` days. Each day you load consecutive packages without exceeding the ship's capacity. Return the least capacity that ships everything within `days`.\n\n**Example:** `shipWithinDays([1,2,3,4,5,6,7,8,9,10], 5)` -> `15`",
+    "fn": "shipWithinDays",
+    "starter": {
+      "js": "function shipWithinDays(weights, days) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int shipWithinDays(int[] weights, int days) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "shipWithinDays([1,2,3,4,5,6,7,8,9,10], 5)",
+        "expected": 15
+      },
+      {
+        "name": "three days",
+        "call": "shipWithinDays([3,2,2,4,1,4], 3)",
+        "expected": 6
+      },
+      {
+        "name": "four days",
+        "call": "shipWithinDays([1,2,3,1,1], 4)",
+        "expected": 3
+      },
+      {
+        "name": "one day",
+        "call": "shipWithinDays([5,5,5], 1)",
+        "expected": 15
+      },
+      {
+        "name": "many days",
+        "call": "shipWithinDays([5,9,2], 10)",
+        "expected": 9
+      },
+      {
+        "name": "single",
+        "call": "shipWithinDays([7], 1)",
+        "expected": 7
+      }
+    ],
+    "solution": {
+      "js": "function shipWithinDays(weights, days) {\n  let lo = Math.max(...weights), hi = weights.reduce((a, b) => a + b, 0);\n  const daysNeeded = cap => {\n    let d = 1, load = 0;\n    for (const w of weights) {\n      if (load + w > cap) { d++; load = 0; }\n      load += w;\n    }\n    return d;\n  };\n  while (lo < hi) {\n    const mid = Math.floor((lo + hi) / 2);\n    if (daysNeeded(mid) <= days) hi = mid; else lo = mid + 1;\n  }\n  return lo;\n}\n",
+      "java": "class Solution {\n  public int shipWithinDays(int[] weights, int days) {\n    int lo = 0, hi = 0;\n    for (int w : weights) { lo = Math.max(lo, w); hi += w; }\n    while (lo < hi) {\n      int mid = lo + (hi - lo) / 2;\n      int d = 1, load = 0;\n      for (int w : weights) {\n        if (load + w > mid) { d++; load = 0; }\n        load += w;\n      }\n      if (d <= days) hi = mid; else lo = mid + 1;\n    }\n    return lo;\n  }\n}\n"
+    },
+    "complexity": "Time O(n log S) where S = sum of weights, space O(1)",
+    "hints": [
+      "Capacity must be at least the heaviest package and at most the total weight.",
+      "For a fixed capacity, a greedy pass tells you how many days are needed.",
+      "Binary search the smallest capacity whose day count is <= days."
+    ],
+    "keyPoints": [
+      "Bounds: [max(w), sum(w)]",
+      "Greedy feasibility check is O(n)",
+      "Monotonic: more capacity never needs more days",
+      "Same template as Koko and Split Array"
+    ]
+  },
+  {
+    "id": "code-36",
+    "title": "Split Array Largest Sum",
+    "level": "hard",
+    "topic": "Binary search",
+    "pattern": "Binary search on the answer",
+    "prompt": "Split non-negative `nums` into `k` non-empty contiguous subarrays so that the **largest** subarray sum is minimized. Return that minimized largest sum.\n\n**Example:** `splitArray([7,2,5,10,8], 2)` -> `18` ([7,2,5] and [10,8])",
+    "fn": "splitArray",
+    "starter": {
+      "js": "function splitArray(nums, k) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int splitArray(int[] nums, int k) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "splitArray([7,2,5,10,8], 2)",
+        "expected": 18
+      },
+      {
+        "name": "sequential",
+        "call": "splitArray([1,2,3,4,5], 2)",
+        "expected": 9
+      },
+      {
+        "name": "k=n",
+        "call": "splitArray([1,4,4], 3)",
+        "expected": 4
+      },
+      {
+        "name": "k=1",
+        "call": "splitArray([2,3,1,2,4,3], 1)",
+        "expected": 15
+      },
+      {
+        "name": "zeros",
+        "call": "splitArray([0,0,0,5], 2)",
+        "expected": 5
+      },
+      {
+        "name": "many",
+        "call": "splitArray([10,5,13,4,8,4,5,11,14,9,16,10,20,8], 8)",
+        "expected": 25
+      }
+    ],
+    "solution": {
+      "js": "function splitArray(nums, k) {\n  let lo = Math.max(...nums), hi = nums.reduce((a, b) => a + b, 0);\n  const pieces = limit => {\n    let count = 1, sum = 0;\n    for (const x of nums) {\n      if (sum + x > limit) { count++; sum = 0; }\n      sum += x;\n    }\n    return count;\n  };\n  while (lo < hi) {\n    const mid = Math.floor((lo + hi) / 2);\n    if (pieces(mid) <= k) hi = mid; else lo = mid + 1;\n  }\n  return lo;\n}\n",
+      "java": "class Solution {\n  public int splitArray(int[] nums, int k) {\n    long lo = 0, hi = 0;\n    for (int x : nums) { lo = Math.max(lo, x); hi += x; }\n    while (lo < hi) {\n      long mid = lo + (hi - lo) / 2;\n      int count = 1; long sum = 0;\n      for (int x : nums) {\n        if (sum + x > mid) { count++; sum = 0; }\n        sum += x;\n      }\n      if (count <= k) hi = mid; else lo = mid + 1;\n    }\n    return (int) lo;\n  }\n}\n"
+    },
+    "complexity": "Time O(n log S), space O(1)",
+    "hints": [
+      "Guess an answer L: can you split into at most k pieces with every piece sum <= L?",
+      "Greedily extend each piece until adding the next element would exceed L.",
+      "Fewer pieces than k is fine: you can always split a piece further since k <= n."
+    ],
+    "keyPoints": [
+      "Binary search on the answer with greedy feasibility",
+      "Bounds [max, sum]",
+      "pieces <= k is the feasibility test (not == k)",
+      "DP alternative O(k * n^2) is too slow for big inputs"
+    ]
+  },
+  {
+    "id": "code-37",
+    "title": "Longest Substring Without Repeating Characters",
+    "level": "medium",
+    "topic": "Sliding window",
+    "pattern": "Sliding window",
+    "prompt": "Return the length of the longest substring of `s` that contains no repeated characters.\n\n**Example 1:** `lengthOfLongestSubstring(\"abcabcbb\")` -> `3`\n\n**Example 2:** `lengthOfLongestSubstring(\"pwwkew\")` -> `3`",
+    "fn": "lengthOfLongestSubstring",
+    "starter": {
+      "js": "function lengthOfLongestSubstring(s) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int lengthOfLongestSubstring(String s) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "abcabcbb",
+        "call": "lengthOfLongestSubstring(\"abcabcbb\")",
+        "expected": 3
+      },
+      {
+        "name": "bbbbb",
+        "call": "lengthOfLongestSubstring(\"bbbbb\")",
+        "expected": 1
+      },
+      {
+        "name": "pwwkew",
+        "call": "lengthOfLongestSubstring(\"pwwkew\")",
+        "expected": 3
+      },
+      {
+        "name": "empty",
+        "call": "lengthOfLongestSubstring(\"\")",
+        "expected": 0
+      },
+      {
+        "name": "abba",
+        "call": "lengthOfLongestSubstring(\"abba\")",
+        "expected": 2
+      },
+      {
+        "name": "space",
+        "call": "lengthOfLongestSubstring(\" \")",
+        "expected": 1
+      },
+      {
+        "name": "dvdf",
+        "call": "lengthOfLongestSubstring(\"dvdf\")",
+        "expected": 3
+      }
+    ],
+    "solution": {
+      "js": "function lengthOfLongestSubstring(s) {\n  const last = new Map();\n  let best = 0, left = 0;\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last.has(c) && last.get(c) >= left) left = last.get(c) + 1;\n    last.set(c, right);\n    best = Math.max(best, right - left + 1);\n  }\n  return best;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int lengthOfLongestSubstring(String s) {\n    Map<Character, Integer> last = new HashMap<>();\n    int best = 0, left = 0;\n    for (int right = 0; right < s.length(); right++) {\n      char c = s.charAt(right);\n      Integer p = last.get(c);\n      if (p != null && p >= left) left = p + 1;\n      last.put(c, right);\n      best = Math.max(best, right - left + 1);\n    }\n    return best;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(min(n, alphabet))",
+    "hints": [
+      "Maintain a window [left, right] with all-unique characters.",
+      "When s[right] was seen inside the window, jump left past its previous position.",
+      "Track the last index of each character in a map."
+    ],
+    "keyPoints": [
+      "Variable-size sliding window",
+      "Jump left directly using last-seen index (only if inside window)",
+      "O(n) single pass",
+      "Common bug: moving left backwards when the previous occurrence is outside the window"
+    ]
+  },
+  {
+    "id": "code-38",
+    "title": "Minimum Window Substring",
+    "level": "hard",
+    "topic": "Sliding window",
+    "pattern": "Sliding window",
+    "prompt": "Return the minimum-length substring of `s` that contains every character of `t` (including duplicates). If none exists return `\"\"`. The answer is unique when it exists.\n\n**Example:** `minWindow(\"ADOBECODEBANC\", \"ABC\")` -> `\"BANC\"`",
+    "fn": "minWindow",
+    "starter": {
+      "js": "function minWindow(s, t) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public String minWindow(String s, String t) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "minWindow(\"ADOBECODEBANC\", \"ABC\")",
+        "expected": "BANC"
+      },
+      {
+        "name": "exact",
+        "call": "minWindow(\"a\", \"a\")",
+        "expected": "a"
+      },
+      {
+        "name": "impossible",
+        "call": "minWindow(\"a\", \"aa\")",
+        "expected": ""
+      },
+      {
+        "name": "dups",
+        "call": "minWindow(\"aaflslflsldkalskaaa\", \"aaa\")",
+        "expected": "aaa"
+      },
+      {
+        "name": "whole",
+        "call": "minWindow(\"abc\", \"cba\")",
+        "expected": "abc"
+      },
+      {
+        "name": "not present",
+        "call": "minWindow(\"xyz\", \"q\")",
+        "expected": ""
+      },
+      {
+        "name": "later shorter",
+        "call": "minWindow(\"abbbbbcdac\", \"ac\")",
+        "expected": "ac"
+      }
+    ],
+    "solution": {
+      "js": "function minWindow(s, t) {\n  if (!t.length) return \"\";\n  const need = new Map();\n  for (const c of t) need.set(c, (need.get(c) || 0) + 1);\n  let missing = t.length, left = 0, bestL = 0, bestLen = Infinity;\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (need.has(c)) { if (need.get(c) > 0) missing--; need.set(c, need.get(c) - 1); }\n    while (missing === 0) {\n      if (right - left + 1 < bestLen) { bestLen = right - left + 1; bestL = left; }\n      const d = s[left++];\n      if (need.has(d)) { need.set(d, need.get(d) + 1); if (need.get(d) > 0) missing++; }\n    }\n  }\n  return bestLen === Infinity ? \"\" : s.slice(bestL, bestL + bestLen);\n}\n",
+      "java": "class Solution {\n  public String minWindow(String s, String t) {\n    if (t.isEmpty()) return \"\";\n    int[] need = new int[128];\n    for (char c : t.toCharArray()) need[c]++;\n    int missing = t.length(), left = 0, bestL = 0, bestLen = Integer.MAX_VALUE;\n    for (int right = 0; right < s.length(); right++) {\n      if (need[s.charAt(right)]-- > 0) missing--;\n      while (missing == 0) {\n        if (right - left + 1 < bestLen) { bestLen = right - left + 1; bestL = left; }\n        if (++need[s.charAt(left++)] > 0) missing++;\n      }\n    }\n    return bestLen == Integer.MAX_VALUE ? \"\" : s.substring(bestL, bestL + bestLen);\n  }\n}\n"
+    },
+    "complexity": "Time O(|s| + |t|), space O(alphabet)",
+    "hints": [
+      "Expand right until the window covers t; then shrink left while it still covers t.",
+      "Keep a count of still-needed characters so 'covers' is O(1) to check.",
+      "Record the best window each time the window is valid, before shrinking past validity."
+    ],
+    "keyPoints": [
+      "Expand/contract sliding window",
+      "need-counts can go negative for surplus characters",
+      "missing counter avoids comparing maps every step",
+      "Handles duplicates in t"
+    ]
+  },
+  {
+    "id": "code-39",
+    "title": "Container With Most Water",
+    "level": "easy",
+    "topic": "Two pointers",
+    "pattern": "Two pointers",
+    "prompt": "Given heights of vertical lines at positions `0..n-1`, choose two lines that, with the x-axis, form a container holding the most water. Return that maximum area.\n\n**Example:** `maxArea([1,8,6,2,5,4,8,3,7])` -> `49`",
+    "fn": "maxArea",
+    "starter": {
+      "js": "function maxArea(height) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int maxArea(int[] height) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "maxArea([1,8,6,2,5,4,8,3,7])",
+        "expected": 49
+      },
+      {
+        "name": "two",
+        "call": "maxArea([1,1])",
+        "expected": 1
+      },
+      {
+        "name": "equal ends",
+        "call": "maxArea([4,3,2,1,4])",
+        "expected": 16
+      },
+      {
+        "name": "ramp",
+        "call": "maxArea([1,2,1])",
+        "expected": 2
+      },
+      {
+        "name": "increasing",
+        "call": "maxArea([1,2,3,4,5])",
+        "expected": 6
+      },
+      {
+        "name": "zeros",
+        "call": "maxArea([0,0,0])",
+        "expected": 0
+      }
+    ],
+    "solution": {
+      "js": "function maxArea(height) {\n  let i = 0, j = height.length - 1, best = 0;\n  while (i < j) {\n    best = Math.max(best, (j - i) * Math.min(height[i], height[j]));\n    if (height[i] < height[j]) i++; else j--;\n  }\n  return best;\n}\n",
+      "java": "class Solution {\n  public int maxArea(int[] height) {\n    int i = 0, j = height.length - 1, best = 0;\n    while (i < j) {\n      best = Math.max(best, (j - i) * Math.min(height[i], height[j]));\n      if (height[i] < height[j]) i++; else j--;\n    }\n    return best;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "Start with the widest container (both ends).",
+      "The shorter line limits the area; keeping it while narrowing can never help.",
+      "Always move the pointer at the shorter line inward."
+    ],
+    "keyPoints": [
+      "Two pointers from both ends",
+      "Move the shorter side: provably never skips the optimum",
+      "O(n) vs O(n^2) brute force",
+      "Area = width * min(height)"
+    ]
+  },
+  {
+    "id": "code-40",
+    "title": "Trapping Rain Water",
+    "level": "hard",
+    "topic": "Two pointers",
+    "pattern": "Two pointers",
+    "prompt": "Given non-negative bar heights (width 1 each), compute how much rain water is trapped after raining.\n\n**Example:** `trap([0,1,0,2,1,0,1,3,2,1,2,1])` -> `6`",
+    "fn": "trap",
+    "starter": {
+      "js": "function trap(height) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int trap(int[] height) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "trap([0,1,0,2,1,0,1,3,2,1,2,1])",
+        "expected": 6
+      },
+      {
+        "name": "second",
+        "call": "trap([4,2,0,3,2,5])",
+        "expected": 9
+      },
+      {
+        "name": "empty",
+        "call": "trap([])",
+        "expected": 0
+      },
+      {
+        "name": "increasing",
+        "call": "trap([1,2,3,4])",
+        "expected": 0
+      },
+      {
+        "name": "valley",
+        "call": "trap([3,0,3])",
+        "expected": 3
+      },
+      {
+        "name": "flat",
+        "call": "trap([2,2,2])",
+        "expected": 0
+      },
+      {
+        "name": "two basins",
+        "call": "trap([5,1,5,1,5])",
+        "expected": 8
+      }
+    ],
+    "solution": {
+      "js": "function trap(height) {\n  let i = 0, j = height.length - 1, leftMax = 0, rightMax = 0, water = 0;\n  while (i < j) {\n    if (height[i] < height[j]) {\n      leftMax = Math.max(leftMax, height[i]);\n      water += leftMax - height[i++];\n    } else {\n      rightMax = Math.max(rightMax, height[j]);\n      water += rightMax - height[j--];\n    }\n  }\n  return water;\n}\n",
+      "java": "class Solution {\n  public int trap(int[] height) {\n    int i = 0, j = height.length - 1, leftMax = 0, rightMax = 0, water = 0;\n    while (i < j) {\n      if (height[i] < height[j]) {\n        leftMax = Math.max(leftMax, height[i]);\n        water += leftMax - height[i++];\n      } else {\n        rightMax = Math.max(rightMax, height[j]);\n        water += rightMax - height[j--];\n      }\n    }\n    return water;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "Water above bar i = min(max height to its left, max to its right) - height[i].",
+      "Prefix/suffix max arrays give O(n) time and O(n) space.",
+      "With two pointers, the side with the smaller current height has its bound fully determined by its own running max."
+    ],
+    "keyPoints": [
+      "Know three solutions: prefix/suffix arrays, monotonic stack, two pointers",
+      "Two pointers: process the lower side, its max is the binding constraint",
+      "O(n) time, O(1) space",
+      "Empty and monotone inputs trap 0"
+    ]
+  },
+  {
+    "id": "code-41",
+    "title": "Daily Temperatures",
+    "level": "medium",
+    "topic": "Stacks",
+    "pattern": "Monotonic stack",
+    "prompt": "For each day, return how many days you must wait for a **warmer** temperature; use `0` if none.\n\n**Example:** `dailyTemperatures([73,74,75,71,69,72,76,73])` -> `[1,1,4,2,1,1,0,0]`",
+    "fn": "dailyTemperatures",
+    "starter": {
+      "js": "function dailyTemperatures(temperatures) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] dailyTemperatures(int[] temperatures) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "dailyTemperatures([73,74,75,71,69,72,76,73])",
+        "expected": [
+          1,
+          1,
+          4,
+          2,
+          1,
+          1,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "increasing",
+        "call": "dailyTemperatures([30,40,50,60])",
+        "expected": [
+          1,
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "name": "short",
+        "call": "dailyTemperatures([30,60,90])",
+        "expected": [
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "name": "decreasing",
+        "call": "dailyTemperatures([90,80,70])",
+        "expected": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "equal",
+        "call": "dailyTemperatures([50,50,51])",
+        "expected": [
+          2,
+          1,
+          0
+        ]
+      },
+      {
+        "name": "single",
+        "call": "dailyTemperatures([42])",
+        "expected": [
+          0
+        ]
+      }
+    ],
+    "solution": {
+      "js": "function dailyTemperatures(temperatures) {\n  const res = new Array(temperatures.length).fill(0);\n  const stack = []; // indices with non-increasing temperatures\n  for (let i = 0; i < temperatures.length; i++) {\n    while (stack.length && temperatures[stack[stack.length - 1]] < temperatures[i]) {\n      const j = stack.pop();\n      res[j] = i - j;\n    }\n    stack.push(i);\n  }\n  return res;\n}\n",
+      "java": "class Solution {\n  public int[] dailyTemperatures(int[] temperatures) {\n    int n = temperatures.length;\n    int[] res = new int[n], stack = new int[n];\n    int top = 0;\n    for (int i = 0; i < n; i++) {\n      while (top > 0 && temperatures[stack[top - 1]] < temperatures[i]) {\n        int j = stack[--top];\n        res[j] = i - j;\n      }\n      stack[top++] = i;\n    }\n    return res;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(n)",
+    "hints": [
+      "Brute force scans forward from each day: O(n^2).",
+      "Keep a stack of indices still waiting for a warmer day; their temperatures are non-increasing.",
+      "When today is warmer than the stack top, pop and resolve that day's answer."
+    ],
+    "keyPoints": [
+      "Monotonic decreasing stack of indices",
+      "Each index pushed and popped once: amortized O(n)",
+      "Store indices, not values, to compute distances",
+      "Same pattern: next greater element, stock span"
+    ]
+  },
+  {
+    "id": "code-42",
+    "title": "Largest Rectangle in Histogram",
+    "level": "hard",
+    "topic": "Stacks",
+    "pattern": "Monotonic stack",
+    "prompt": "Given bar heights of a histogram (each bar width 1), return the area of the largest rectangle that fits inside it.\n\n**Example:** `largestRectangleArea([2,1,5,6,2,3])` -> `10`",
+    "fn": "largestRectangleArea",
+    "starter": {
+      "js": "function largestRectangleArea(heights) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int largestRectangleArea(int[] heights) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "largestRectangleArea([2,1,5,6,2,3])",
+        "expected": 10
+      },
+      {
+        "name": "two",
+        "call": "largestRectangleArea([2,4])",
+        "expected": 4
+      },
+      {
+        "name": "single",
+        "call": "largestRectangleArea([5])",
+        "expected": 5
+      },
+      {
+        "name": "flat",
+        "call": "largestRectangleArea([3,3,3,3])",
+        "expected": 12
+      },
+      {
+        "name": "valley",
+        "call": "largestRectangleArea([6,2,5,4,5,1,6])",
+        "expected": 12
+      },
+      {
+        "name": "empty",
+        "call": "largestRectangleArea([])",
+        "expected": 0
+      },
+      {
+        "name": "increasing",
+        "call": "largestRectangleArea([1,2,3,4,5])",
+        "expected": 9
+      }
+    ],
+    "solution": {
+      "js": "function largestRectangleArea(heights) {\n  const stack = []; // indices with increasing heights\n  let best = 0;\n  for (let i = 0; i <= heights.length; i++) {\n    const h = i === heights.length ? 0 : heights[i];\n    while (stack.length && heights[stack[stack.length - 1]] >= h) {\n      const height = heights[stack.pop()];\n      const left = stack.length ? stack[stack.length - 1] + 1 : 0;\n      best = Math.max(best, height * (i - left));\n    }\n    stack.push(i);\n  }\n  return best;\n}\n",
+      "java": "class Solution {\n  public int largestRectangleArea(int[] heights) {\n    int n = heights.length, top = 0, best = 0;\n    int[] stack = new int[n + 1];\n    for (int i = 0; i <= n; i++) {\n      int h = i == n ? 0 : heights[i];\n      while (top > 0 && heights[stack[top - 1]] >= h) {\n        int height = heights[stack[--top]];\n        int left = top > 0 ? stack[top - 1] + 1 : 0;\n        best = Math.max(best, height * (i - left));\n      }\n      stack[top++] = i;\n    }\n    return best;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(n)",
+    "hints": [
+      "For each bar, the best rectangle using its full height extends to the nearest shorter bar on each side.",
+      "An increasing stack of indices gives both boundaries when a bar is popped.",
+      "Append a sentinel height 0 at the end to flush the stack."
+    ],
+    "keyPoints": [
+      "Monotonic increasing stack",
+      "Popped bar's right boundary is i, left boundary is the new stack top + 1",
+      "Sentinel 0 avoids a separate cleanup loop",
+      "Building block for Maximal Rectangle in a binary matrix"
+    ]
+  },
+  {
+    "id": "code-43",
+    "title": "Network Delay Time",
+    "level": "medium",
+    "topic": "Graphs",
+    "pattern": "Dijkstra",
+    "prompt": "`times[i] = [u, v, w]` is a directed edge from node u to v taking w time. Nodes are `1..n`. A signal is sent from node `k`. Return the time for all nodes to receive it, or `-1` if some node is unreachable.\n\n**Example:** `networkDelayTime([[2,1,1],[2,3,1],[3,4,1]], 4, 2)` -> `2`",
+    "fn": "networkDelayTime",
+    "starter": {
+      "js": "function networkDelayTime(times, n, k) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int networkDelayTime(int[][] times, int n, int k) {\n    // your code\n    return -2;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "networkDelayTime([[2,1,1],[2,3,1],[3,4,1]], 4, 2)",
+        "expected": 2
+      },
+      {
+        "name": "single edge",
+        "call": "networkDelayTime([[1,2,1]], 2, 1)",
+        "expected": 1
+      },
+      {
+        "name": "unreachable",
+        "call": "networkDelayTime([[1,2,1]], 2, 2)",
+        "expected": -1
+      },
+      {
+        "name": "indirect shorter",
+        "call": "networkDelayTime([[1,2,10],[1,3,1],[3,2,1]], 3, 1)",
+        "expected": 2
+      },
+      {
+        "name": "one node",
+        "call": "networkDelayTime([], 1, 1)",
+        "expected": 0
+      },
+      {
+        "name": "diamond",
+        "call": "networkDelayTime([[1,2,1],[1,3,4],[2,3,2],[3,4,1],[2,4,5]], 4, 1)",
+        "expected": 4
+      }
+    ],
+    "solution": {
+      "js": "function networkDelayTime(times, n, k) {\n  const adj = Array.from({ length: n + 1 }, () => []);\n  for (const [u, v, w] of times) adj[u].push([v, w]);\n  const dist = new Array(n + 1).fill(Infinity);\n  dist[k] = 0;\n  // binary min-heap of [dist, node]\n  const heap = [[0, k]];\n  const push = x => {\n    heap.push(x);\n    let i = heap.length - 1;\n    while (i > 0) {\n      const p = (i - 1) >> 1;\n      if (heap[p][0] <= heap[i][0]) break;\n      [heap[p], heap[i]] = [heap[i], heap[p]];\n      i = p;\n    }\n  };\n  const pop = () => {\n    const top = heap[0], last = heap.pop();\n    if (heap.length) {\n      heap[0] = last;\n      let i = 0;\n      for (;;) {\n        const l = 2 * i + 1, r = l + 1;\n        let m = i;\n        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;\n        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;\n        if (m === i) break;\n        [heap[m], heap[i]] = [heap[i], heap[m]];\n        i = m;\n      }\n    }\n    return top;\n  };\n  while (heap.length) {\n    const [d, u] = pop();\n    if (d > dist[u]) continue;\n    for (const [v, w] of adj[u]) {\n      if (d + w < dist[v]) { dist[v] = d + w; push([dist[v], v]); }\n    }\n  }\n  const ans = Math.max(...dist.slice(1));\n  return ans === Infinity ? -1 : ans;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int networkDelayTime(int[][] times, int n, int k) {\n    List<List<int[]>> adj = new ArrayList<>();\n    for (int i = 0; i <= n; i++) adj.add(new ArrayList<>());\n    for (int[] t : times) adj.get(t[0]).add(new int[]{t[1], t[2]});\n    int[] dist = new int[n + 1];\n    Arrays.fill(dist, Integer.MAX_VALUE);\n    dist[k] = 0;\n    PriorityQueue<int[]> pq = new PriorityQueue<>((a, b) -> Integer.compare(a[0], b[0]));\n    pq.add(new int[]{0, k});\n    while (!pq.isEmpty()) {\n      int[] cur = pq.poll();\n      int d = cur[0], u = cur[1];\n      if (d > dist[u]) continue;\n      for (int[] e : adj.get(u)) {\n        if (d + e[1] < dist[e[0]]) { dist[e[0]] = d + e[1]; pq.add(new int[]{dist[e[0]], e[0]}); }\n      }\n    }\n    int ans = 0;\n    for (int i = 1; i <= n; i++) {\n      if (dist[i] == Integer.MAX_VALUE) return -1;\n      ans = Math.max(ans, dist[i]);\n    }\n    return ans;\n  }\n}\n"
+    },
+    "complexity": "Time O(E log V), space O(V + E)",
+    "hints": [
+      "This is single-source shortest paths with non-negative weights.",
+      "Use Dijkstra with a min-heap keyed by tentative distance.",
+      "The answer is the max shortest distance; any Infinity means -1."
+    ],
+    "keyPoints": [
+      "Dijkstra with lazy deletion (skip stale heap entries)",
+      "Non-negative weights are required (else Bellman-Ford)",
+      "Answer = max over shortest distances",
+      "Directed edges: only add u -> v"
+    ]
+  },
+  {
+    "id": "code-44",
+    "title": "Alien Dictionary (Lite)",
+    "level": "hard",
+    "topic": "Graphs",
+    "pattern": "Topological sort",
+    "prompt": "`words` is sorted lexicographically by an unknown alphabet (lowercase letters). Derive a letter order consistent with it, containing every letter that appears. If no valid order exists (contradiction, or a word precedes its own prefix) return `\"\"`. When several orders are valid, break ties by choosing the **smallest available letter first** (Kahn's algorithm with a min-priority queue) so the answer is deterministic.\n\n**Example:** `alienOrder([\"wrt\",\"wrf\",\"er\",\"ett\",\"rftt\"])` -> `\"wertf\"`",
+    "fn": "alienOrder",
+    "starter": {
+      "js": "function alienOrder(words) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public String alienOrder(String[] words) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "alienOrder([\"wrt\",\"wrf\",\"er\",\"ett\",\"rftt\"])",
+        "expected": "wertf"
+      },
+      {
+        "name": "two",
+        "call": "alienOrder([\"z\",\"x\"])",
+        "expected": "zx"
+      },
+      {
+        "name": "cycle",
+        "call": "alienOrder([\"z\",\"x\",\"z\"])",
+        "expected": ""
+      },
+      {
+        "name": "prefix invalid",
+        "call": "alienOrder([\"abc\",\"ab\"])",
+        "expected": ""
+      },
+      {
+        "name": "unconstrained ties",
+        "call": "alienOrder([\"ba\",\"bc\"])",
+        "expected": "abc"
+      },
+      {
+        "name": "single word",
+        "call": "alienOrder([\"cab\"])",
+        "expected": "abc"
+      },
+      {
+        "name": "chain",
+        "call": "alienOrder([\"c\",\"b\",\"a\"])",
+        "expected": "cba"
+      }
+    ],
+    "solution": {
+      "js": "function alienOrder(words) {\n  const adj = new Map(), indeg = new Map();\n  for (const w of words) for (const c of w) { if (!adj.has(c)) { adj.set(c, new Set()); indeg.set(c, 0); } }\n  for (let i = 0; i + 1 < words.length; i++) {\n    const a = words[i], b = words[i + 1];\n    const len = Math.min(a.length, b.length);\n    let j = 0;\n    while (j < len && a[j] === b[j]) j++;\n    if (j === len) { if (a.length > b.length) return \"\"; continue; }\n    if (!adj.get(a[j]).has(b[j])) { adj.get(a[j]).add(b[j]); indeg.set(b[j], indeg.get(b[j]) + 1); }\n  }\n  const ready = [...indeg.keys()].filter(c => indeg.get(c) === 0);\n  let out = \"\";\n  while (ready.length) {\n    ready.sort();\n    const c = ready.shift();\n    out += c;\n    for (const d of adj.get(c)) { indeg.set(d, indeg.get(d) - 1); if (indeg.get(d) === 0) ready.push(d); }\n  }\n  return out.length === adj.size ? out : \"\";\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public String alienOrder(String[] words) {\n    Map<Character, Set<Character>> adj = new HashMap<>();\n    Map<Character, Integer> indeg = new HashMap<>();\n    for (String w : words) for (char c : w.toCharArray()) { adj.putIfAbsent(c, new HashSet<>()); indeg.putIfAbsent(c, 0); }\n    for (int i = 0; i + 1 < words.length; i++) {\n      String a = words[i], b = words[i + 1];\n      int len = Math.min(a.length(), b.length()), j = 0;\n      while (j < len && a.charAt(j) == b.charAt(j)) j++;\n      if (j == len) { if (a.length() > b.length()) return \"\"; continue; }\n      if (adj.get(a.charAt(j)).add(b.charAt(j))) indeg.merge(b.charAt(j), 1, Integer::sum);\n    }\n    PriorityQueue<Character> ready = new PriorityQueue<>();\n    for (Map.Entry<Character, Integer> e : indeg.entrySet()) if (e.getValue() == 0) ready.add(e.getKey());\n    StringBuilder out = new StringBuilder();\n    while (!ready.isEmpty()) {\n      char c = ready.poll();\n      out.append(c);\n      for (char d : adj.get(c)) if (indeg.merge(d, -1, Integer::sum) == 0) ready.add(d);\n    }\n    return out.length() == adj.size() ? out.toString() : \"\";\n  }\n}\n"
+    },
+    "complexity": "Time O(C + U log U) for C total characters and U unique letters, space O(U^2) edges worst case",
+    "hints": [
+      "Only the first differing character between adjacent words gives an ordering edge.",
+      "If a longer word precedes its own prefix (\"abc\" before \"ab\"), the input is invalid.",
+      "Topologically sort with Kahn's algorithm; leftover nodes mean a cycle."
+    ],
+    "keyPoints": [
+      "Compare only adjacent word pairs",
+      "Prefix rule violation returns empty",
+      "Kahn's BFS detects cycles (output shorter than letter count)",
+      "Include letters with no edges; deduplicate edges before counting in-degree"
+    ]
+  },
+  {
+    "id": "code-45",
+    "title": "Is Graph Bipartite?",
+    "level": "medium",
+    "topic": "Graphs",
+    "pattern": "Graph coloring (BFS)",
+    "prompt": "`graph[i]` lists the neighbors of node `i` in an undirected graph (possibly disconnected). Return `true` if nodes can be split into two sets such that every edge connects nodes from different sets.\n\n**Example 1:** `isBipartite([[1,3],[0,2],[1,3],[0,2]])` -> `true`\n\n**Example 2:** `isBipartite([[1,2,3],[0,2],[0,1,3],[0,2]])` -> `false`",
+    "fn": "isBipartite",
+    "starter": {
+      "js": "function isBipartite(graph) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public boolean isBipartite(int[][] graph) {\n    // your code\n    return false;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "square",
+        "call": "isBipartite([[1,3],[0,2],[1,3],[0,2]])",
+        "expected": true
+      },
+      {
+        "name": "triangle",
+        "call": "isBipartite([[1,2,3],[0,2],[0,1,3],[0,2]])",
+        "expected": false
+      },
+      {
+        "name": "disconnected odd",
+        "call": "isBipartite([[1],[0],[3,4],[2,4],[2,3]])",
+        "expected": false
+      },
+      {
+        "name": "isolated",
+        "call": "isBipartite([[],[],[]])",
+        "expected": true
+      },
+      {
+        "name": "path",
+        "call": "isBipartite([[1],[0,2],[1,3],[2]])",
+        "expected": true
+      },
+      {
+        "name": "pentagon",
+        "call": "isBipartite([[1,4],[0,2],[1,3],[2,4],[3,0]])",
+        "expected": false
+      }
+    ],
+    "solution": {
+      "js": "function isBipartite(graph) {\n  const color = new Array(graph.length).fill(-1);\n  for (let s = 0; s < graph.length; s++) {\n    if (color[s] !== -1) continue;\n    color[s] = 0;\n    const queue = [s];\n    for (let qi = 0; qi < queue.length; qi++) {\n      const u = queue[qi];\n      for (const v of graph[u]) {\n        if (color[v] === -1) { color[v] = 1 - color[u]; queue.push(v); }\n        else if (color[v] === color[u]) return false;\n      }\n    }\n  }\n  return true;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public boolean isBipartite(int[][] graph) {\n    int[] color = new int[graph.length];\n    Arrays.fill(color, -1);\n    for (int s = 0; s < graph.length; s++) {\n      if (color[s] != -1) continue;\n      color[s] = 0;\n      Deque<Integer> q = new ArrayDeque<>();\n      q.add(s);\n      while (!q.isEmpty()) {\n        int u = q.poll();\n        for (int v : graph[u]) {\n          if (color[v] == -1) { color[v] = 1 - color[u]; q.add(v); }\n          else if (color[v] == color[u]) return false;\n        }\n      }\n    }\n    return true;\n  }\n}\n"
+    },
+    "complexity": "Time O(V + E), space O(V)",
+    "hints": [
+      "Try to 2-color the graph: neighbors must get opposite colors.",
+      "BFS/DFS from each uncolored node (the graph may be disconnected).",
+      "A neighbor that already has the same color proves an odd cycle."
+    ],
+    "keyPoints": [
+      "2-coloring via BFS or DFS",
+      "Loop over all components",
+      "Bipartite iff no odd-length cycle",
+      "Union-find alternative: union all neighbors of u together, check u never joins them"
+    ]
+  },
+  {
+    "id": "code-46",
+    "title": "Non-overlapping Intervals",
+    "level": "medium",
+    "topic": "Intervals",
+    "pattern": "Greedy (intervals)",
+    "prompt": "Return the minimum number of intervals to remove so the rest are non-overlapping. Intervals that only touch (e.g. `[1,2]` and `[2,3]`) do not overlap.\n\n**Example:** `eraseOverlapIntervals([[1,2],[2,3],[3,4],[1,3]])` -> `1`",
+    "fn": "eraseOverlapIntervals",
+    "starter": {
+      "js": "function eraseOverlapIntervals(intervals) {\n  // your code\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int eraseOverlapIntervals(int[][] intervals) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "eraseOverlapIntervals([[1,2],[2,3],[3,4],[1,3]])",
+        "expected": 1
+      },
+      {
+        "name": "dups",
+        "call": "eraseOverlapIntervals([[1,2],[1,2],[1,2]])",
+        "expected": 2
+      },
+      {
+        "name": "none",
+        "call": "eraseOverlapIntervals([[1,2],[2,3]])",
+        "expected": 0
+      },
+      {
+        "name": "empty",
+        "call": "eraseOverlapIntervals([])",
+        "expected": 0
+      },
+      {
+        "name": "long one",
+        "call": "eraseOverlapIntervals([[1,100],[11,22],[1,11],[2,12]])",
+        "expected": 2
+      },
+      {
+        "name": "nested",
+        "call": "eraseOverlapIntervals([[0,10],[1,2],[3,4],[5,6]])",
+        "expected": 1
+      }
+    ],
+    "solution": {
+      "js": "function eraseOverlapIntervals(intervals) {\n  const sorted = [...intervals].sort((a, b) => a[1] - b[1]);\n  let kept = 0, end = -Infinity;\n  for (const [s, e] of sorted) {\n    if (s >= end) { kept++; end = e; }\n  }\n  return intervals.length - kept;\n}\n",
+      "java": "import java.util.*;\n\nclass Solution {\n  public int eraseOverlapIntervals(int[][] intervals) {\n    int[][] sorted = intervals.clone();\n    Arrays.sort(sorted, (a, b) -> Integer.compare(a[1], b[1]));\n    int kept = 0;\n    long end = Long.MIN_VALUE;\n    for (int[] iv : sorted) {\n      if (iv[0] >= end) { kept++; end = iv[1]; }\n    }\n    return intervals.length - kept;\n  }\n}\n"
+    },
+    "complexity": "Time O(n log n), space O(n) for the sorted copy",
+    "hints": [
+      "Equivalently: keep the maximum number of non-overlapping intervals.",
+      "Greedy: always keep the interval that ends earliest.",
+      "Sort by end; keep an interval if it starts at or after the last kept end."
+    ],
+    "keyPoints": [
+      "Activity-selection greedy: sort by end time",
+      "Exchange argument proves optimality",
+      "Touching endpoints are compatible (>=)",
+      "Sorting by start needs a different rule (drop the one ending later)"
+    ]
+  },
+  {
+    "id": "code-47",
+    "title": "Jump Game",
+    "level": "easy",
+    "topic": "Greedy",
+    "pattern": "Greedy",
+    "prompt": "You start at index 0. `nums[i]` is your maximum jump length from index i. Return `true` if you can reach the last index.\n\n**Example 1:** `canJump([2,3,1,1,4])` -> `true`\n\n**Example 2:** `canJump([3,2,1,0,4])` -> `false`",
+    "fn": "canJump",
+    "starter": {
+      "js": "function canJump(nums) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public boolean canJump(int[] nums) {\n    // your code\n    return false;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "reachable",
+        "call": "canJump([2,3,1,1,4])",
+        "expected": true
+      },
+      {
+        "name": "stuck",
+        "call": "canJump([3,2,1,0,4])",
+        "expected": false
+      },
+      {
+        "name": "single",
+        "call": "canJump([0])",
+        "expected": true
+      },
+      {
+        "name": "zero start",
+        "call": "canJump([0,1])",
+        "expected": false
+      },
+      {
+        "name": "exact",
+        "call": "canJump([1,1,1,0])",
+        "expected": true
+      },
+      {
+        "name": "big jump",
+        "call": "canJump([5,0,0,0,0,0])",
+        "expected": true
+      },
+      {
+        "name": "trap later",
+        "call": "canJump([2,0,0,1])",
+        "expected": false
+      }
+    ],
+    "solution": {
+      "js": "function canJump(nums) {\n  let reach = 0;\n  for (let i = 0; i < nums.length; i++) {\n    if (i > reach) return false;\n    reach = Math.max(reach, i + nums[i]);\n  }\n  return true;\n}\n",
+      "java": "class Solution {\n  public boolean canJump(int[] nums) {\n    int reach = 0;\n    for (int i = 0; i < nums.length; i++) {\n      if (i > reach) return false;\n      reach = Math.max(reach, i + nums[i]);\n    }\n    return true;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "Track the furthest index reachable so far.",
+      "If you ever stand at an index beyond that reach, you are stuck.",
+      "No need to simulate jumps; one greedy pass suffices."
+    ],
+    "keyPoints": [
+      "Greedy max-reach scan",
+      "O(n) beats DP O(n^2)",
+      "A single element [0] is already at the end",
+      "Follow-up Jump Game II: BFS-by-levels greedy for min jumps"
+    ]
+  },
+  {
+    "id": "code-48",
+    "title": "Single Number",
+    "level": "easy",
+    "topic": "Bit manipulation",
+    "pattern": "Bit manipulation",
+    "prompt": "Every element in `nums` appears twice except one. Return that single one using O(n) time and O(1) extra space.\n\n**Example:** `singleNumber([4,1,2,1,2])` -> `4`",
+    "fn": "singleNumber",
+    "starter": {
+      "js": "function singleNumber(nums) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int singleNumber(int[] nums) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "singleNumber([4,1,2,1,2])",
+        "expected": 4
+      },
+      {
+        "name": "small",
+        "call": "singleNumber([2,2,1])",
+        "expected": 1
+      },
+      {
+        "name": "single",
+        "call": "singleNumber([1])",
+        "expected": 1
+      },
+      {
+        "name": "negative",
+        "call": "singleNumber([-3,7,7])",
+        "expected": -3
+      },
+      {
+        "name": "zero",
+        "call": "singleNumber([0,5,5])",
+        "expected": 0
+      },
+      {
+        "name": "large",
+        "call": "singleNumber([100000,3,3,9,9])",
+        "expected": 100000
+      }
+    ],
+    "solution": {
+      "js": "function singleNumber(nums) {\n  let x = 0;\n  for (const v of nums) x ^= v;\n  return x;\n}\n",
+      "java": "class Solution {\n  public int singleNumber(int[] nums) {\n    int x = 0;\n    for (int v : nums) x ^= v;\n    return x;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "What is a ^ a? What is a ^ 0?",
+      "XOR is commutative and associative.",
+      "XOR everything: pairs cancel, the single remains."
+    ],
+    "keyPoints": [
+      "XOR cancels pairs",
+      "O(1) space beats hash-set counting",
+      "Works with negatives",
+      "Follow-ups: every other appears 3 times (bit counting mod 3); two singles (split by lowest set bit)"
+    ]
+  },
+  {
+    "id": "code-49",
+    "title": "Counting Bits",
+    "level": "easy",
+    "topic": "Bit manipulation",
+    "pattern": "Bit manipulation",
+    "prompt": "Return an array `ans` of length `n + 1` where `ans[i]` is the number of 1 bits in the binary representation of `i`. Aim for O(n).\n\n**Example:** `countBits(5)` -> `[0,1,1,2,1,2]`",
+    "fn": "countBits",
+    "starter": {
+      "js": "function countBits(n) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int[] countBits(int n) {\n    // your code\n    return null;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "two",
+        "call": "countBits(2)",
+        "expected": [
+          0,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "five",
+        "call": "countBits(5)",
+        "expected": [
+          0,
+          1,
+          1,
+          2,
+          1,
+          2
+        ]
+      },
+      {
+        "name": "zero",
+        "call": "countBits(0)",
+        "expected": [
+          0
+        ]
+      },
+      {
+        "name": "eight",
+        "call": "countBits(8)",
+        "expected": [
+          0,
+          1,
+          1,
+          2,
+          1,
+          2,
+          2,
+          3,
+          1
+        ]
+      },
+      {
+        "name": "sum to 15",
+        "call": "countBits(15).reduce((a,b)=>a+b,0)",
+        "expected": 32
+      },
+      {
+        "name": "last of 1023",
+        "call": "countBits(1023)[1023]",
+        "expected": 10
+      }
+    ],
+    "solution": {
+      "js": "function countBits(n) {\n  const ans = new Array(n + 1).fill(0);\n  for (let i = 1; i <= n; i++) ans[i] = ans[i >> 1] + (i & 1);\n  return ans;\n}\n",
+      "java": "class Solution {\n  public int[] countBits(int n) {\n    int[] ans = new int[n + 1];\n    for (int i = 1; i <= n; i++) ans[i] = ans[i >> 1] + (i & 1);\n    return ans;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(n) output",
+    "hints": [
+      "i >> 1 drops the last bit and is smaller than i.",
+      "bits(i) = bits(i >> 1) + (i & 1).",
+      "Alternative: bits(i) = bits(i & (i - 1)) + 1 (clears lowest set bit)."
+    ],
+    "keyPoints": [
+      "DP over bits reusing smaller answers",
+      "Two recurrences: i>>1 and i&(i-1)",
+      "O(n) vs O(n log n) per-number popcount",
+      "Brian Kernighan trick i & (i-1)"
+    ]
+  },
+  {
+    "id": "code-50",
+    "title": "Missing Number",
+    "level": "easy",
+    "topic": "Bit manipulation",
+    "pattern": "Bit manipulation",
+    "prompt": "`nums` contains `n` distinct numbers from the range `[0, n]`. Return the one number in the range that is missing, using O(1) extra space.\n\n**Example:** `missingNumber([3,0,1])` -> `2`",
+    "fn": "missingNumber",
+    "starter": {
+      "js": "function missingNumber(nums) {\n  // your code\n}\n",
+      "java": "class Solution {\n  public int missingNumber(int[] nums) {\n    // your code\n    return -1;\n  }\n}\n"
+    },
+    "tests": [
+      {
+        "name": "example",
+        "call": "missingNumber([3,0,1])",
+        "expected": 2
+      },
+      {
+        "name": "end",
+        "call": "missingNumber([0,1])",
+        "expected": 2
+      },
+      {
+        "name": "long",
+        "call": "missingNumber([9,6,4,2,3,5,7,0,1])",
+        "expected": 8
+      },
+      {
+        "name": "zero missing",
+        "call": "missingNumber([1])",
+        "expected": 0
+      },
+      {
+        "name": "single zero",
+        "call": "missingNumber([0])",
+        "expected": 1
+      },
+      {
+        "name": "middle",
+        "call": "missingNumber([0,1,2,4,5])",
+        "expected": 3
+      }
+    ],
+    "solution": {
+      "js": "function missingNumber(nums) {\n  let x = nums.length;\n  for (let i = 0; i < nums.length; i++) x ^= i ^ nums[i];\n  return x;\n}\n",
+      "java": "class Solution {\n  public int missingNumber(int[] nums) {\n    int x = nums.length;\n    for (int i = 0; i < nums.length; i++) x ^= i ^ nums[i];\n    return x;\n  }\n}\n"
+    },
+    "complexity": "Time O(n), space O(1)",
+    "hints": [
+      "XOR all indices 0..n and all values together.",
+      "Every present number cancels with its matching index.",
+      "Alternative: n(n+1)/2 minus the sum (watch for overflow in fixed-width ints)."
+    ],
+    "keyPoints": [
+      "XOR of indices and values isolates the missing one",
+      "No overflow risk unlike the sum formula",
+      "Remember to include n itself",
+      "Sorting is O(n log n) and unnecessary"
+    ]
+  }
+]

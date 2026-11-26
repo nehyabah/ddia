@@ -96,6 +96,7 @@ export function Art({ seed, motif, palette, className, label }: { seed: number; 
 const CHAPTER_ICON: Record<number, string> = {
   1: "shield", 2: "file-text", 3: "folder", 4: "lock", 5: "copy", 6: "chart", 7: "wallet", 8: "fire", 9: "link",
   10: "calender", 11: "flash", 12: "trophy", 13: "boy", 14: "battery", 15: "chart", 16: "computer", 17: "wallet", 18: "bulb",
+  19: "link", 20: "flash", 21: "computer", 22: "folder",
 };
 const TINTS = ["blue", "slate", "sand", "sky"] as const;
 

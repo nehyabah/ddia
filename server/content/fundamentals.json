@@ -1,0 +1,2256 @@
+{
+ "chapters": [
+  {
+   "id": 19,
+   "tag": "NET1",
+   "title": "Networking I: TCP/IP, TLS & DNS",
+   "blurb": "How bytes actually get from one machine to another: IP routing, TCP reliability and congestion control, the TLS 1.3 handshake, and DNS resolution. The layer under every distributed-systems answer.",
+   "cards": [
+    {
+     "t": "The layers that matter",
+     "b": [
+      "Practical stack: link (Ethernet/Wi‑Fi frames, MAC addresses), network (IP packets, routing), transport (TCP/UDP, ports), application (HTTP, DNS, TLS on top of TCP).",
+      "Each layer encapsulates the one above: an HTTP request sits inside TLS records, inside TCP segments, inside IP packets, inside Ethernet frames.",
+      "A connection is identified by the 5‑tuple: protocol, source IP, source port, destination IP, destination port.",
+      "L4 devices (NAT, L4 load balancers, firewalls) see IPs and ports; L7 devices (reverse proxies, API gateways) parse HTTP and need to terminate TLS.",
+      "Interview shortcut: when debugging, ask which layer broke — DNS (name), IP (route), TCP (connect/reset/timeout), TLS (cert/handshake), or HTTP (status code)."
+     ]
+    },
+    {
+     "t": "IP & routing basics",
+     "b": [
+      "IP is best‑effort: packets can be dropped, duplicated, reordered or delayed. Reliability is the transport layer's job.",
+      "Routers forward by longest‑prefix match on the destination address against their routing table; CIDR like 10.0.0.0/16 means the first 16 bits are the network.",
+      "Between organisations, BGP exchanges reachability for prefixes; inside a cloud VNet/VPC, the provider's software‑defined routing does the work.",
+      "MTU (often 1500 bytes on Ethernet) limits packet size. Path MTU problems show up as connections that handshake fine but hang on large transfers.",
+      "TTL (hop limit) is decremented at each router so looping packets die; traceroute exploits this to discover hops.",
+      "Private ranges (10/8, 172.16/12, 192.168/16) are not routable on the internet and need NAT to reach out."
+     ]
+    },
+    {
+     "t": "TCP handshake & teardown",
+     "b": [
+      "Three‑way handshake: client SYN (with initial sequence number), server SYN‑ACK, client ACK. Costs one round trip before data can flow.",
+      "Options are negotiated in the SYN: MSS, window scaling, SACK, timestamps.",
+      "The server keeps half‑open connections in a SYN queue and completed ones in an accept queue; if the app doesn't accept() fast enough, the accept queue overflows and new connections are dropped.",
+      "Teardown is per direction: FIN/ACK each way (often four segments). A RST aborts immediately — e.g. connecting to a closed port or a peer that crashed.",
+      "SYN floods fill the SYN queue; SYN cookies let the server avoid storing state until the final ACK arrives."
+     ]
+    },
+    {
+     "t": "Reliability: sequence numbers, ACKs & retransmits",
+     "b": [
+      "Every byte has a sequence number; the receiver sends cumulative ACKs for the next byte it expects. SACK lets it report non‑contiguous blocks received.",
+      "Retransmission timeout (RTO) is computed from smoothed RTT plus variance, with exponential backoff on repeated losses — why a lost packet can cost hundreds of ms or seconds.",
+      "Fast retransmit: three duplicate ACKs signal a likely loss, so the sender retransmits without waiting for RTO.",
+      "A lost SYN uses an initial RTO (commonly around 1 second) — one dropped SYN visibly adds ~1s to connection setup.",
+      "TCP gives an ordered, reliable byte stream with no message boundaries — applications must frame messages themselves (length prefixes, delimiters, HTTP framing)."
+     ]
+    },
+    {
+     "t": "Flow control vs congestion control",
+     "b": [
+      "Flow control protects the receiver: the receive window (rwnd) advertises how much buffer space is free. A slow reader shrinks it to zero and the sender stalls.",
+      "Congestion control protects the network: the sender keeps a congestion window (cwnd) and sends at most min(cwnd, rwnd) unacknowledged bytes.",
+      "Slow start grows cwnd exponentially from a small initial window until loss or a threshold; then congestion avoidance grows it roughly linearly (AIMD: additive increase, multiplicative decrease on loss).",
+      "Algorithms: Reno/CUBIC are loss‑based; BBR models bottleneck bandwidth and RTT instead of reacting only to loss.",
+      "Throughput ceiling ≈ window / RTT. The bandwidth‑delay product tells you how big buffers/windows must be to fill a long fat pipe.",
+      "New connections start slow, which is why connection reuse and pooling matter so much for latency."
+     ]
+    },
+    {
+     "t": "Nagle, delayed ACK & small writes",
+     "b": [
+      "Nagle's algorithm holds back small segments while earlier data is unacknowledged, coalescing tiny writes into fewer packets.",
+      "Delayed ACK makes the receiver wait briefly (tens of ms up to ~200ms depending on OS) hoping to piggyback the ACK on response data.",
+      "Together they can stall: the sender waits for an ACK before sending the rest; the receiver waits for more data before ACKing — classic 40–200ms latency spikes on write‑write‑read patterns.",
+      "Fix: set TCP_NODELAY on latency‑sensitive sockets (most RPC frameworks and database drivers do), or build each message in one buffer and write once.",
+      "TCP_CORK / MSG_MORE are the opposite: deliberately batch until you uncork."
+     ]
+    },
+    {
+     "t": "TIME_WAIT & ephemeral ports",
+     "b": [
+      "The side that closes first enters TIME_WAIT for 2×MSL (60s on Linux) so stray delayed segments don't corrupt a new connection with the same 5‑tuple and the final ACK can be resent.",
+      "A client opening many short connections to the same destination can exhaust ephemeral ports (each 5‑tuple stuck in TIME_WAIT).",
+      "Fixes: connection pooling/keep‑alive (best), widening the ephemeral port range, more source IPs, or tcp_tw_reuse for outgoing connections. Avoid the long‑removed tcp_tw_recycle.",
+      "In the cloud, SNAT port exhaustion on a NAT gateway or load balancer is the same problem one level up — a frequent Azure outbound‑connectivity issue.",
+      "CLOSE_WAIT piling up means your application received FIN but never closed the socket — an app bug (leaked connections), not a kernel tuning issue."
+     ]
+    },
+    {
+     "t": "Head‑of‑line blocking & UDP",
+     "b": [
+      "TCP delivers bytes in order: one lost segment stalls everything behind it, even data for unrelated logical streams. That is transport‑level head‑of‑line blocking.",
+      "HTTP/2 multiplexes streams over one TCP connection, so a single loss blocks all streams; QUIC (HTTP/3) runs over UDP and does loss recovery per stream.",
+      "UDP: connectionless datagrams, no handshake, no ordering, no retransmits, no congestion control. Message boundaries are preserved.",
+      "Used where latency beats reliability or the app does its own reliability: DNS queries, VoIP/video, gaming, QUIC, metrics (StatsD).",
+      "Apps on UDP must handle loss, reordering, duplication, and should implement their own congestion control to be good network citizens."
+     ]
+    },
+    {
+     "t": "TLS 1.3 handshake",
+     "b": [
+      "Goals: confidentiality (encryption), integrity (AEAD ciphers), and authentication of the server (and optionally client) via certificates.",
+      "TLS 1.3 is 1‑RTT: ClientHello carries supported ciphers plus a key share (ephemeral (EC)DHE); ServerHello replies with its key share, then encrypted certificate, CertificateVerify and Finished.",
+      "Ephemeral Diffie–Hellman gives forward secrecy: stealing the server's private key later doesn't decrypt past recorded traffic.",
+      "Resumption with a pre‑shared key can allow 0‑RTT early data — but 0‑RTT data is replayable, so only use it for idempotent requests.",
+      "Total cold cost over TCP: 1 RTT (TCP) + 1 RTT (TLS 1.3) before the first request byte; TLS 1.2 needed 2 RTTs for the handshake.",
+      "SNI in the ClientHello names the host so one IP can serve many certificates; ALPN negotiates the application protocol (h2, http/1.1)."
+     ]
+    },
+    {
+     "t": "Certificates, chains & mTLS",
+     "b": [
+      "A certificate binds a public key to names (SANs) and is signed by a CA. The client validates the chain up to a trusted root, checks hostname match, validity dates, and possibly revocation (OCSP/CRL).",
+      "Servers must send intermediates; a missing intermediate is a classic \"works in browser, fails in curl/Java\" bug because browsers may cache or fetch intermediates.",
+      "Cert expiry is a top cause of outages — automate rotation (ACME, Key Vault/cert‑manager) and alert well before expiry.",
+      "mTLS: the server also requests a client certificate, giving strong service‑to‑service identity. Common in service meshes and zero‑trust networks.",
+      "TLS termination at a load balancer simplifies certs but means traffic behind it is plaintext unless you re‑encrypt to the backend."
+     ]
+    },
+    {
+     "t": "DNS resolution, caching & TTLs",
+     "b": [
+      "Stub resolver (in the OS) asks a recursive resolver; on a miss, the recursive walks root → TLD (.com) → authoritative servers, then caches the answer.",
+      "Records: A/AAAA (addresses), CNAME (alias), MX, TXT, NS, SRV. A CNAME can't coexist with other records at the same name, so apex domains use ALIAS/flattening features.",
+      "Every answer has a TTL; caches (resolvers, OS, language runtimes, connection pools) may hold it that long — or longer if they misbehave. Negative answers are cached too.",
+      "Low TTLs speed failover but increase query load and latency; lower TTLs before a planned migration, not during the incident.",
+      "DNS mostly uses UDP port 53 with TCP fallback for large responses; DNS failures look like \"everything is down\" because nothing can find anything."
+     ]
+    },
+    {
+     "t": "Anycast & global traffic",
+     "b": [
+      "Anycast: many sites announce the same IP prefix via BGP; the network routes each client to the \"nearest\" site in routing terms.",
+      "Used for DNS root/resolvers, CDNs, DDoS absorption and global front doors (e.g. Azure Front Door, Cloudflare).",
+      "Works best for short or stateless exchanges; long TCP connections can break if routing shifts mid‑flow to another site.",
+      "Contrast with DNS‑based geo load balancing (Azure Traffic Manager style): different IPs handed out per client region, limited by TTL caching and resolver location.",
+      "Failover with anycast is fast: withdraw the route from the unhealthy site and traffic shifts without waiting for DNS TTLs."
+     ]
+    }
+   ],
+   "qs": [
+    {
+     "q": "Which identifies a single TCP connection?",
+     "o": [
+      "The TLS session ID",
+      "Destination IP and port only",
+      "The 5‑tuple: protocol, source IP/port, destination IP/port",
+      "The source MAC address"
+     ],
+     "a": 2,
+     "e": "Many clients can hit the same server port; the source side differentiates them."
+    },
+    {
+     "q": "How many round trips does the TCP handshake cost before the client can send data (without TCP Fast Open)?",
+     "o": [
+      "One",
+      "Three",
+      "Zero",
+      "Two"
+     ],
+     "a": 0,
+     "e": "SYN, SYN‑ACK, ACK: one RTT; the client can send data with its ACK."
+    },
+    {
+     "q": "What does IP guarantee about delivery?",
+     "o": [
+      "In‑order delivery",
+      "Exactly‑once delivery",
+      "Delivery within one RTT",
+      "Nothing: best effort, packets may be lost, duplicated or reordered"
+     ],
+     "a": 3,
+     "e": "Reliability is added by TCP or the application."
+    },
+    {
+     "q": "Flow control in TCP primarily protects…",
+     "o": [
+      "The network from congestion",
+      "The receiver from being overwhelmed, via the advertised receive window",
+      "The sender's CPU",
+      "The DNS resolver"
+     ],
+     "a": 1,
+     "e": "rwnd reflects free receive buffer space."
+    },
+    {
+     "q": "Congestion control limits in‑flight data using…",
+     "o": [
+      "The congestion window (cwnd), combined with rwnd as min(cwnd, rwnd)",
+      "The receive window only",
+      "The MTU",
+      "The TTL"
+     ],
+     "a": 0,
+     "e": "The sender estimates what the network path can carry."
+    },
+    {
+     "q": "What triggers TCP fast retransmit?",
+     "o": [
+      "A SYN cookie",
+      "DNS TTL expiry",
+      "A RST",
+      "Three duplicate ACKs"
+     ],
+     "a": 3,
+     "e": "Duplicate ACKs suggest a hole; retransmit without waiting for RTO."
+    },
+    {
+     "q": "Why can one dropped SYN add about a second to connection setup?",
+     "o": [
+      "TLS restarts",
+      "The initial retransmission timeout is conservative (commonly ~1s) since there is no RTT sample yet",
+      "The kernel resets the socket",
+      "DNS must re‑resolve"
+     ],
+     "a": 1,
+     "e": "No RTT estimate exists yet, so the first RTO is large."
+    },
+    {
+     "q": "Throughput of a single TCP flow is roughly bounded by…",
+     "o": [
+      "window / RTT",
+      "MTU × TTL",
+      "RTT / window",
+      "Number of hops"
+     ],
+     "a": 0,
+     "e": "You can only have one window of unacked data per round trip."
+    },
+    {
+     "q": "A client writes a 10‑byte header and then a 200‑byte body in two writes, then waits for a reply, and sees ~40ms stalls. Likely cause?",
+     "o": [
+      "Anycast routing",
+      "DNS caching",
+      "Nagle's algorithm interacting with delayed ACK",
+      "TIME_WAIT"
+     ],
+     "a": 2,
+     "e": "Set TCP_NODELAY or write the message in one call."
+    },
+    {
+     "q": "Which side of a TCP connection enters TIME_WAIT?",
+     "o": [
+      "Neither, only on RST",
+      "The side that actively closes first",
+      "Always the server",
+      "Always the client"
+     ],
+     "a": 1,
+     "e": "The active closer holds TIME_WAIT for 2×MSL."
+    },
+    {
+     "q": "Lots of sockets stuck in CLOSE_WAIT on your service usually means…",
+     "o": [
+      "The application received the peer's FIN but never closed its socket",
+      "Kernel TIME_WAIT is too long",
+      "DNS is slow",
+      "The peer has not sent FIN"
+     ],
+     "a": 0,
+     "e": "CLOSE_WAIT is waiting on the local app to close — a leak."
+    },
+    {
+     "q": "Best fix for ephemeral port exhaustion from many short outbound HTTP calls?",
+     "o": [
+      "Reuse connections with pooling/keep‑alive",
+      "Lower the DNS TTL",
+      "Disable TCP_NODELAY",
+      "Use a bigger MTU"
+     ],
+     "a": 0,
+     "e": "Fewer new connections means fewer TIME_WAIT 5‑tuples."
+    },
+    {
+     "q": "Why does HTTP/2 over TCP still suffer head‑of‑line blocking?",
+     "o": [
+      "It requires UDP",
+      "It uses one stream per connection",
+      "It cannot compress headers",
+      "A lost TCP segment stalls the whole in‑order byte stream, blocking all multiplexed streams"
+     ],
+     "a": 3,
+     "e": "Multiplexing is above TCP, which knows nothing of streams."
+    },
+    {
+     "q": "Which is true of UDP?",
+     "o": [
+      "It uses a three‑way handshake",
+      "It retransmits lost datagrams",
+      "It guarantees ordering",
+      "It preserves message boundaries but provides no reliability or congestion control"
+     ],
+     "a": 3,
+     "e": "Datagrams are independent; loss handling is up to the app."
+    },
+    {
+     "q": "How many round trips does a full TLS 1.3 handshake add on top of TCP?",
+     "o": [
+      "Two",
+      "Three",
+      "Zero always",
+      "One"
+     ],
+     "a": 3,
+     "e": "TLS 1.3 sends key shares in the first flight; TLS 1.2 needed two."
+    },
+    {
+     "q": "What provides forward secrecy in TLS 1.3?",
+     "o": [
+      "RSA key transport",
+      "Long‑lived session tickets",
+      "Certificate pinning",
+      "Ephemeral (EC)Diffie–Hellman key exchange"
+     ],
+     "a": 3,
+     "e": "Session keys can't be recovered from the long‑term key later."
+    },
+    {
+     "q": "Why is TLS 1.3 0‑RTT early data risky?",
+     "o": [
+      "It only works over UDP",
+      "It is unencrypted",
+      "It can be replayed by an attacker, so it should only carry idempotent requests",
+      "It disables certificate checks"
+     ],
+     "a": 2,
+     "e": "Early data lacks the fresh server input that protects against replay."
+    },
+    {
+     "q": "What does SNI do?",
+     "o": [
+      "Tells the server which hostname the client wants, so it can pick the right certificate",
+      "Signs the certificate",
+      "Encrypts DNS",
+      "Negotiates HTTP/2"
+     ],
+     "a": 0,
+     "e": "Lets many TLS sites share one IP. ALPN negotiates h2."
+    },
+    {
+     "q": "A service works in browsers but Java clients fail with \"unable to find valid certification path\". Most likely?",
+     "o": [
+      "DNS TTL is too low",
+      "TCP_NODELAY is off",
+      "The cert uses SANs",
+      "The server is not sending the intermediate certificate"
+     ],
+     "a": 3,
+     "e": "Browsers often fill gaps; strict clients need the full chain."
+    },
+    {
+     "q": "What does mTLS add over normal TLS?",
+     "o": [
+      "Faster handshakes",
+      "The client also presents a certificate, so the server authenticates the client",
+      "Compression",
+      "UDP support"
+     ],
+     "a": 1,
+     "e": "Mutual authentication for service‑to‑service identity."
+    },
+    {
+     "q": "In recursive DNS resolution, who walks root → TLD → authoritative?",
+     "o": [
+      "The recursive resolver",
+      "The stub resolver in the OS",
+      "The authoritative server",
+      "The browser always"
+     ],
+     "a": 0,
+     "e": "Stub asks recursive; recursive does the walk and caches."
+    },
+    {
+     "q": "You plan to move a service to new IPs. What should you do with DNS TTLs?",
+     "o": [
+      "Lower them at the moment of the switch",
+      "TTLs do not matter",
+      "Raise them right before the move",
+      "Lower them well in advance, wait out the old TTL, then switch"
+     ],
+     "a": 3,
+     "e": "Caches keep the old record until the old TTL expires."
+    },
+    {
+     "q": "Why can't you put a CNAME at a zone apex like example.com?",
+     "o": [
+      "A CNAME cannot coexist with other records, and the apex must have SOA/NS records",
+      "Apex records must be TXT",
+      "Resolvers ignore apex records",
+      "CNAMEs only work for IPv6"
+     ],
+     "a": 0,
+     "e": "Providers offer ALIAS/flattening as a workaround."
+    },
+    {
+     "q": "What is anycast?",
+     "o": [
+      "Sending one packet to all hosts",
+      "Encrypting DNS",
+      "Multiple sites announcing the same IP prefix so routing delivers each client to a nearby one",
+      "Round‑robin DNS"
+     ],
+     "a": 2,
+     "e": "BGP picks the \"closest\" site."
+    },
+    {
+     "q": "What does an overflowing accept queue look like to clients?",
+     "o": [
+      "TLS alerts",
+      "Instant 500 errors",
+      "Connections dropped or timing out / retrying SYNs while the app isn't calling accept() fast enough",
+      "DNS NXDOMAIN"
+     ],
+     "a": 2,
+     "e": "Slow accept loops or a small backlog cause it."
+    },
+    {
+     "q": "Clients in another region see 3s+ tail latency to your API; server traces show 20ms handling. Packet captures show occasional SYN retransmits. Best explanation and fix?",
+     "o": [
+      "Loss on new connections hits large initial RTOs; reuse warm pooled connections and investigate the lossy path",
+      "TLS 1.3 is too slow; downgrade to 1.2",
+      "DNS TTLs are too long; lower them",
+      "Nagle; enable TCP_NODELAY"
+     ],
+     "a": 0,
+     "e": "Handshake losses cost whole RTOs; warm connections avoid repeated handshakes and slow start.",
+     "boss": true
+    },
+    {
+     "q": "A service on Azure making many outbound calls to one third‑party API fails intermittently with connection timeouts at high load, while the API is healthy. Most likely culprit?",
+     "o": [
+      "Too many DNS records",
+      "HTTP/2 multiplexing",
+      "Delayed ACK",
+      "SNAT port exhaustion from opening a new connection per request"
+     ],
+     "a": 3,
+     "e": "Each new outbound flow consumes a SNAT port; pooling or a NAT gateway with more IPs fixes it.",
+     "boss": true
+    },
+    {
+     "q": "Large uploads hang mid‑transfer through a VPN, while small requests work fine. Most likely cause?",
+     "o": [
+      "TIME_WAIT",
+      "A path MTU problem (e.g. ICMP blocked so PMTU discovery fails), so full‑size packets are silently dropped",
+      "DNS caching",
+      "Certificate expiry"
+     ],
+     "a": 1,
+     "e": "Small packets fit; big ones vanish. Fix with MSS clamping or allowing ICMP.",
+     "boss": true
+    },
+    {
+     "q": "You cut over DNS to a new load balancer with TTL 60s, but some clients still hit the old one hours later. Why?",
+     "o": [
+      "Clients or runtimes cache DNS beyond TTL (e.g. JVM settings) and long‑lived pooled connections never re‑resolve",
+      "Anycast is broken",
+      "TLS session resumption pins IPs",
+      "TCP caches routes"
+     ],
+     "a": 0,
+     "e": "Keep the old endpoint alive and bound connection lifetime so clients re‑resolve.",
+     "boss": true
+    },
+    {
+     "q": "A transfer between two regions (100ms RTT) caps at ~5 MB/s despite a 1 Gbps link and no loss. What do you check first?",
+     "o": [
+      "Window sizes: receive buffers / window scaling too small for the bandwidth‑delay product",
+      "TIME_WAIT counts",
+      "The DNS TTL",
+      "Nagle's algorithm"
+     ],
+     "a": 0,
+     "e": "Throughput ≈ window/RTT: 512KB / 0.1s ≈ 5MB/s. Filling 1Gbps needs ~12.5MB in flight.",
+     "boss": true
+    }
+   ],
+   "terms": [
+    [
+     "5‑tuple",
+     "Protocol + source/destination IP and port identifying a flow"
+    ],
+    [
+     "MSS",
+     "Maximum TCP payload per segment, negotiated in SYN"
+    ],
+    [
+     "RTO",
+     "Retransmission timeout derived from smoothed RTT and variance"
+    ],
+    [
+     "rwnd",
+     "Receive window: receiver's free buffer, for flow control"
+    ],
+    [
+     "cwnd",
+     "Congestion window: sender's estimate of what the path can carry"
+    ],
+    [
+     "Slow start",
+     "Exponential cwnd growth from a small initial window"
+    ],
+    [
+     "Bandwidth‑delay product",
+     "Bandwidth × RTT: bytes in flight needed to fill a link"
+    ],
+    [
+     "Nagle's algorithm",
+     "Coalesces small writes while data is unacknowledged"
+    ],
+    [
+     "TIME_WAIT",
+     "Active closer's 2×MSL wait to absorb stray segments"
+    ],
+    [
+     "Head‑of‑line blocking",
+     "One lost/slow item stalls everything queued behind it"
+    ],
+    [
+     "Forward secrecy",
+     "Past sessions stay safe if the long‑term key leaks"
+    ],
+    [
+     "SNI",
+     "Hostname in ClientHello so the server picks the right cert"
+    ],
+    [
+     "ALPN",
+     "TLS extension negotiating the application protocol (h2, http/1.1)"
+    ],
+    [
+     "mTLS",
+     "Both sides present certificates for mutual authentication"
+    ],
+    [
+     "Anycast",
+     "Same IP announced from many sites; routing picks the nearest"
+    ]
+   ],
+   "drills": [
+    {
+     "p": "Explain everything that happens on the network before the first byte of an HTTPS request reaches the server, and how much latency each step costs.",
+     "a": [
+      "DNS lookup (cached, or recursive walk costing several RTTs)",
+      "TCP three‑way handshake: 1 RTT",
+      "TLS 1.3 handshake: 1 RTT (2 for TLS 1.2), certificate validation",
+      "SNI and ALPN select cert and protocol",
+      "Slow start limits how fast the first response arrives",
+      "Connection reuse/pooling removes all of these for later requests"
+     ]
+    },
+    {
+     "p": "Compare flow control and congestion control in TCP, and explain why new connections are slow.",
+     "a": [
+      "Flow control: receiver advertises rwnd to avoid overflowing its buffer",
+      "Congestion control: sender's cwnd protects the network",
+      "Effective window = min(cwnd, rwnd)",
+      "Slow start then AIMD; loss‑based (CUBIC) vs model‑based (BBR)",
+      "Throughput ≈ window/RTT",
+      "New connections start with small cwnd, hence pooling and keep‑alive"
+     ]
+    },
+    {
+     "p": "Your service shows thousands of sockets in TIME_WAIT and some in CLOSE_WAIT. Explain what each means and what you would do.",
+     "a": [
+      "TIME_WAIT: normal for the active closer, lasts 2×MSL",
+      "Only a problem when it exhausts ephemeral/SNAT ports",
+      "Fix with connection reuse, more ports/IPs, tcp_tw_reuse for outbound",
+      "CLOSE_WAIT: peer closed, local app never closed — a leak",
+      "Fix CLOSE_WAIT in code: close/dispose connections, check pool handling"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "tag": "NET2",
+   "title": "Networking II: HTTP, load balancing & the edge",
+   "blurb": "HTTP versions, API styles, load balancers, CDNs and proxies: the layer where most production latency, retries and outages actually live.",
+   "cards": [
+    {
+     "t": "HTTP/1.1 & keep‑alive",
+     "b": [
+      "Text protocol: request line, headers, optional body. Persistent connections (keep‑alive) are the default in HTTP/1.1, avoiding a new TCP+TLS handshake per request.",
+      "Effectively one outstanding request per connection (pipelining is rarely used), so clients open several connections per host (browsers ~6).",
+      "Bodies are framed by Content‑Length or chunked transfer encoding; disagreement between proxies about which applies is the root of request‑smuggling attacks.",
+      "Idle keep‑alive connections are closed by whichever side has the shorter idle timeout — if the server closes just as the client reuses it, the client sees a reset on a \"healthy\" connection.",
+      "Rule: client idle timeout shorter than the server/LB idle timeout, and retry idempotent requests on stale‑connection errors."
+     ]
+    },
+    {
+     "t": "HTTP/2 multiplexing",
+     "b": [
+      "Binary framing; many concurrent streams over one TCP connection, interleaved as frames. Removes the need for many connections per host.",
+      "HPACK header compression shrinks repetitive headers (cookies, auth tokens).",
+      "Flow control per stream and per connection; servers advertise max concurrent streams.",
+      "Still on TCP, so one packet loss stalls all streams (transport head‑of‑line blocking).",
+      "One long‑lived connection can defeat L4 load balancing: all of a client's requests stick to one backend. Use L7 balancing or cap connection age.",
+      "gRPC runs on HTTP/2, which is why it needs HTTP/2‑aware proxies end to end."
+     ]
+    },
+    {
+     "t": "HTTP/3 & QUIC",
+     "b": [
+      "QUIC is a transport over UDP with TLS 1.3 built in: combined transport+crypto handshake in 1 RTT, 0‑RTT on resumption.",
+      "Streams are independent at the transport level, so a loss only blocks the affected stream.",
+      "Connection IDs instead of the 5‑tuple let connections survive client IP changes (Wi‑Fi to cellular).",
+      "Encrypted transport headers limit middlebox interference but make debugging and some network monitoring harder.",
+      "Downsides: UDP sometimes blocked or rate‑limited, more CPU in user space; clients fall back to HTTP/2. Discovered via Alt‑Svc headers or HTTPS DNS records."
+     ]
+    },
+    {
+     "t": "Methods, idempotency & status codes",
+     "b": [
+      "Safe methods (GET, HEAD, OPTIONS) shouldn't change state. Idempotent methods (safe ones plus PUT, DELETE) have the same effect when repeated. POST and PATCH are not idempotent by default.",
+      "Retries are only automatically safe for idempotent requests; for POST use idempotency keys (Stripe‑style Idempotency‑Key header) stored server‑side with the result.",
+      "2xx success (201 Created, 204 No Content); 3xx redirects (301 permanent, 302/307 temporary, 304 Not Modified).",
+      "4xx client errors: 400 bad request, 401 unauthenticated, 403 forbidden, 404, 409 conflict, 422 validation, 429 rate limited (honour Retry‑After).",
+      "5xx server errors: 500 bug, 502 bad gateway (invalid response or reset from upstream), 503 unavailable/overloaded, 504 gateway timeout (upstream too slow).",
+      "Retry 429/503 with backoff and jitter; don't blindly retry other 4xx."
+     ]
+    },
+    {
+     "t": "REST vs gRPC vs GraphQL",
+     "b": [
+      "REST: resources + HTTP verbs, JSON, cacheable GETs, universal tooling, human‑readable. Great for public APIs (Stripe's API is REST).",
+      "gRPC: Protobuf schemas, HTTP/2, generated clients, streaming (unary, server, client, bidi), deadlines propagated. Great for internal service‑to‑service calls.",
+      "gRPC trade‑offs: needs HTTP/2 end to end, browsers need gRPC‑Web or a proxy, binary payloads are harder to debug.",
+      "GraphQL: client chooses fields from one endpoint; avoids over/under‑fetching but complicates caching, authorization and query‑cost limits.",
+      "Versioning: additive changes are safe; Protobuf field numbers must never be reused; public REST APIs often pin versions per client (Stripe uses dated versions)."
+     ]
+    },
+    {
+     "t": "WebSockets, SSE & long polling",
+     "b": [
+      "WebSocket: HTTP Upgrade to a full‑duplex, message‑framed connection. Good for chat, collaboration, live dashboards.",
+      "Server‑Sent Events: one‑way server→client stream over plain HTTP, text events, automatic reconnect with Last‑Event‑ID. Simpler when the client only listens.",
+      "Long polling: client holds a request open until data arrives, then re‑requests. Works everywhere but costs a request per message batch.",
+      "Operational issues: long‑lived connections pin to one backend, complicate deploys (must drain/reconnect), and hit proxy idle timeouts — send heartbeats/pings.",
+      "Scaling needs a pub/sub backplane (Redis, Kafka, Azure SignalR/Web PubSub) so any node can deliver to any connected user."
+     ]
+    },
+    {
+     "t": "L4 vs L7 load balancers",
+     "b": [
+      "L4 balances TCP/UDP flows by 5‑tuple; doesn't parse HTTP. Very fast, protocol agnostic, can pass TLS through untouched. Examples: Azure Load Balancer, AWS NLB.",
+      "L7 terminates HTTP(S) and routes per request: by path, host, header; can retry, rewrite, add auth, do canaries. Examples: Azure Application Gateway/Front Door, Envoy, NGINX, AWS ALB.",
+      "Algorithms: round robin, least connections/least outstanding requests, consistent hashing (sticky by key), power of two random choices.",
+      "L4 with long‑lived HTTP/2 or gRPC connections leads to imbalance; L7 balances per request.",
+      "Client IP is lost behind proxies unless passed via X‑Forwarded‑For / Forwarded headers, or PROXY protocol at L4."
+     ]
+    },
+    {
+     "t": "Health checks & connection draining",
+     "b": [
+      "Active health checks probe an endpoint on an interval; passive checks (outlier detection) eject backends that error on live traffic.",
+      "Liveness (\"restart me if I'm wedged\") differs from readiness (\"send me traffic now\"). Don't make liveness depend on downstream services, or one DB blip restarts your whole fleet.",
+      "Readiness should fail during startup warm‑up and during shutdown so the LB stops sending new traffic.",
+      "Connection draining: on removal/deploy, stop new requests to the instance but let in‑flight ones finish within a deadline.",
+      "Graceful shutdown: fail readiness → wait for LB to notice → stop accepting → finish in‑flight → close idle keep‑alive connections → exit."
+     ]
+    },
+    {
+     "t": "CDNs & caching headers",
+     "b": [
+      "CDNs cache content at edge PoPs near users, cutting latency and origin load; they also terminate TLS close to the user and absorb DDoS.",
+      "Cache‑Control: max‑age (all caches), s‑maxage (shared caches only), public/private, no‑store (never store), no‑cache (store but revalidate before use).",
+      "Validators: ETag/If‑None‑Match and Last‑Modified/If‑Modified‑Since give cheap 304 Not Modified revalidations.",
+      "stale‑while‑revalidate and stale‑if‑error serve slightly old content while refreshing or when the origin is down.",
+      "Cache key matters: Vary headers, query strings and cookies can fragment the cache or leak personalised responses. Never cache authenticated responses as public.",
+      "Invalidate with versioned/fingerprinted URLs (app.3f9a.js) rather than relying on purges."
+     ]
+    },
+    {
+     "t": "Timeouts, retries & keep‑alive tuning",
+     "b": [
+      "Every network call needs timeouts: a short connect timeout, a request/read timeout, and an overall deadline propagated through the call chain.",
+      "Retries multiply: 3 attempts at each of 4 layers = up to 3^4 = 81 calls at the bottom. Retry at one layer, with exponential backoff, jitter and a retry budget.",
+      "Deadlines should shrink as they go down the chain: an inner call shouldn't keep working after the outer caller has already given up.",
+      "Keep‑alive: align idle timeouts (client < LB < server), and cap connection lifetime so DNS changes and rebalancing take effect.",
+      "TCP keepalive (kernel probes, default idle ~2h on Linux) differs from HTTP keep‑alive (connection reuse); lower TCP keepalive to detect dead peers and keep NAT entries alive."
+     ]
+    },
+    {
+     "t": "Proxies & NAT",
+     "b": [
+      "Forward proxy acts for clients (corporate egress, outbound filtering). Reverse proxy acts for servers (TLS termination, routing, caching, rate limiting).",
+      "Service mesh sidecars (Envoy) proxy every pod's traffic, adding mTLS, retries and telemetry without app changes — at the cost of extra hops and complexity.",
+      "NAT rewrites addresses/ports; SNAT lets many private hosts share public IPs by mapping to distinct source ports. NAT tables have idle timeouts.",
+      "A NAT/firewall silently dropping an idle flow looks like a hang on next use — fix with keepalives shorter than the idle timeout (Azure LB/NAT defaults are a few minutes).",
+      "API gateways are L7 reverse proxies adding auth, quotas, routing and request transformation."
+     ]
+    },
+    {
+     "t": "What happens when you type a URL",
+     "b": [
+      "Browser parses the URL, checks HSTS and caches; DNS resolution (browser, OS, recursive resolver, authoritative), often landing on a CDN's anycast or geo‑DNS address.",
+      "TCP handshake (or QUIC), TLS handshake with SNI/ALPN, certificate validation.",
+      "HTTP request to edge/CDN; a cache hit returns immediately; a miss goes to origin via load balancer → reverse proxy → app servers.",
+      "App calls caches/databases/services; response returns with caching and compression (gzip/br) headers.",
+      "Browser parses HTML, fetches subresources (reusing connections, HTTP/2 multiplexing), builds DOM/CSSOM, runs JS, renders.",
+      "Interview tip: sketch all hops quickly, then go deep on whichever one the interviewer cares about."
+     ]
+    }
+   ],
+   "qs": [
+    {
+     "q": "In HTTP/1.1, persistent connections are…",
+     "o": [
+      "Disabled unless requested",
+      "The default (keep‑alive)",
+      "Only for POST",
+      "Only over UDP"
+     ],
+     "a": 1,
+     "e": "Connection: close opts out."
+    },
+    {
+     "q": "Why do browsers open several HTTP/1.1 connections per host?",
+     "o": [
+      "To bypass caches",
+      "Each connection effectively handles one outstanding request at a time",
+      "TLS requires it",
+      "DNS round robin"
+     ],
+     "a": 1,
+     "e": "Pipelining is rarely used, so parallelism needs more connections."
+    },
+    {
+     "q": "What is the main improvement of HTTP/2 over HTTP/1.1?",
+     "o": [
+      "Multiplexing many concurrent streams over one connection",
+      "No headers",
+      "UDP transport",
+      "Plain‑text framing"
+     ],
+     "a": 0,
+     "e": "Plus HPACK header compression."
+    },
+    {
+     "q": "Which HTTP version removes transport head‑of‑line blocking between streams?",
+     "o": [
+      "HTTP/1.1",
+      "HTTP/2",
+      "HTTP/3 over QUIC",
+      "HTTP/1.0"
+     ],
+     "a": 2,
+     "e": "QUIC recovers loss per stream."
+    },
+    {
+     "q": "How does QUIC let a connection survive a client IP change?",
+     "o": [
+      "It re‑handshakes TCP",
+      "It identifies connections by connection IDs rather than the 5‑tuple",
+      "Anycast",
+      "Sticky cookies"
+     ],
+     "a": 1,
+     "e": "Connection migration."
+    },
+    {
+     "q": "Which set of methods is idempotent?",
+     "o": [
+      "PATCH, DELETE",
+      "POST, PATCH",
+      "GET, PUT, DELETE",
+      "POST, PUT"
+     ],
+     "a": 2,
+     "e": "Repeating them has the same effect as doing them once."
+    },
+    {
+     "q": "How does Stripe make retried payment‑creating POSTs safe?",
+     "o": [
+      "It uses PUT instead",
+      "It relies on TCP retransmits",
+      "It forbids retries",
+      "Idempotency keys: the server stores the result per key and returns it on retry"
+     ],
+     "a": 3,
+     "e": "Same key, same outcome, no double charge."
+    },
+    {
+     "q": "The upstream took too long and the gateway gave up. Which status?",
+     "o": [
+      "500",
+      "504",
+      "429",
+      "502"
+     ],
+     "a": 1,
+     "e": "504 Gateway Timeout. 502 is an invalid upstream response."
+    },
+    {
+     "q": "Which status means \"rate limited; retry later\"?",
+     "o": [
+      "429 Too Many Requests",
+      "409 Conflict",
+      "401 Unauthorized",
+      "400 Bad Request"
+     ],
+     "a": 0,
+     "e": "Often with a Retry‑After header."
+    },
+    {
+     "q": "401 vs 403?",
+     "o": [
+      "403 is a server error",
+      "Same thing",
+      "401 not authenticated; 403 authenticated but not allowed",
+      "401 forbidden; 403 not found"
+     ],
+     "a": 2,
+     "e": "Identity vs permission."
+    },
+    {
+     "q": "A good fit for gRPC over REST?",
+     "o": [
+      "Internal low‑latency service‑to‑service calls with typed contracts and streaming",
+      "CDN‑cached content",
+      "Public API for third‑party browser developers",
+      "Static file serving"
+     ],
+     "a": 0,
+     "e": "Protobuf + HTTP/2 + code generation."
+    },
+    {
+     "q": "Which Protobuf practice preserves compatibility?",
+     "o": [
+      "Never reuse or change the field numbers of existing or removed fields",
+      "Make all fields required",
+      "Change field types freely",
+      "Renumber fields alphabetically"
+     ],
+     "a": 0,
+     "e": "Reserve removed numbers."
+    },
+    {
+     "q": "A client needs only one‑way live updates from the server over plain HTTP. Simplest choice?",
+     "o": [
+      "Server‑Sent Events",
+      "WebSockets",
+      "gRPC bidi streaming",
+      "Raw UDP"
+     ],
+     "a": 0,
+     "e": "SSE is simple and auto‑reconnects."
+    },
+    {
+     "q": "What lets WebSocket servers scale horizontally?",
+     "o": [
+      "HTTP caching",
+      "Bigger VMs only",
+      "DNS round robin",
+      "A pub/sub backplane so any node can reach any connected user"
+     ],
+     "a": 3,
+     "e": "Redis/Kafka/managed PubSub."
+    },
+    {
+     "q": "What can an L7 load balancer do that an L4 one cannot?",
+     "o": [
+      "Route by URL path or header and retry individual requests",
+      "Operate at lower latency",
+      "Balance UDP",
+      "Pass TLS through without terminating it"
+     ],
+     "a": 0,
+     "e": "It parses HTTP."
+    },
+    {
+     "q": "Why do gRPC clients behind an L4 load balancer often cause uneven backend load?",
+     "o": [
+      "Long‑lived HTTP/2 connections pin all of a client's requests to one backend",
+      "L4 drops gRPC",
+      "Protobuf is too large",
+      "gRPC uses UDP"
+     ],
+     "a": 0,
+     "e": "Balance per request at L7 or client‑side."
+    },
+    {
+     "q": "Why shouldn't a liveness probe check the database?",
+     "o": [
+      "It is slow",
+      "A DB blip would restart every instance, turning a dependency hiccup into a full outage",
+      "Databases forbid it",
+      "Liveness checks are optional"
+     ],
+     "a": 1,
+     "e": "Use readiness for dependency gating, carefully."
+    },
+    {
+     "q": "Connection draining means…",
+     "o": [
+      "Clearing CDN caches",
+      "Closing all connections instantly",
+      "Stopping new requests to an instance while letting in‑flight requests finish",
+      "Flushing DNS"
+     ],
+     "a": 2,
+     "e": "Key to zero‑downtime deploys."
+    },
+    {
+     "q": "Cache‑Control: no‑cache means…",
+     "o": [
+      "Cache for one hour",
+      "Only browsers may cache",
+      "Never store",
+      "Store, but revalidate with the origin before each use"
+     ],
+     "a": 3,
+     "e": "no‑store is \"never store\"."
+    },
+    {
+     "q": "How do you reliably invalidate cached static assets?",
+     "o": [
+      "Purge on every deploy",
+      "Fingerprinted/versioned file names with long max‑age",
+      "Disable the CDN",
+      "Short TTLs everywhere"
+     ],
+     "a": 1,
+     "e": "New content = new URL."
+    },
+    {
+     "q": "Why should retries live at only one layer?",
+     "o": [
+      "HTTP forbids nested retries",
+      "Retries at many layers multiply load exponentially during an outage",
+      "TCP already retries",
+      "It breaks TLS"
+     ],
+     "a": 1,
+     "e": "Retry storms."
+    },
+    {
+     "q": "TCP keepalive vs HTTP keep‑alive?",
+     "o": [
+      "HTTP keep‑alive sends probes",
+      "Same thing",
+      "HTTP keep‑alive reuses connections; TCP keepalive sends probes to detect dead peers and keep NAT state",
+      "TCP keepalive is for UDP"
+     ],
+     "a": 2,
+     "e": "Different mechanisms, different purposes."
+    },
+    {
+     "q": "What does SNAT do?",
+     "o": [
+      "Resolves DNS",
+      "Balances at L7",
+      "Encrypts traffic",
+      "Maps many private source addresses to shared public IPs using distinct ports"
+     ],
+     "a": 3,
+     "e": "Port tables have limits and idle timeouts."
+    },
+    {
+     "q": "A reverse proxy acts on behalf of…",
+     "o": [
+      "Servers",
+      "DNS resolvers",
+      "Routers",
+      "Clients"
+     ],
+     "a": 0,
+     "e": "Forward proxies act for clients."
+    },
+    {
+     "q": "How does a backend behind an L7 proxy learn the real client IP?",
+     "o": [
+      "From the TCP source address",
+      "From the X‑Forwarded‑For/Forwarded header set by the proxy",
+      "From DNS",
+      "It cannot"
+     ],
+     "a": 1,
+     "e": "Trust it only from known proxies; use PROXY protocol at L4."
+    },
+    {
+     "q": "Clients get intermittent \"connection reset\" on the first request over a reused pooled connection, especially after idle periods. Fix?",
+     "o": [
+      "Switch to UDP",
+      "Raise the client idle timeout above the server's",
+      "Keep the client idle timeout below the server/LB idle timeout and retry idempotent requests on stale‑connection errors",
+      "Disable keep‑alive entirely"
+     ],
+     "a": 2,
+     "e": "The server closed the idle connection first; the client reused a dead socket.",
+     "boss": true
+    },
+    {
+     "q": "Service A (timeout 2s) calls B (timeout 5s), which calls C. A's users see errors while B and C log successful slow responses. Root cause?",
+     "o": [
+      "DNS",
+      "Nagle",
+      "C is down",
+      "Timeouts are inverted: A gives up while B is still within its own budget, wasting work. Propagate deadlines that shrink down the chain"
+     ],
+     "a": 3,
+     "e": "Inner timeouts should be shorter than outer ones.",
+     "boss": true
+    },
+    {
+     "q": "A CDN started serving user A's account page to user B. Most likely cause?",
+     "o": [
+      "A personalised response was cached as public / the cache key ignored the auth cookie",
+      "Anycast misrouting",
+      "An HTTP/3 bug",
+      "TLS failure"
+     ],
+     "a": 0,
+     "e": "Mark it private/no‑store; never cache authenticated responses in shared caches.",
+     "boss": true
+    },
+    {
+     "q": "During rolling deploys ~0.5% of requests fail with 502s. Instances exit immediately on SIGTERM. Best fix?",
+     "o": [
+      "Add more instances",
+      "Increase CDN TTL",
+      "Graceful shutdown: fail readiness, wait for LB deregistration, drain in‑flight, then exit",
+      "Use L4 instead of L7"
+     ],
+     "a": 2,
+     "e": "Otherwise the LB keeps routing to dying instances.",
+     "boss": true
+    },
+    {
+     "q": "A backend outage triggers 50× the normal request rate at the database. Each of 3 service layers retries 3 times. Which change helps most?",
+     "o": [
+      "Retry at a single layer with exponential backoff, jitter and a retry budget; add circuit breakers",
+      "Longer DNS TTLs",
+      "More DB replicas only",
+      "Disable HTTP/2"
+     ],
+     "a": 0,
+     "e": "Nested retries amplify multiplicatively.",
+     "boss": true
+    }
+   ],
+   "terms": [
+    [
+     "Keep‑alive",
+     "Reusing one TCP/TLS connection for many HTTP requests"
+    ],
+    [
+     "Multiplexing",
+     "Many concurrent streams interleaved on one connection"
+    ],
+    [
+     "QUIC",
+     "UDP‑based transport with built‑in TLS 1.3 and per‑stream recovery"
+    ],
+    [
+     "Idempotent",
+     "Repeating the request has the same effect as doing it once"
+    ],
+    [
+     "Idempotency key",
+     "Client‑supplied key so the server dedupes retried requests"
+    ],
+    [
+     "L4 load balancer",
+     "Balances TCP/UDP flows without parsing HTTP"
+    ],
+    [
+     "L7 load balancer",
+     "Terminates HTTP and routes/retries per request"
+    ],
+    [
+     "Readiness probe",
+     "Signals whether an instance should receive traffic"
+    ],
+    [
+     "Connection draining",
+     "Let in‑flight requests finish while stopping new ones"
+    ],
+    [
+     "ETag",
+     "Validator enabling cheap 304 revalidation"
+    ],
+    [
+     "stale‑while‑revalidate",
+     "Serve stale content while refreshing in the background"
+    ],
+    [
+     "Retry budget",
+     "Cap on retries as a fraction of total traffic"
+    ],
+    [
+     "SNAT",
+     "Source NAT sharing public IPs via port mappings"
+    ],
+    [
+     "Reverse proxy",
+     "Server‑side intermediary for TLS, routing, caching"
+    ],
+    [
+     "Deadline propagation",
+     "Passing the remaining time budget down the call chain"
+    ]
+   ],
+   "drills": [
+    {
+     "p": "Walk through what happens when you type https://stripe.com into a browser, end to end.",
+     "a": [
+      "URL parse, HSTS, browser/OS DNS caches, recursive resolution",
+      "TCP + TLS (or QUIC) handshake with SNI/ALPN and cert validation",
+      "Edge/CDN: cache hit, or forward to origin",
+      "Load balancer → reverse proxy → app servers → data stores",
+      "Response with caching and compression headers",
+      "Browser renders, fetching subresources over reused connections"
+     ]
+    },
+    {
+     "p": "Compare L4 and L7 load balancing and say when you would use each.",
+     "a": [
+      "L4: per‑flow, fast, protocol agnostic, can pass TLS through",
+      "L7: per‑request routing, retries, auth, canaries; terminates TLS",
+      "Long‑lived HTTP/2/gRPC connections imbalance at L4",
+      "Health checks (active vs passive) and draining",
+      "Client IP via X‑Forwarded‑For or PROXY protocol",
+      "Common combo: L4 in front of a fleet of L7 proxies"
+     ]
+    },
+    {
+     "p": "Design timeouts and retries for a request path client → API → payments service → database.",
+     "a": [
+      "Connect and request timeouts on every hop",
+      "Overall deadline propagated, shrinking down the chain",
+      "Retry only idempotent operations, or use idempotency keys",
+      "Retry at one layer with exponential backoff and jitter",
+      "Retry budgets and circuit breakers to stop storms",
+      "Align keep‑alive idle timeouts client < LB < server"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "tag": "OS1",
+   "title": "Operating systems I: processes, threads & scheduling",
+   "blurb": "How the kernel runs your code: processes, threads, syscalls, scheduling, and the IO models (epoll, IOCP, event loops, virtual threads) behind every high‑concurrency server.",
+   "cards": [
+    {
+     "t": "Process vs thread",
+     "b": [
+      "A process is an isolated address space plus resources: memory mappings, open file descriptors, credentials, and at least one thread.",
+      "Threads share the process's memory and file descriptors but each has its own stack, registers and program counter.",
+      "Isolation trade‑off: a crashing process doesn't corrupt others; a crashing thread (or memory bug) can take down the whole process.",
+      "Threads communicate via shared memory (needs synchronization); processes use IPC (pipes, sockets, shared memory segments).",
+      "On Linux both are \"tasks\" created by clone() with different sharing flags; the scheduler schedules threads, not processes."
+     ]
+    },
+    {
+     "t": "User mode, kernel mode & syscalls",
+     "b": [
+      "CPU privilege levels separate user code from the kernel. User code can't touch hardware or other processes' memory directly.",
+      "A system call (read, write, open, mmap, futex, epoll_wait) traps into the kernel, which validates arguments and does the privileged work.",
+      "Syscalls cost roughly a hundred nanoseconds to microseconds, more with security mitigations; batching (writev, io_uring) amortizes them.",
+      "Interrupts (device, timer) also enter the kernel; the timer interrupt lets the scheduler preempt running threads.",
+      "strace (Linux) or Process Monitor/ETW (Windows) show which syscalls a program makes — the first tool for \"what is it stuck on?\"."
+     ]
+    },
+    {
+     "t": "Context switches",
+     "b": [
+      "Switching threads saves registers and stack pointer and loads another's; switching processes also changes the address space (page tables), which can flush TLB entries.",
+      "Direct cost is around microseconds; indirect cost (cold caches, TLB misses) is often larger.",
+      "Voluntary switches: thread blocks on IO or a lock. Involuntary: time slice expired or a higher‑priority task woke.",
+      "Thousands of threads contending for a few cores means more time switching than working — the motivation for event loops and core‑sized pools.",
+      "Measure with vmstat (cs column), pidstat -w, or perf."
+     ]
+    },
+    {
+     "t": "Scheduling",
+     "b": [
+      "The scheduler picks which runnable thread runs on each core. Goals: throughput, fairness, low latency for interactive work.",
+      "Linux's CFS (replaced by EEVDF in recent kernels) aims for fair CPU share weighted by nice value. Windows uses priority‑based preemptive scheduling with dynamic boosts.",
+      "Linux load average counts runnable plus uninterruptible (usually IO‑waiting) tasks; persistently above core count means work is queueing.",
+      "Container CPU limits via cgroups (CFS quota) can throttle a process mid‑request even when the host is idle — a common cause of tail latency.",
+      "CPU affinity/pinning and NUMA awareness keep threads near their memory and caches for latency‑critical workloads."
+     ]
+    },
+    {
+     "t": "CPU‑bound vs IO‑bound",
+     "b": [
+      "CPU‑bound work is limited by computation: more threads than cores doesn't help; parallelize across cores.",
+      "IO‑bound work spends most of its time waiting on network/disk: concurrency (many in‑flight operations) helps far more than raw CPU.",
+      "Sizing heuristic: threads ≈ cores × (1 + wait time / compute time).",
+      "Mixing both in one pool is dangerous: CPU‑heavy tasks starve IO handlers. Use separate pools or offload CPU work.",
+      "CPython's GIL makes threads useful for IO but not for CPU parallelism in pure Python; use processes or native extensions for CPU work."
+     ]
+    },
+    {
+     "t": "Blocking vs non‑blocking IO",
+     "b": [
+      "Blocking IO: the thread sleeps until the operation completes. Simple code, but one thread per concurrent operation.",
+      "Non‑blocking IO: the call returns immediately (EAGAIN/EWOULDBLOCK) if not ready; you need readiness notification to know when to retry.",
+      "Async/completion IO: you submit an operation and are notified when it's done (Windows IOCP, Linux io_uring).",
+      "Readiness model (epoll): \"this socket is readable now, go read\". Completion model (IOCP): \"your read finished, here are the bytes\".",
+      "Regular files always report \"ready\" to epoll, so runtimes use thread pools for disk IO (e.g. libuv) or io_uring."
+     ]
+    },
+    {
+     "t": "select, poll, epoll, kqueue & IOCP",
+     "b": [
+      "select: fixed‑size fd set (FD_SETSIZE, typically 1024), O(n) scan per call. poll: no fixed limit but still O(n) per call.",
+      "epoll (Linux): register interest once; epoll_wait returns only ready fds — scales to hundreds of thousands of connections. kqueue is the BSD/macOS equivalent.",
+      "Level‑triggered: keeps reporting while data remains. Edge‑triggered: reports on changes only, so you must drain until EAGAIN or you stall.",
+      "IOCP (Windows): completion‑based; threads wait on a completion port and the kernel limits how many run concurrently. .NET async IO on Windows is built on it.",
+      "io_uring (Linux): shared submission/completion ring buffers, batches syscalls, async for both files and sockets."
+     ]
+    },
+    {
+     "t": "Event loops",
+     "b": [
+      "One thread waits on epoll/kqueue/IOCP, dispatches callbacks for ready events, and runs each to completion. Node.js, NGINX, Redis and Netty work this way.",
+      "Handles huge numbers of mostly idle connections with little memory, since there's no thread stack per connection.",
+      "Golden rule: never block the loop. A 100ms CPU task or synchronous file read stalls every connection on that loop.",
+      "Scale across cores with one loop per core (NGINX workers, Netty event‑loop groups, Node cluster) and offload CPU work to worker pools.",
+      "async/await in C#, JS, Python and Rust is syntax over this model: the function yields at await and resumes later as a continuation."
+     ]
+    },
+    {
+     "t": "Thread pools",
+     "b": [
+      "Reuse a fixed set of threads to avoid creation cost and cap concurrency. Work is queued and picked up by free threads.",
+      "Sizing: CPU work ≈ number of cores; blocking IO work needs more. Unbounded pools blow up memory; unbounded queues hide overload as latency.",
+      "Use bounded queues with backpressure or rejection, so overload is visible instead of turning into minutes of queueing.",
+      "Thread pool starvation: tasks block waiting on work queued in the same pool (or sync‑over‑async in .NET), so no thread is free to make progress.",
+      "Separate pools (bulkheads) per dependency keep one slow downstream from consuming every thread."
+     ]
+    },
+    {
+     "t": "Green threads & virtual threads",
+     "b": [
+      "User‑space threads scheduled by the runtime onto a small set of OS threads (M:N). Cheap to create (small, growable stacks) so you can have millions.",
+      "Go goroutines and Java virtual threads let you write blocking‑style code; the runtime parks the virtual thread on IO and frees the carrier OS thread.",
+      "Pitfall: pinning — blocking inside native code or certain synchronized sections can hold the carrier thread; behaviour varies by runtime version.",
+      "They remove the thread‑per‑request memory limit but not downstream limits: you still need connection pools, rate limits and backpressure.",
+      "Contrast: async/await uses stackless coroutines (compiler‑generated state machines); green threads are stackful."
+     ]
+    },
+    {
+     "t": "Signals & process lifecycle",
+     "b": [
+      "Signals are asynchronous notifications: SIGTERM (polite stop), SIGKILL (cannot be caught), SIGINT (Ctrl‑C), SIGHUP (often reload config), SIGCHLD (child exited), SIGSEGV (bad memory access).",
+      "Orchestrators send SIGTERM, then SIGKILL after a grace period (Kubernetes default 30s) — handle SIGTERM for graceful shutdown.",
+      "Signal handlers may only call async‑signal‑safe functions; the usual pattern is setting a flag or writing to a self‑pipe.",
+      "A process that exits stays a zombie until its parent wait()s for it; orphans are re‑parented to init (PID 1) or a subreaper.",
+      "In containers your app may be PID 1, which gets no default signal handling and must reap children — use a tiny init (tini) or an exec‑form entrypoint."
+     ]
+    },
+    {
+     "t": "File descriptors, fork & exec",
+     "b": [
+      "A file descriptor is a per‑process integer referring to a kernel open‑file object: files, sockets, pipes, epoll instances. Windows uses handles similarly.",
+      "Per‑process fd limits (ulimit -n) cap concurrent connections; \"too many open files\" (EMFILE) usually means a leak or a low limit.",
+      "fork() duplicates the process; memory is shared copy‑on‑write, so it's cheap until pages are written. The child inherits fds.",
+      "exec() replaces the current program image, keeping the PID and any fds not marked close‑on‑exec. fork+exec is how shells launch programs; posix_spawn is a lighter alternative.",
+      "Redis uses fork for background snapshots: COW lets the child write a consistent snapshot while the parent keeps serving."
+     ]
+    }
+   ],
+   "qs": [
+    {
+     "q": "What do threads in the same process share?",
+     "o": [
+      "Address space (heap, globals) and file descriptors",
+      "Nothing",
+      "Only the program counter",
+      "Stacks and registers"
+     ],
+     "a": 0,
+     "e": "Each thread has its own stack and registers."
+    },
+    {
+     "q": "Why is a process switch generally more expensive than a thread switch within one process?",
+     "o": [
+      "Processes have more registers",
+      "It changes the address space, which can flush TLB entries and cool caches",
+      "Threads don't involve the kernel",
+      "Processes can't be preempted"
+     ],
+     "a": 1,
+     "e": "Page‑table switch plus cache/TLB effects."
+    },
+    {
+     "q": "What is a system call?",
+     "o": [
+      "A signal",
+      "A libc function that never enters the kernel",
+      "A controlled transition from user mode into the kernel to perform privileged work",
+      "A hardware fault"
+     ],
+     "a": 2,
+     "e": "e.g. read, write, epoll_wait."
+    },
+    {
+     "q": "What lets the scheduler preempt a thread stuck in a tight loop?",
+     "o": [
+      "The periodic timer interrupt",
+      "Page faults",
+      "The thread calling yield",
+      "Signals"
+     ],
+     "a": 0,
+     "e": "Timer interrupts return control to the kernel."
+    },
+    {
+     "q": "Linux load average counts…",
+     "o": [
+      "Runnable tasks plus tasks in uninterruptible sleep (often disk IO)",
+      "Network packets",
+      "Open files",
+      "Only CPU utilization percent"
+     ],
+     "a": 0,
+     "e": "High load with low CPU can mean IO waits."
+    },
+    {
+     "q": "A container at 30% average CPU shows latency spikes and a rising nr_throttled counter. Cause?",
+     "o": [
+      "Disk full",
+      "CFS quota throttling from the cgroup CPU limit during bursts",
+      "DNS",
+      "TIME_WAIT"
+     ],
+     "a": 1,
+     "e": "Bursts use up the quota within a period, then the cgroup is paused."
+    },
+    {
+     "q": "For purely CPU‑bound work, the best thread pool size is roughly…",
+     "o": [
+      "Twice the RAM in GB",
+      "1000 threads",
+      "The number of cores",
+      "One per request"
+     ],
+     "a": 2,
+     "e": "More threads only add switching."
+    },
+    {
+     "q": "In CPython with the GIL, threads are useful for…",
+     "o": [
+      "Nothing",
+      "Kernel scheduling",
+      "CPU‑parallel number crunching in pure Python",
+      "IO‑bound concurrency"
+     ],
+     "a": 3,
+     "e": "The GIL is released during blocking IO."
+    },
+    {
+     "q": "A non‑blocking read on a socket with no data available returns…",
+     "o": [
+      "EAGAIN/EWOULDBLOCK",
+      "It blocks anyway",
+      "SIGPIPE",
+      "Zero bytes"
+     ],
+     "a": 0,
+     "e": "Zero bytes means the peer closed (EOF)."
+    },
+    {
+     "q": "Readiness vs completion IO models?",
+     "o": [
+      "They are the same",
+      "epoll tells you an fd is ready to read; IOCP tells you a submitted read has completed",
+      "IOCP is readiness, epoll is completion",
+      "Both are only for files"
+     ],
+     "a": 1,
+     "e": "The model shapes how runtimes are built."
+    },
+    {
+     "q": "Why does epoll scale better than select?",
+     "o": [
+      "It uses more threads",
+      "It uses UDP",
+      "Interest is registered once and only ready fds are returned, instead of scanning all fds every call",
+      "It disables interrupts"
+     ],
+     "a": 2,
+     "e": "O(ready) vs O(n) per wait."
+    },
+    {
+     "q": "With edge‑triggered epoll, what must you do on a readable event?",
+     "o": [
+      "Close the socket",
+      "Call select",
+      "Read exactly once",
+      "Read until EAGAIN, or you may never be notified about the remaining data"
+     ],
+     "a": 3,
+     "e": "Edge = notify on change only."
+    },
+    {
+     "q": "Which is Windows' native high‑scale async IO mechanism?",
+     "o": [
+      "kqueue",
+      "IO Completion Ports (IOCP)",
+      "select only",
+      "epoll"
+     ],
+     "a": 1,
+     "e": ".NET async sockets on Windows sit on IOCP."
+    },
+    {
+     "q": "The cardinal rule of an event‑loop server?",
+     "o": [
+      "Run many loops per core",
+      "Never block the loop thread with CPU‑heavy or synchronous IO work",
+      "Always use edge‑triggered mode",
+      "Disable timers"
+     ],
+     "a": 1,
+     "e": "One blocked callback stalls every connection."
+    },
+    {
+     "q": "Why does Node.js (libuv) use a thread pool for file system operations?",
+     "o": [
+      "For TLS",
+      "Files are faster with threads",
+      "Regular files can't be usefully polled for readiness, so blocking file ops are offloaded",
+      "Sockets require it"
+     ],
+     "a": 2,
+     "e": "Disk IO doesn't fit the readiness model."
+    },
+    {
+     "q": "What is thread pool starvation?",
+     "o": [
+      "GC pauses",
+      "Too many idle threads",
+      "Too few CPUs",
+      "All pool threads are blocked waiting on work that needs a pool thread to run, so nothing progresses"
+     ],
+     "a": 3,
+     "e": "Classic sync‑over‑async in .NET."
+    },
+    {
+     "q": "Why put a bounded queue in front of a thread pool?",
+     "o": [
+      "To apply backpressure / reject when overloaded instead of building unbounded latency and memory",
+      "The OS requires it",
+      "To avoid context switches",
+      "It is faster"
+     ],
+     "a": 0,
+     "e": "Make overload visible."
+    },
+    {
+     "q": "What is the bulkhead pattern?",
+     "o": [
+      "One giant shared pool",
+      "Separate resource pools per dependency so one slow dependency can't exhaust everything",
+      "A firewall rule",
+      "A retry policy"
+     ],
+     "a": 1,
+     "e": "Isolates failure."
+    },
+    {
+     "q": "Java virtual threads and goroutines primarily give you…",
+     "o": [
+      "No need for locks",
+      "Faster CPU math",
+      "Cheap blocking‑style concurrency: the runtime parks them on IO and reuses carrier OS threads",
+      "Kernel bypass"
+     ],
+     "a": 2,
+     "e": "M:N scheduling."
+    },
+    {
+     "q": "Which signal cannot be caught or ignored?",
+     "o": [
+      "SIGHUP",
+      "SIGKILL",
+      "SIGTERM",
+      "SIGINT"
+     ],
+     "a": 1,
+     "e": "SIGSTOP cannot be caught either."
+    },
+    {
+     "q": "What does Kubernetes send to stop a pod before force‑killing it?",
+     "o": [
+      "SIGTERM, then SIGKILL after the grace period",
+      "SIGHUP",
+      "SIGSTOP",
+      "SIGKILL immediately"
+     ],
+     "a": 0,
+     "e": "Default grace period is 30s."
+    },
+    {
+     "q": "A zombie process is…",
+     "o": [
+      "A process using 100% CPU",
+      "A process that exited but hasn't been reaped by its parent via wait()",
+      "A hung process",
+      "A detached thread"
+     ],
+     "a": 1,
+     "e": "Only a process table entry remains."
+    },
+    {
+     "q": "\"Too many open files\" errors usually indicate…",
+     "o": [
+      "DNS failure",
+      "Disk full",
+      "Hitting the per‑process fd limit, often from leaked sockets/files",
+      "Out of RAM"
+     ],
+     "a": 2,
+     "e": "Check ulimit -n and lsof."
+    },
+    {
+     "q": "Why is fork() cheap even for a large process?",
+     "o": [
+      "It uses swap",
+      "It only copies the stack",
+      "It never copies anything",
+      "Memory pages are shared copy‑on‑write until modified"
+     ],
+     "a": 3,
+     "e": "Page tables are copied; pages are shared."
+    },
+    {
+     "q": "What does exec() do?",
+     "o": [
+      "Replaces the calling process's program image, keeping the PID",
+      "Creates a thread",
+      "Sends a signal",
+      "Creates a new process"
+     ],
+     "a": 0,
+     "e": "fork + exec launches programs."
+    },
+    {
+     "q": "A Node.js API's p99 jumps from 20ms to 2s whenever one endpoint generates a large PDF. Average CPU is moderate. Best fix?",
+     "o": [
+      "Add more event loops on the same thread",
+      "Only increase the libuv thread pool size",
+      "PDF rendering blocks the event loop; move it to worker threads or a separate service and keep the loop non‑blocking",
+      "Use edge‑triggered epoll"
+     ],
+     "a": 2,
+     "e": "CPU work on the loop stalls every request.",
+     "boss": true
+    },
+    {
+     "q": "A .NET service hangs under load: thread count climbs slowly, CPU is low, requests time out. Code calls .Result on async HTTP calls. Diagnosis?",
+     "o": [
+      "Nagle",
+      "GC pressure",
+      "Thread pool starvation from sync‑over‑async blocking pool threads",
+      "Too many file descriptors"
+     ],
+     "a": 2,
+     "e": "Go async all the way; the pool injects new threads slowly.",
+     "boss": true
+    },
+    {
+     "q": "Your container ignores docker stop and is killed after the timeout every time. It starts via a shell script entrypoint. Likely cause?",
+     "o": [
+      "Docker has no signals",
+      "The app's fd limit",
+      "SIGKILL is blocked",
+      "The shell is PID 1 and doesn't forward SIGTERM to the app; exec the app or use an init like tini"
+     ],
+     "a": 3,
+     "e": "PID 1 has special signal semantics.",
+     "boss": true
+    },
+    {
+     "q": "After migrating a blocking JDBC service to virtual threads, throughput barely changes and the DB reports max connections reached. Why?",
+     "o": [
+      "The bottleneck is the bounded DB connection pool/database; virtual threads don't remove downstream limits",
+      "JDBC can't run on virtual threads",
+      "GC",
+      "Virtual threads are slower"
+     ],
+     "a": 0,
+     "e": "Concurrency is capped by the scarcest resource.",
+     "boss": true
+    },
+    {
+     "q": "A Redis instance with 20GB of data shows a latency spike and memory growth during BGSAVE under heavy writes. Why?",
+     "o": [
+      "Redis blocks all reads while saving",
+      "fork() is free and COW never copies",
+      "fork() must copy large page tables (a pause), and heavy writes trigger copy‑on‑write of many pages, raising memory",
+      "Swap is disabled"
+     ],
+     "a": 2,
+     "e": "COW cost scales with pages written; THP makes it worse.",
+     "boss": true
+    }
+   ],
+   "terms": [
+    [
+     "Process",
+     "Isolated address space plus resources and threads"
+    ],
+    [
+     "Thread",
+     "Schedulable execution context sharing its process's memory"
+    ],
+    [
+     "System call",
+     "Controlled entry into the kernel for privileged work"
+    ],
+    [
+     "Context switch",
+     "Saving one thread's state and loading another's"
+    ],
+    [
+     "Preemption",
+     "Kernel forcibly suspending a running thread"
+    ],
+    [
+     "CFS throttling",
+     "cgroup CPU quota pausing a container within a period"
+    ],
+    [
+     "epoll",
+     "Linux scalable readiness notification for many fds"
+    ],
+    [
+     "IOCP",
+     "Windows completion‑based async IO mechanism"
+    ],
+    [
+     "io_uring",
+     "Linux ring‑buffer async IO interface for sockets and files"
+    ],
+    [
+     "Edge‑triggered",
+     "Notified only on state change; must drain to EAGAIN"
+    ],
+    [
+     "Event loop",
+     "Single thread dispatching callbacks for ready IO"
+    ],
+    [
+     "Thread pool starvation",
+     "All workers blocked so queued work cannot run"
+    ],
+    [
+     "Virtual thread",
+     "Runtime‑scheduled lightweight thread on carrier OS threads"
+    ],
+    [
+     "Zombie",
+     "Exited process not yet reaped by its parent"
+    ],
+    [
+     "File descriptor",
+     "Per‑process handle to an open file, socket or pipe"
+    ]
+   ],
+   "drills": [
+    {
+     "p": "Explain how a single‑threaded server like Redis or NGINX handles 50,000 concurrent connections.",
+     "a": [
+      "Non‑blocking sockets",
+      "epoll/kqueue registration; waits return only ready fds",
+      "Event loop dispatches short callbacks",
+      "No thread stack per connection, so low memory",
+      "Must never block the loop; offload slow work",
+      "Scale across cores with one loop per core"
+     ]
+    },
+    {
+     "p": "Compare thread‑per‑request, event loop with async/await, and virtual threads.",
+     "a": [
+      "Thread‑per‑request: simple, but memory and context‑switch cost per thread",
+      "Event loop/async: scales, but function coloring and must not block",
+      "Virtual threads: blocking‑style code with M:N scheduling",
+      "All still need bounded downstream resources (connection pools)",
+      "CPU‑bound work needs core‑sized pools regardless"
+     ]
+    },
+    {
+     "p": "Describe graceful shutdown of a service in Kubernetes, from the OS signal upward.",
+     "a": [
+      "SIGTERM sent to PID 1, SIGKILL after the grace period",
+      "App must be PID 1 or have signals forwarded (tini/exec)",
+      "Fail readiness so endpoints are removed",
+      "Stop accepting, finish in‑flight requests, close idle connections",
+      "Flush buffers/logs and exit before the deadline"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "tag": "OS2",
+   "title": "Operating systems II: memory, files & performance",
+   "blurb": "Virtual memory, the page cache, fsync and durability, containers, and the latency numbers behind every capacity estimate — the OS knowledge database and cloud interviewers probe hardest.",
+   "cards": [
+    {
+     "t": "Virtual memory",
+     "b": [
+      "Each process sees its own virtual address space; the MMU translates virtual pages to physical frames using per‑process page tables maintained by the kernel.",
+      "Benefits: isolation between processes, overcommit, memory‑mapped files, shared libraries mapped once, copy‑on‑write.",
+      "Pages are typically 4KB; huge pages (2MB/1GB on x86‑64) reduce page‑table and TLB pressure for large heaps and databases.",
+      "Virtual size (VSZ) counts reservations; resident set size (RSS) is what is actually in RAM. Container limits apply to real usage, not VSZ.",
+      "Linux overcommits by default: allocations succeed and physical memory is assigned on first touch."
+     ]
+    },
+    {
+     "t": "Paging, page faults & the TLB",
+     "b": [
+      "A page fault occurs when an accessed virtual page isn't currently mapped. Minor fault: data is already in memory (page cache, fresh zero page) — microseconds. Major fault: needs disk IO — far slower.",
+      "The TLB caches recent virtual→physical translations; a TLB miss requires a page‑table walk.",
+      "Random access over a huge working set causes TLB misses; huge pages help.",
+      "Transparent Huge Pages can cause latency spikes from compaction; several databases (e.g. Redis, and MongoDB historically) have recommended disabling THP — check current vendor guidance.",
+      "Watch major faults (sar -B, pgmajfault in /proc/vmstat) as a sign the working set doesn't fit in RAM."
+     ]
+    },
+    {
+     "t": "Page cache & write‑back",
+     "b": [
+      "The kernel caches file data in otherwise unused RAM. Hot file reads hit memory; low \"free\" memory is normal — look at \"available\".",
+      "write() normally copies into the page cache and returns; dirty pages are flushed to disk later by background write‑back.",
+      "So a successful write() is not durable: a power loss can lose it. Durability requires fsync/fdatasync (or O_DSYNC, or O_DIRECT plus flushes).",
+      "When too many pages are dirty, the kernel throttles writers — sudden write stalls.",
+      "Some databases lean on the page cache (PostgreSQL, Kafka); others manage their own cache and may bypass it with O_DIRECT. MongoDB's WiredTiger keeps its own cache and also benefits from the filesystem cache."
+     ]
+    },
+    {
+     "t": "fsync & durability",
+     "b": [
+      "fsync(fd) flushes the file's data and metadata to stable storage and waits; fdatasync skips metadata not needed to read the data back.",
+      "Creating or renaming a file also requires fsyncing the parent directory to make the directory entry durable.",
+      "Atomic file replacement: write temp file → fsync it → rename over target → fsync directory.",
+      "fsync errors are serious: after a failed fsync, Linux may drop the dirty pages and mark them clean, so a retried fsync can falsely succeed. PostgreSQL now treats fsync failure as fatal for this reason.",
+      "Group commit amortizes one fsync across many transactions — the core trick behind write‑ahead log throughput.",
+      "Drives have volatile write caches; durability depends on them honouring flush/FUA commands."
+     ]
+    },
+    {
+     "t": "mmap",
+     "b": [
+      "mmap maps a file into the address space; accesses become page faults served from the page cache, with no explicit read() copies.",
+      "Pros: zero‑copy access, sharing between processes, simple code for random reads.",
+      "Cons: IO errors arrive as SIGBUS, little control over eviction or read‑ahead, page faults stall threads unpredictably, and durability needs msync.",
+      "Databases that relied on mmap (e.g. MongoDB's old MMAPv1 engine) moved to engines with explicit buffer management for control and compression.",
+      "Also used for anonymous memory (large malloc allocations) and shared‑memory IPC."
+     ]
+    },
+    {
+     "t": "Swap & the OOM killer",
+     "b": [
+      "Swap pages rarely used anonymous memory out to disk. It postpones OOM but turns memory access into disk latency — for latency‑sensitive servers heavy swapping is effectively an outage.",
+      "Many server and container setups run with little or no swap and rely on capacity planning; Kubernetes historically required swap to be off.",
+      "When memory is exhausted, the Linux OOM killer picks a victim by oom_score (mostly memory usage, adjustable via oom_score_adj) and SIGKILLs it.",
+      "In containers, exceeding the cgroup memory limit triggers the OOM killer within that cgroup: exit code 137 / OOMKilled.",
+      "Page cache counts toward cgroup memory but is reclaimable; anonymous memory (heap) is what usually gets you killed."
+     ]
+    },
+    {
+     "t": "Stack vs heap & GC interaction",
+     "b": [
+      "The stack holds call frames and local variables: allocation is a pointer bump, freed automatically on return, size limited (typically MBs per OS thread) — deep recursion overflows it.",
+      "The heap holds dynamically allocated objects with arbitrary lifetimes, managed by malloc/free or a garbage collector.",
+      "GC runtimes must be told the container limit (modern ones detect it) and leave headroom: JVM -Xmx or MaxRAMPercentage, .NET heap hard limit settings. Off‑heap, metaspace, thread stacks and native buffers also count.",
+      "GC pauses and concurrent GC CPU use show up as tail latency; allocation rate is often the real knob — fewer allocations, fewer collections.",
+      "A GC scanning a heap that was swapped out causes enormous pauses — another reason to avoid swap for GC'd services."
+     ]
+    },
+    {
+     "t": "Copy‑on‑write",
+     "b": [
+      "Multiple owners share the same pages read‑only; the first write to a page triggers a fault and a private copy is made.",
+      "Used by fork(), container image layers (overlay filesystems), snapshots in ZFS/Btrfs, and many storage engines' MVCC designs.",
+      "The cost shows up later: write‑heavy workloads after a fork copy many pages, increasing memory.",
+      "COW filesystems never overwrite data in place, which simplifies crash consistency and snapshots but can fragment data.",
+      "Interview link: Redis BGSAVE and fork‑based snapshots depend on COW."
+     ]
+    },
+    {
+     "t": "Containers: namespaces & cgroups",
+     "b": [
+      "A container is an isolated process, not a VM: it shares the host kernel.",
+      "Namespaces isolate what a process sees: PID, network, mount, UTS (hostname), IPC, user, cgroup.",
+      "cgroups limit and account resources: CPU (weights/quota), memory, IO, number of PIDs.",
+      "Overlay filesystems stack read‑only image layers under a writable layer (copy‑on‑write).",
+      "Gotchas: older runtimes read host CPU/memory counts instead of cgroup limits (pools sized wrong); CPU quota throttling; memory limits killing GC'd apps with untuned heaps.",
+      "VMs (Hyper‑V, KVM) run a separate kernel for stronger isolation; gVisor and Kata Containers sit in between."
+     ]
+    },
+    {
+     "t": "File systems basics",
+     "b": [
+      "Files are inodes (metadata + block pointers) referenced by directory entries; rename within one filesystem is atomic.",
+      "Journaling filesystems (ext4, XFS, NTFS) log metadata changes so crashes don't corrupt filesystem structure — they don't make your application's data writes atomic.",
+      "Deleting a file another process still has open frees space only when the last fd closes — \"disk full but du shows little\" usually means deleted‑but‑open log files.",
+      "Running out of inodes fails file creation even with free space (millions of tiny files).",
+      "Sequential IO is far faster than random IO on HDDs and still faster on SSDs; append‑only logs and LSM trees exploit this."
+     ]
+    },
+    {
+     "t": "Latency numbers every programmer should know",
+     "b": [
+      "Orders of magnitude: L1 cache ~1ns; L2 ~4ns; main memory ~100ns; uncontended mutex lock/unlock ~tens of ns.",
+      "Compress 1KB ~ a few µs; random 4KB read from NVMe SSD ~tens to ~100µs; read 1MB sequentially from memory ~tens of µs.",
+      "Round trip within a datacenter ~0.5ms or less; HDD seek ~5–10ms.",
+      "Cross‑region round trips: tens of ms (US coast to coast ~60–80ms); intercontinental ~100–150ms+. Light in fiber travels ~200km per ms.",
+      "Use them for back‑of‑envelope estimates: 10 sequential DB round trips at 1ms cost 10ms before any real work."
+     ]
+    },
+    {
+     "t": "Profiling & performance basics",
+     "b": [
+      "Start with USE (Utilization, Saturation, Errors) for each resource and RED (Rate, Errors, Duration) for each service.",
+      "Linux toolbox: top/htop, vmstat, iostat, sar, pidstat, ss, perf, strace, eBPF tools (bcc/bpftrace). Windows: PerfMon, ETW with PerfView/WPA.",
+      "Sampling CPU profilers and flame graphs show where on‑CPU time goes; off‑CPU analysis shows where threads wait (locks, IO).",
+      "Look at percentiles (p99, p999), not averages; coordinated omission can make load tests hide tail latency.",
+      "High iowait with low user CPU = storage bound; high sys time = syscall/kernel heavy; very high context switches = lock contention or too many threads."
+     ]
+    }
+   ],
+   "qs": [
+    {
+     "q": "What translates virtual addresses to physical addresses?",
+     "o": [
+      "The scheduler",
+      "The page cache",
+      "The disk controller",
+      "The MMU, using page tables"
+     ],
+     "a": 3,
+     "e": "The TLB caches those translations."
+    },
+    {
+     "q": "A major page fault means…",
+     "o": [
+      "The page had to be read from disk",
+      "A segmentation fault",
+      "A TLB hit",
+      "The page was already in RAM"
+     ],
+     "a": 0,
+     "e": "Disk IO makes it far slower than a minor fault."
+    },
+    {
+     "q": "What does the TLB cache?",
+     "o": [
+      "File data",
+      "Virtual‑to‑physical address translations",
+      "DNS records",
+      "Dirty pages"
+     ],
+     "a": 1,
+     "e": "Misses require page‑table walks."
+    },
+    {
+     "q": "Why can huge pages help a database with a large buffer pool?",
+     "o": [
+      "They disable swap",
+      "They compress data",
+      "Fewer TLB misses and smaller page tables",
+      "They avoid fsync"
+     ],
+     "a": 2,
+     "e": "One TLB entry covers 2MB instead of 4KB."
+    },
+    {
+     "q": "\"free\" memory on a Linux DB host is near zero. Is it a problem?",
+     "o": [
+      "It means a leak",
+      "It means swap is broken",
+      "Always critical",
+      "Not necessarily: the page cache uses spare RAM and is reclaimable; check \"available\""
+     ],
+     "a": 3,
+     "e": "Unused RAM is wasted RAM."
+    },
+    {
+     "q": "After write() returns successfully, is the data durable?",
+     "o": [
+      "No: it may only be in the page cache until fsync or write‑back",
+      "Only on SSDs",
+      "Only on Windows",
+      "Yes"
+     ],
+     "a": 0,
+     "e": "You need fsync/fdatasync."
+    },
+    {
+     "q": "To durably create a new file you should fsync…",
+     "o": [
+      "Only the file",
+      "The file and its parent directory",
+      "Only the directory",
+      "Nothing; journaling handles it"
+     ],
+     "a": 1,
+     "e": "The directory entry must be durable too."
+    },
+    {
+     "q": "Safe atomic replacement of a config file?",
+     "o": [
+      "mmap it and modify",
+      "Overwrite in place",
+      "Write a temp file, fsync it, rename over the target, fsync the directory",
+      "Truncate then write"
+     ],
+     "a": 2,
+     "e": "rename is atomic within a filesystem."
+    },
+    {
+     "q": "Why did PostgreSQL change to treat fsync failure as fatal?",
+     "o": [
+      "Licensing",
+      "A Windows‑only bug",
+      "Performance",
+      "Linux may mark failed dirty pages clean, so a retried fsync can falsely succeed and lose data"
+     ],
+     "a": 3,
+     "e": "Crash and recover from the WAL instead."
+    },
+    {
+     "q": "What is group commit?",
+     "o": [
+      "Batching many transactions' log records into one fsync",
+      "Two‑phase commit",
+      "Squashing git commits",
+      "Committing in a team chat"
+     ],
+     "a": 0,
+     "e": "Amortizes expensive flushes."
+    },
+    {
+     "q": "An IO error while reading an mmapped file shows up as…",
+     "o": [
+      "A return value of -1",
+      "SIGBUS",
+      "EAGAIN",
+      "Zero bytes"
+     ],
+     "a": 1,
+     "e": "There is no return value to check on a memory access."
+    },
+    {
+     "q": "A container exits with code 137 and status OOMKilled. Meaning?",
+     "o": [
+      "Disk full",
+      "Segfault",
+      "It exceeded its cgroup memory limit and was SIGKILLed",
+      "Graceful exit"
+     ],
+     "a": 2,
+     "e": "137 = 128 + 9 (SIGKILL)."
+    },
+    {
+     "q": "How does the Linux OOM killer choose a victim?",
+     "o": [
+      "Randomly",
+      "Lowest PID",
+      "Oldest process",
+      "Mainly by oom_score (memory usage), adjusted by oom_score_adj"
+     ],
+     "a": 3,
+     "e": "The biggest consumers usually go first."
+    },
+    {
+     "q": "Why is heavy swapping bad for latency‑sensitive servers?",
+     "o": [
+      "Memory accesses become disk IO, causing huge stalls (especially when a GC scans swapped heap)",
+      "It uses more CPU cache",
+      "It breaks TCP",
+      "Swap is unencrypted"
+     ],
+     "a": 0,
+     "e": "Effectively an outage."
+    },
+    {
+     "q": "What lives on the stack?",
+     "o": [
+      "Objects with arbitrary lifetimes",
+      "Call frames and local variables, freed automatically on return",
+      "The page cache",
+      "File descriptors"
+     ],
+     "a": 1,
+     "e": "Bump allocation, limited size."
+    },
+    {
+     "q": "A JVM in a 2GB container keeps getting OOMKilled with -Xmx2g. Why?",
+     "o": [
+      "Too few threads",
+      "A JVM bug",
+      "Total memory includes off‑heap, metaspace, thread stacks and native buffers beyond the heap; leave headroom",
+      "Swap"
+     ],
+     "a": 2,
+     "e": "Set the heap well below the container limit."
+    },
+    {
+     "q": "Copy‑on‑write means…",
+     "o": [
+      "Writes go to swap",
+      "Writes are mirrored to two disks",
+      "Every write copies the whole file",
+      "Shared pages are copied only when someone writes to them"
+     ],
+     "a": 3,
+     "e": "Lazy copying."
+    },
+    {
+     "q": "What isolates what a container process can see (PIDs, network, mounts)?",
+     "o": [
+      "Namespaces",
+      "SELinux only",
+      "The hypervisor",
+      "cgroups"
+     ],
+     "a": 0,
+     "e": "cgroups limit; namespaces isolate."
+    },
+    {
+     "q": "What limits a container's CPU and memory usage?",
+     "o": [
+      "Namespaces",
+      "cgroups",
+      "chroot",
+      "iptables"
+     ],
+     "a": 1,
+     "e": "Control groups."
+    },
+    {
+     "q": "Key difference between a container and a VM?",
+     "o": [
+      "Containers need hardware virtualization",
+      "Containers are always slower",
+      "Containers share the host kernel; VMs run their own kernel",
+      "VMs have no isolation"
+     ],
+     "a": 2,
+     "e": "Weaker isolation, lower overhead."
+    },
+    {
+     "q": "df shows the disk full but du finds little data. Likely cause?",
+     "o": [
+      "The swap file",
+      "DNS",
+      "A corrupted inode",
+      "Deleted files still held open by a process (e.g. rotated logs)"
+     ],
+     "a": 3,
+     "e": "Space is freed when the last fd closes; check lsof +L1."
+    },
+    {
+     "q": "Writes fail with \"No space left on device\" but df shows free space. Check…",
+     "o": [
+      "Inode exhaustion (df -i)",
+      "TCP windows",
+      "GC",
+      "DNS"
+     ],
+     "a": 0,
+     "e": "Too many small files."
+    },
+    {
+     "q": "Rough main memory access latency?",
+     "o": [
+      "~1ns",
+      "~100ns",
+      "~1ms",
+      "~10ms"
+     ],
+     "a": 1,
+     "e": "L1 cache is ~1ns."
+    },
+    {
+     "q": "Typical network round trip within a datacenter?",
+     "o": [
+      "~150ms",
+      "~1µs",
+      "~0.5ms or less",
+      "~50ms"
+     ],
+     "a": 2,
+     "e": "Cross‑region is tens of ms."
+    },
+    {
+     "q": "High iowait with low user CPU suggests…",
+     "o": [
+      "Lock‑free code",
+      "An idle network",
+      "CPU bound",
+      "Storage/IO bound"
+     ],
+     "a": 3,
+     "e": "Threads are waiting on disk."
+    },
+    {
+     "q": "A MongoDB node shows rising p99 latency and many major page faults; the working set exceeds RAM. What is happening and what helps?",
+     "o": [
+      "The working set doesn't fit in memory, so reads hit disk; add RAM, shrink the working set with better indexes/projections, or shard",
+      "Too many threads; shrink the pool",
+      "TLS overhead; disable TLS",
+      "Network congestion; add bandwidth"
+     ],
+     "a": 0,
+     "e": "Memory is the first capacity limit of a database.",
+     "boss": true
+    },
+    {
+     "q": "A service writes events with write() and acks clients; after a host crash some acknowledged events are missing. Fix?",
+     "o": [
+      "Use bigger buffers",
+      "Ack only after fsync (with group commit for throughput) or after replication to a quorum",
+      "Use mmap",
+      "Disable journaling"
+     ],
+     "a": 1,
+     "e": "write() alone only reaches the page cache.",
+     "boss": true
+    },
+    {
+     "q": "A Java service has a 1‑core CPU limit, but an old JVM detects all host cores and creates many GC and pool threads. Symptom and fix?",
+     "o": [
+      "File descriptor leak",
+      "DNS failures; fix the resolver",
+      "CFS throttling and long GC pauses; use a container‑aware runtime or set processor count / GC threads explicitly",
+      "OOM; add swap"
+     ],
+     "a": 2,
+     "e": "Oversized thread counts burn the quota in bursts.",
+     "boss": true
+    },
+    {
+     "q": "A Redis host has periodic 100ms+ latency spikes with no load change; perf shows time in memory compaction. Likely cause and fix?",
+     "o": [
+      "Swap disabled; enable it",
+      "fsync errors",
+      "Network jitter; use UDP",
+      "Transparent Huge Pages compaction/defrag; disable THP as recommended"
+     ],
+     "a": 3,
+     "e": "THP defrag can stall allocations.",
+     "boss": true
+    },
+    {
+     "q": "An API handler makes 20 sequential calls to a database in another region (70ms RTT). Rough latency floor and fix?",
+     "o": [
+      "~1.4s; colocate compute with data, batch queries or parallelize calls",
+      "~140ms; add a cache",
+      "~70ms; enable HTTP/2",
+      "~20ms; fine"
+     ],
+     "a": 0,
+     "e": "Sequential round trips add up: 20 × 70ms.",
+     "boss": true
+    }
+   ],
+   "terms": [
+    [
+     "Virtual memory",
+     "Per‑process address space mapped to physical frames"
+    ],
+    [
+     "Page fault",
+     "Access to a page not currently mapped; minor or major"
+    ],
+    [
+     "TLB",
+     "Cache of virtual‑to‑physical translations"
+    ],
+    [
+     "Huge pages",
+     "Larger pages (2MB/1GB) reducing TLB and page‑table overhead"
+    ],
+    [
+     "Page cache",
+     "Kernel cache of file data in spare RAM"
+    ],
+    [
+     "Dirty page",
+     "Modified cached page not yet written to disk"
+    ],
+    [
+     "fsync",
+     "Flush a file's data and metadata to stable storage"
+    ],
+    [
+     "Group commit",
+     "One fsync covering many transactions"
+    ],
+    [
+     "mmap",
+     "Map a file or anonymous memory into the address space"
+    ],
+    [
+     "RSS",
+     "Resident set size: memory actually in RAM"
+    ],
+    [
+     "OOM killer",
+     "Kernel mechanism that kills processes when memory runs out"
+    ],
+    [
+     "Copy‑on‑write",
+     "Share pages until written, then copy"
+    ],
+    [
+     "Namespace",
+     "Kernel feature isolating what a process can see"
+    ],
+    [
+     "cgroup",
+     "Kernel feature limiting and accounting resource usage"
+    ],
+    [
+     "USE method",
+     "Check Utilization, Saturation, Errors per resource"
+    ]
+   ],
+   "drills": [
+    {
+     "p": "Explain what happens, from the application down to the disk, when a database commits a transaction durably.",
+     "a": [
+      "Append the commit record to the WAL buffer",
+      "write() into the page cache (or O_DIRECT)",
+      "fsync/fdatasync forces it to stable storage; the device must honour flushes",
+      "Group commit batches many transactions per fsync",
+      "Ack the client only after the flush (or quorum replication)",
+      "Data pages written back later; WAL replay on crash recovery"
+     ]
+    },
+    {
+     "p": "A containerized service keeps getting OOMKilled. How do you investigate and fix it?",
+     "a": [
+      "Confirm exit 137/OOMKilled and cgroup memory events",
+      "Separate heap vs off‑heap/native vs page cache usage",
+      "Check runtime heap limits against the container limit; leave headroom",
+      "Look for leaks with heap dumps/profilers over time",
+      "Right‑size limits; reduce allocation or concurrency"
+     ]
+    },
+    {
+     "p": "Using latency numbers, estimate and reduce the latency of a request that makes several storage and network calls.",
+     "a": [
+      "Memory ~100ns, SSD read ~tens–100µs, in‑region RTT ~0.5ms, cross‑region tens of ms",
+      "Sum sequential steps; take the max of parallel ones",
+      "Identify the dominant term (usually network round trips)",
+      "Batch, parallelize, cache, colocate",
+      "Reason about tail latency, not just the average"
+     ]
+    }
+   ]
+  }
+ ]
+}
