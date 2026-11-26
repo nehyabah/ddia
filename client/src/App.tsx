@@ -30,6 +30,7 @@ import { MockPage, PrepHome } from "./pages/Prep";
 import { CommitmentPage } from "./pages/Commitment";
 import { PracticalList, PracticalPlay } from "./pages/Practical";
 import { HistoryPage } from "./pages/HistoryPage";
+import { ApplicationsPage, DeepDivePage, EstimationList, EstimationPlay, RoadmapPage, WhyUsPage } from "./pages/Career";
 
 type NavItem = { to: string; label: string; icon: IconName; badge?: number; end?: boolean; desktopOnly?: boolean; mobileOnly?: boolean; match?: string[] };
 
@@ -42,7 +43,7 @@ function Shell() {
   const items: NavItem[] = [
     { to: "/", label: "Home", icon: "home", end: true, match: ["/chapter"] },
     { to: "/review", label: "Review", icon: "review", badge: profile.dueCount },
-    { to: "/prep", label: "Prep", icon: "brief", match: ["/design", "/coding", "/mongo", "/behavioral", "/mock", "/companies", "/practical"] },
+    { to: "/prep", label: "Prep", icon: "brief", match: ["/design", "/coding", "/mongo", "/behavioral", "/mock", "/companies", "/practical", "/applications", "/deepdive", "/whyus", "/estimation"] },
     { to: "/java", label: "Java", icon: "code", badge: profile.javaDue },
     { to: "/puzzles", label: "Puzzles", icon: "puzzle" },
     { to: "/stats", label: "Stats", icon: "chart", desktopOnly: true, match: ["/report", "/readiness"] },
@@ -132,6 +133,12 @@ export function App() {
           <Route path="/prep" element={<PrepHome />} />
           <Route path="/commitment" element={<CommitmentPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/roadmap" element={<RoadmapPage />} />
+          <Route path="/applications" element={<ApplicationsPage />} />
+          <Route path="/deepdive" element={<DeepDivePage />} />
+          <Route path="/whyus" element={<WhyUsPage />} />
+          <Route path="/estimation" element={<EstimationList />} />
+          <Route path="/estimation/:id" element={<EstimationPlay />} />
           <Route path="/practical" element={<PracticalList />} />
           <Route path="/practical/:id" element={<PracticalPlay />} />
           <Route path="/design" element={<DesignList />} />

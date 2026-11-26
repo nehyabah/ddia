@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, tx } from "../db.js";
+import { db, tx, trackOf } from "../db.js";
 import { BADGES, addXP, award, dueCount, mastery, masteryByChapter, now, localDay, schedule } from "../progress.js";
 import { HttpError, chapterLabel, int, str } from "../http.js";
 
@@ -42,7 +42,7 @@ export function chapterLocks(userId: number): Map<number, { locked: boolean; aft
   const out = new Map<number, { locked: boolean; after: string | null }>();
   const prev: Record<string, { id: number; tag: string | null } | undefined> = {};
   for (const c of chapters) {
-    const track = c.tag ? "db" : "book";
+    const track = trackOf(c.tag);
     const p = prev[track];
     const locked = !!p && (m.get(p.id) ?? 0) < UNLOCK_AT && !started.has(c.id);
     out.set(c.id, { locked, after: p ? chapterLabel(p) : null });

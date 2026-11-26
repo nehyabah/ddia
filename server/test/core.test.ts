@@ -198,3 +198,61 @@ test("plan and readiness never send you to a locked chapter", () => {
   assert.ok(p.tasks.some((t) => t.id === "unlock-1"), "the chapter you are unlocking is on the plan");
   for (const a of computeReadiness(u).areas) assert.ok(!locked(a.action.to), `readiness ${a.id} -> ${a.action.to}`);
 });
+
+test("coding reviews: solving schedules a re-solve; passing pushes it out, failing brings it back", async () => {
+  const { scheduleCoding, codingDue } = await import("../src/routes/prep.js");
+  const u = newUser("code-srs");
+  const s1 = scheduleCoding(u, "code-01", true);
+  assert.equal(s1.box, 1);
+  assert.equal(codingDue(u), 0, "not due until tomorrow");
+  db.prepare("UPDATE coding_srs SET due_at = ? WHERE user_id = ?").run(Date.now() - 1000, u);
+  assert.equal(codingDue(u), 1);
+  const s2 = scheduleCoding(u, "code-01", true);
+  assert.equal(s2.box, 2);
+  assert.ok(s2.due - Date.now() > 2.5 * 86400000, "next review ~3 days out");
+  const s3 = scheduleCoding(u, "code-01", false);
+  assert.equal(s3.box, 1, "a failed re-solve resets");
+});
+
+test("roadmap: six months with targets, milestones and an honest status", async () => {
+  const { roadmap } = await import("../src/routes/career.js");
+  const u = newUser("roadmap");
+  const r = roadmap(u);
+  assert.equal(r.months.length, 6);
+  assert.equal(r.totalWeeks, 26);
+  assert.ok(r.months.every((m, i) => i === 0 || m.target > r.months[i - 1].target), "targets rise");
+  assert.equal(r.current, 0);
+  assert.ok(["ahead", "on track", "slightly behind", "behind"].includes(r.status));
+  for (const m of r.months) for (const c of m.checks) assert.ok(c.have <= c.need && c.need > 0, `${m.title}: ${c.label}`);
+});
+
+test("applications: the next interview round drives the plan countdown and a prep task", async () => {
+  const { nextInterview } = await import("../src/routes/career.js");
+  const u = newUser("apps");
+  const now = Date.now();
+  const app = Number(db.prepare("INSERT INTO applications (user_id, company, role, stage, created_at, updated_at) VALUES (?, 'Stripe', 'SWE', 'screen', ?, ?)").run(u, now, now).lastInsertRowid);
+  const day = (n: number) => { const d = new Date(now + n * 86400000); const p = (x: number) => String(x).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+  db.prepare("INSERT INTO app_rounds (user_id, app_id, kind, at) VALUES (?, ?, 'Phone screen', ?)").run(u, app, day(5));
+  assert.equal(nextInterview(u)?.company, "Stripe");
+  const p = buildPlan(u);
+  assert.ok(p.daysLeft! >= 4 && p.daysLeft! <= 6, `daysLeft ${p.daysLeft}`);
+  assert.ok(p.tasks.some((t) => t.id === "interview-prep" && t.to === "/companies/stripe"));
+});
+
+test("content: estimation answers, deep dive and networking/OS chapters load", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const est = JSON.parse(fs.readFileSync(path.join(process.cwd(), "server/content/estimation.json"), "utf8"));
+  assert.ok(est.drills.length >= 30);
+  for (const d of est.drills) assert.ok(d.answer > 0 && d.tolerance >= 1.5 && d.steps.length >= 2, d.id);
+  const dd = JSON.parse(fs.readFileSync(path.join(process.cwd(), "server/content/deepdive.json"), "utf8"));
+  assert.equal(dd.sections.length, 8);
+  for (const c of ["mongodb", "microsoft", "stripe"]) assert.ok(dd.companies[c].askThem.length >= 8, c);
+  if (fs.existsSync(path.join(process.cwd(), "server/content/fundamentals.json"))) {
+    const u = newUser("net-track");
+    const locks = chapterLocks(u);
+    assert.equal(locks.get(19)?.locked, false, "Networking I opens its own track");
+    assert.equal(locks.get(21)?.locked, false, "OS I opens its own track");
+    assert.equal(locks.get(20)?.locked, true, "Networking II waits for Networking I");
+  }
+});

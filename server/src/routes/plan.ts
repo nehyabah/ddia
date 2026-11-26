@@ -6,6 +6,8 @@ import { javaDueCount } from "./java.js";
 import { computeReadiness } from "./readiness.js";
 import { content } from "./prep.js";
 import { getPuzzle } from "./puzzles.js";
+import { nextInterview } from "./career.js";
+import { codingDue } from "./prep.js";
 import { chapterLocks } from "./study.js";
 
 /* ============================================================
@@ -82,7 +84,7 @@ function todayCounts(u: number) {
 }
 
 const AREA_CHAPTERS: Record<string, number[]> = {
-  consistency: [7, 9, 17], replication: [5, 14], sharding: [6, 15], distributed: [8, 10, 11, 12], storage: [3, 16], modeling: [1, 2, 4, 18], mongodb: [13],
+  fundamentals: [19, 20, 21, 22], consistency: [7, 9, 17], replication: [5, 14], sharding: [6, 15], distributed: [8, 10, 11, 12], storage: [3, 16], modeling: [1, 2, 4, 18], mongodb: [13],
 };
 const AREA_TRACK: Record<string, string> = { concurrency: "concurrency", resilience: "resilience" };
 
@@ -90,7 +92,10 @@ export function buildPlan(u: number) {
   const user = db.prepare("SELECT interview_date FROM users WHERE id = ?").get(u) as { interview_date: string | null };
   const r = snapshot(u);
   const t = todayCounts(u);
-  const daysLeft = user.interview_date ? Math.ceil((new Date(user.interview_date + "T09:00:00").getTime() - Date.now()) / DAY) : null;
+  // Interview date: the one you set, otherwise the next round in your application tracker.
+  const next = nextInterview(u);
+  const when = user.interview_date ?? next?.at ?? null;
+  const daysLeft = when ? Math.ceil((new Date(when + "T09:00:00").getTime() - Date.now()) / DAY) : null;
   const intensity = daysLeft == null ? "steady" : daysLeft <= 7 ? "final" : daysLeft <= 21 ? "push" : "steady";
   const tasks: Task[] = [];
   const add = (id: string, label: string, detail: string, to: string, progress: number, target: number) =>
@@ -99,6 +104,15 @@ export function buildPlan(u: number) {
   const due = dueCount(u), jdue = javaDueCount(u);
   if (due > 0 || t.reviews > 0) add("review", "Clear your reviews", `${due} due now`, "/review", t.reviews, Math.max(1, Math.min(20, t.reviews + due)));
   if (jdue > 0) add("java-review", "Fix Java bugs you missed", `${jdue} due`, "/java/play?mode=review", t.java, Math.min(5, jdue));
+  const cdue = codingDue(u);
+  const cReviewed = (db.prepare("SELECT COUNT(*) n FROM coding_srs WHERE user_id = ? AND updated_at >= ?").get(u, new Date(localDay() + "T00:00:00").getTime()) as { n: number }).n;
+  if (cdue > 0 || cReviewed > 0) add("code-review", "Re-solve coding problems from memory", `${cdue} due · keeps them from fading`, "/coding?due=1", cReviewed, Math.max(1, Math.min(3, cReviewed + cdue)));
+  // An interview in the next two weeks gets its own prep task.
+  if (next) {
+    const d = Math.ceil((new Date(next.at + "T09:00:00").getTime() - Date.now()) / DAY);
+    const co = content.companies.find((c) => c.name.toLowerCase() === next.company.toLowerCase() || c.id === next.company.toLowerCase());
+    if (d >= 0 && d <= 14) add("interview-prep", `Prep for ${next.company} ${next.kind}`, d === 0 ? "Today. Good luck!" : `in ${d} day${d === 1 ? "" : "s"}`, co ? `/companies/${co.id}` : "/applications", 0, 1);
+  }
 
   const nFocus = intensity === "final" ? 2 : 3;
   // Only suggest what you can actually open: skip locked chapters.
@@ -140,7 +154,7 @@ export function buildPlan(u: number) {
   if (!lastMock || Date.now() - lastMock >= mockEvery * DAY || t.mock > 0) add("mock", "Mock interview", "45 minutes, timed", "/mock", t.mock, 1);
 
   const done = tasks.filter((x) => x.done).length;
-  return { date: user.interview_date, daysLeft, intensity, readiness: r.overall, band: r.band, tasks, done, total: tasks.length };
+  return { date: when, fromTracker: !user.interview_date && !!next, daysLeft, intensity, readiness: r.overall, band: r.band, tasks, done, total: tasks.length };
 }
 plan.get("/plan", (req, res) => res.json(buildPlan(req.userId!)));
 

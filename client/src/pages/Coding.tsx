@@ -8,9 +8,9 @@ import { Prose } from "../components/CodeView";
 import { Icon } from "../components/ui";
 import { CompanyChip, CompanyFilter, useCompanyFilter } from "./Companies";
 
-type Item = { id: string; javaOnly?: boolean; company: string | null; title: string; level: string; topic: string; solved: boolean; attempts: number; bestPassed: number; total: number; javaScore: number | null };
+type Item = { id: string; due?: boolean; box?: number; pattern?: string | null; javaOnly?: boolean; company: string | null; title: string; level: string; topic: string; solved: boolean; attempts: number; bestPassed: number; total: number; javaScore: number | null };
 type Problem = {
-  javaOnly?: boolean; id: string; title: string; level: string; topic: string; prompt: string; fn: string; hints: string[]; complexity: string;
+  review?: boolean; javaOnly?: boolean; id: string; title: string; level: string; topic: string; prompt: string; fn: string; hints: string[]; complexity: string;
   tests: { name: string; call: string; expected: unknown }[]; code: { js: string; java: string }; starter: { js: string; java: string };
   solved: boolean; attempts: number; solution: { js: string; java: string } | null;
 };
@@ -21,17 +21,28 @@ export function CodingList() {
   const [company, setCompany] = useCompanyFilter();
   if (!data) return <div className="center">Loading…</div>;
   const list = data.filter((d) => !company || d.company === company || (company === "general" && !d.company));
+  const due = data.filter((d) => d.due);
   const solved = data.filter((d) => d.solved).length;
   return (
     <>
       <Link to="/prep" className="back"><Icon name="back" />Prep</Link>
       <h2>Coding</h2>
       <p className="lede">Write a real solution. JavaScript runs against the test cases right here; Java is reviewed like an interviewer would. {solved}/{data.length} solved.</p>
+      {due.length > 0 && (<>
+        <h3 className="section-h">Due for review <span className="small muted">re-solve from memory</span></h3>
+        <div className="list" style={{ marginBottom: 14 }}>
+          {due.map((d) => (
+            <Link key={d.id} to={`/coding/${d.id}`} className="listrow due">
+              <span className="lr-t"><b>{d.title}</b><small>{d.pattern ?? d.topic} · review #{d.box}</small></span><span className="pill">due</span>
+            </Link>
+          ))}
+        </div>
+      </>)}
       <CompanyFilter value={company} onChange={setCompany} />
       <div className="list">
         {list.map((d) => (
           <Link key={d.id} to={`/coding/${d.id}`} className="listrow">
-            <span className="lr-t"><b>{d.title}</b><small><span className={`lvl ${d.level}`}>{d.level}</span> · {d.topic}{d.javaOnly ? " · Java" : ""}{d.attempts && !d.solved ? ` · ${d.bestPassed}/${d.total} tests` : ""}</small></span>
+            <span className="lr-t"><b>{d.title}</b><small><span className={`lvl ${d.level}`}>{d.level}</span> · {d.pattern ?? d.topic}{d.javaOnly ? " · Java" : ""}{d.solved && !d.due && d.box ? ` · review ${d.box}/6` : ""}{d.attempts && !d.solved ? ` · ${d.bestPassed}/${d.total} tests` : ""}</small></span>
             <CompanyChip id={d.company} />
             {d.solved ? <span className="donemark"><Icon name="check" size={13} /></span> : <Icon name="arrow" />}
           </Link>
@@ -85,6 +96,7 @@ export function CodingPlay() {
       <Link to="/coding" className="back"><Icon name="back" />Coding</Link>
       <div className="chips" style={{ marginBottom: 6 }}><span className={`chip lvl ${data.level}`}>{data.level}</span><span className="chip">{data.topic}</span>{data.solved && <span className="done-tag"><Icon name="check" size={11} />Solved</span>}</div>
       <h2>{data.title}</h2>
+      {data.review && <div className="coach-tip" style={{ marginBottom: 12 }}><b>Review</b><span>You solved this before. Re-solve it from scratch without looking: passing pushes the next review further out.</span></div>}
       <section className="panel"><Prose text={data.prompt} /></section>
 
       {data.javaOnly ? <p className="small muted">Java only: write it, then get a code review focused on correctness under concurrency.</p> : <div className="seg" role="tablist">

@@ -1,0 +1,840 @@
+{
+  "reference": [
+    {
+      "group": "Latency",
+      "items": [
+        [
+          "L1 cache reference",
+          "~1 ns"
+        ],
+        [
+          "Branch mispredict",
+          "~3-5 ns"
+        ],
+        [
+          "L2 cache reference",
+          "~4 ns"
+        ],
+        [
+          "Mutex lock/unlock (uncontended)",
+          "~20 ns"
+        ],
+        [
+          "Main memory reference",
+          "~100 ns"
+        ],
+        [
+          "Compress 1 KB (fast codec, e.g. Snappy/LZ4)",
+          "~2 us"
+        ],
+        [
+          "Read 1 MB sequentially from memory",
+          "~10-50 us"
+        ],
+        [
+          "NVMe SSD random 4 KB read",
+          "~20-100 us"
+        ],
+        [
+          "Round trip within same datacenter",
+          "~0.5 ms"
+        ],
+        [
+          "Read 1 MB sequentially from SSD",
+          "~0.2-1 ms"
+        ],
+        [
+          "HDD seek",
+          "~5-10 ms"
+        ],
+        [
+          "Read 1 MB sequentially from HDD",
+          "~5-10 ms"
+        ],
+        [
+          "Round trip same region, cross-AZ",
+          "~1-2 ms"
+        ],
+        [
+          "Round trip US East <-> US West",
+          "~60-70 ms"
+        ],
+        [
+          "Round trip US <-> Europe",
+          "~80-100 ms"
+        ],
+        [
+          "Round trip US <-> Asia/Australia",
+          "~150-200 ms"
+        ],
+        [
+          "TLS handshake (new connection, 1-2 RTTs)",
+          "~1-2 x RTT"
+        ]
+      ]
+    },
+    {
+      "group": "Throughput & sizes",
+      "items": [
+        [
+          "Memory bandwidth (per socket)",
+          "~50-100 GB/s"
+        ],
+        [
+          "NVMe SSD sequential read",
+          "~2-7 GB/s"
+        ],
+        [
+          "SATA SSD sequential read",
+          "~500 MB/s"
+        ],
+        [
+          "HDD sequential read",
+          "~100-200 MB/s"
+        ],
+        [
+          "10 Gbps NIC",
+          "~1.25 GB/s (plan ~1 GB/s usable)"
+        ],
+        [
+          "NVMe SSD random IOPS",
+          "~100k-1M IOPS"
+        ],
+        [
+          "HDD random IOPS",
+          "~100-200 IOPS"
+        ],
+        [
+          "Simple stateless web/API server",
+          "~1k-10k req/s per box"
+        ],
+        [
+          "Single Postgres/MySQL primary (simple OLTP)",
+          "~5k-20k writes/s, more reads"
+        ],
+        [
+          "Redis single instance",
+          "~100k ops/s"
+        ],
+        [
+          "Kafka partition throughput (conservative plan)",
+          "~10 MB/s per partition"
+        ],
+        [
+          "UUID / int64",
+          "16 B / 8 B"
+        ],
+        [
+          "Typical tweet/short JSON event",
+          "~0.3-1 KB"
+        ],
+        [
+          "Photo (compressed, mobile)",
+          "~200 KB - 2 MB"
+        ],
+        [
+          "1 minute of 1080p video (~5 Mbps)",
+          "~40 MB"
+        ]
+      ]
+    },
+    {
+      "group": "Powers of two & time",
+      "items": [
+        [
+          "2^10",
+          "~1 thousand (KB)"
+        ],
+        [
+          "2^20",
+          "~1 million (MB)"
+        ],
+        [
+          "2^30",
+          "~1 billion (GB)"
+        ],
+        [
+          "2^40",
+          "~1 trillion (TB)"
+        ],
+        [
+          "2^50",
+          "~1 quadrillion (PB)"
+        ],
+        [
+          "1 day",
+          "86,400 s (~10^5 s)"
+        ],
+        [
+          "1 month",
+          "~2.6 million s (~2.5 x 10^6)"
+        ],
+        [
+          "1 year",
+          "~31.5 million s (~3 x 10^7)"
+        ],
+        [
+          "Seconds in a year",
+          "pi x 10^7 (handy mnemonic)"
+        ]
+      ]
+    },
+    {
+      "group": "Handy conversions",
+      "items": [
+        [
+          "1M requests/day",
+          "~12 req/s average"
+        ],
+        [
+          "100M requests/day",
+          "~1,200 req/s average"
+        ],
+        [
+          "1B requests/day",
+          "~12k req/s average"
+        ],
+        [
+          "Peak-to-average ratio",
+          "typically 2-5x (plan ~3x)"
+        ],
+        [
+          "1 Gbps",
+          "125 MB/s"
+        ],
+        [
+          "1 KB/req at 1k req/s",
+          "1 MB/s ≈ 86 GB/day"
+        ],
+        [
+          "1 TB/day",
+          "~12 MB/s ≈ ~100 Mbps"
+        ],
+        [
+          "99.9% availability",
+          "~43 min downtime/month, ~8.8 h/year"
+        ],
+        [
+          "99.99% availability",
+          "~4.3 min/month, ~53 min/year"
+        ],
+        [
+          "Little's law",
+          "concurrency = throughput x latency"
+        ],
+        [
+          "Note",
+          "All values approximate, order-of-magnitude; hardware varies by generation and cloud."
+        ]
+      ]
+    }
+  ],
+  "drills": [
+    {
+      "id": "est-01",
+      "title": "Average QPS from DAU",
+      "level": "easy",
+      "topic": "QPS",
+      "prompt": "A social app has **50 million DAU**. Each user makes on average **20 API requests per day**.\n\nWhat is the **average** request rate?",
+      "unit": "requests/second",
+      "answer": 11600,
+      "tolerance": 2,
+      "steps": [
+        "Requests/day = 50M x 20 = 1B",
+        "1 day ≈ 86,400 s",
+        "1B / 86,400 ≈ 11,574",
+        "Shortcut: 1M/day ≈ 12/s, so 1,000M/day ≈ 12,000/s",
+        "Answer ≈ 11.6k req/s"
+      ],
+      "assumptions": [
+        "Traffic spread evenly across 24h"
+      ],
+      "takeaway": "~12k req/s average is a modest fleet of stateless servers; the hard part is the peak and the data tier."
+    },
+    {
+      "id": "est-02",
+      "title": "Peak QPS with diurnal skew",
+      "level": "easy",
+      "topic": "QPS",
+      "company": "microsoft",
+      "prompt": "An internal Microsoft Teams-style presence service sees **200 million requests/day**. Traffic is concentrated: plan for a **peak-to-average ratio of 3x**.\n\nWhat peak request rate should you provision for?",
+      "unit": "requests/second",
+      "answer": 7000,
+      "tolerance": 2,
+      "steps": [
+        "Average = 200M / 86,400 ≈ 2,315 req/s",
+        "Peak = 3 x 2,315 ≈ 6,944",
+        "Round to ~7k req/s"
+      ],
+      "assumptions": [
+        "Peak factor 3x given"
+      ],
+      "takeaway": "Provision for peak (plus headroom), not average, or the morning login wave will tip you over."
+    },
+    {
+      "id": "est-03",
+      "title": "Payments API peak at Black Friday",
+      "level": "medium",
+      "topic": "QPS",
+      "company": "stripe",
+      "prompt": "A payments processor handles **500 million charges per year**. On Black Friday, volume is **8x the average day**, and within that day the busiest hour carries **10% of the day's charges**. Each charge results in **5 internal API calls**.\n\nWhat is the peak internal API call rate during that busiest hour?",
+      "unit": "requests/second",
+      "answer": 1520,
+      "tolerance": 3,
+      "steps": [
+        "Average day = 500M / 365 ≈ 1.37M charges",
+        "Black Friday = 8 x 1.37M ≈ 11M charges",
+        "Busiest hour = 10% ≈ 1.1M charges",
+        "Per second = 1.1M / 3,600 ≈ 304 charges/s",
+        "Internal calls = 5 x 304 ≈ 1,520 req/s"
+      ],
+      "assumptions": [
+        "8x day multiplier",
+        "10% of daily volume in peak hour"
+      ],
+      "takeaway": "Fan-out multiplies external load; size internal services on calls, not charges."
+    },
+    {
+      "id": "est-04",
+      "title": "Storage for short posts over 5 years",
+      "level": "medium",
+      "topic": "Storage",
+      "prompt": "A microblogging service gets **100 million new posts/day**. Each post stores **300 bytes of text + 200 bytes metadata**. Data is kept **5 years** and **replicated 3x**.\n\nHow much total storage is needed (TB)?",
+      "unit": "TB",
+      "answer": 275,
+      "tolerance": 2,
+      "steps": [
+        "Bytes/post = 500 B",
+        "Per day = 100M x 500 B = 50 GB",
+        "Per year = 50 GB x 365 ≈ 18 TB",
+        "5 years ≈ 91 TB",
+        "x3 replication ≈ 274 TB"
+      ],
+      "assumptions": [
+        "No compression",
+        "Media stored separately"
+      ],
+      "takeaway": "Text is cheap: a few hundred TB fits a modest sharded cluster; media will dominate."
+    },
+    {
+      "id": "est-05",
+      "title": "Photo storage with replication",
+      "level": "medium",
+      "topic": "Storage",
+      "prompt": "A photo-sharing app gets **2 million photo uploads/day**, average **2 MB** each. Three thumbnails add **10%** extra. Photos are kept **forever**; plan **3 years**. Object storage uses **erasure coding with 1.5x overhead**.\n\nHow much raw storage is needed after 3 years (PB)?",
+      "unit": "PB",
+      "answer": 7.2,
+      "tolerance": 2,
+      "steps": [
+        "Per day = 2M x 2 MB = 4 TB",
+        "+10% thumbnails = 4.4 TB/day",
+        "Per year = 4.4 x 365 ≈ 1.6 PB",
+        "3 years ≈ 4.8 PB",
+        "x1.5 erasure coding ≈ 7.2 PB"
+      ],
+      "assumptions": [
+        "1.5x EC overhead instead of 3x replication"
+      ],
+      "takeaway": "Erasure coding halves the bill versus triple replication at PB scale."
+    },
+    {
+      "id": "est-06",
+      "title": "Ledger storage at a payments company",
+      "level": "medium",
+      "topic": "Storage",
+      "company": "stripe",
+      "prompt": "Every charge writes **4 ledger entries** (double-entry, auth + capture) of **250 bytes** each, plus **1 KB** of indexes per charge. Volume: **1 billion charges/year**. Retain **7 years** for compliance, **3 replicas**.\n\nTotal storage (TB)?",
+      "unit": "TB",
+      "answer": 42,
+      "tolerance": 2,
+      "steps": [
+        "Bytes/charge = 4 x 250 + 1,000 = 2 KB",
+        "Per year = 1B x 2 KB = 2 TB",
+        "7 years = 14 TB",
+        "x3 replicas = 42 TB"
+      ],
+      "assumptions": [
+        "No compression",
+        "Indexes counted per charge"
+      ],
+      "takeaway": "Financial ledgers are small in bytes; correctness and auditability, not capacity, drive the design."
+    },
+    {
+      "id": "est-07",
+      "title": "Document DB working set",
+      "level": "medium",
+      "topic": "Memory",
+      "company": "mongodb",
+      "prompt": "A MongoDB collection holds **400 million documents**, average **1.5 KB**. Indexes add **25%** of data size. The **hot 20%** of documents plus **all indexes** should fit in the WiredTiger cache.\n\nHow much RAM is needed for the working set (GB)?",
+      "unit": "GB",
+      "answer": 270,
+      "tolerance": 2,
+      "steps": [
+        "Data = 400M x 1.5 KB = 600 GB",
+        "Indexes = 25% = 150 GB",
+        "Hot data = 20% x 600 = 120 GB",
+        "Working set = 120 + 150 = 270 GB"
+      ],
+      "assumptions": [
+        "All indexes must be resident"
+      ],
+      "takeaway": "Indexes often dominate the working set; trim unused indexes before buying RAM."
+    },
+    {
+      "id": "est-08",
+      "title": "Shards needed for a document store",
+      "level": "medium",
+      "topic": "Servers",
+      "company": "mongodb",
+      "prompt": "Total dataset is **12 TB** (after compression) and grows **50%** over the planning horizon. Each shard (replica set) should hold at most **2 TB** to keep backups and initial sync fast.\n\nHow many shards?",
+      "unit": "shards",
+      "answer": 9,
+      "tolerance": 2,
+      "steps": [
+        "Future size = 12 x 1.5 = 18 TB",
+        "18 / 2 TB per shard = 9",
+        "Answer: 9 shards (each a 3-node replica set = 27 nodes)"
+      ],
+      "assumptions": [
+        "Even distribution via a good shard key"
+      ],
+      "takeaway": "Shard count is often set by operational limits (resync time), not raw disk."
+    },
+    {
+      "id": "est-09",
+      "title": "Shards from write throughput",
+      "level": "hard",
+      "topic": "Servers",
+      "company": "mongodb",
+      "prompt": "An IoT platform ingests **2 million sensor readings/s at peak**, batched into inserts. Each replica-set primary can sustain **60k inserts/s** at **70%** target utilisation of that number.\n\nHow many shards are needed?",
+      "unit": "shards",
+      "answer": 48,
+      "tolerance": 2,
+      "steps": [
+        "Usable per shard = 60k x 0.7 = 42k/s",
+        "2M / 42k ≈ 47.6",
+        "Round up to 48 shards"
+      ],
+      "assumptions": [
+        "Writes evenly distributed (hashed shard key)",
+        "Readings stored 1 doc each"
+      ],
+      "takeaway": "Write-bound workloads scale by shards; a hashed or bucketed shard key avoids a hot primary."
+    },
+    {
+      "id": "est-10",
+      "title": "Video streaming egress",
+      "level": "medium",
+      "topic": "Bandwidth",
+      "prompt": "A streaming service has **2 million concurrent viewers** at peak, average bitrate **4 Mbps**.\n\nWhat is the peak egress bandwidth (Tbps)?",
+      "unit": "Tbps",
+      "answer": 8,
+      "tolerance": 2,
+      "steps": [
+        "2M x 4 Mbps = 8M Mbps",
+        "= 8 Tbps"
+      ],
+      "assumptions": [
+        "All traffic served from CDN edge"
+      ],
+      "takeaway": "Multi-Tbps egress is a CDN problem; origin must only handle cache misses."
+    },
+    {
+      "id": "est-11",
+      "title": "Upload bandwidth for photos",
+      "level": "easy",
+      "topic": "Bandwidth",
+      "prompt": "Users upload **5 million photos/day** at **3 MB** each. Peak is **3x** average.\n\nWhat is peak ingress bandwidth (Gbps)?",
+      "unit": "Gbps",
+      "answer": 4.2,
+      "tolerance": 2,
+      "steps": [
+        "Per day = 15 TB",
+        "Average = 15 TB / 86,400 ≈ 174 MB/s",
+        "Peak = 3 x 174 ≈ 520 MB/s",
+        "x8 bits ≈ 4.2 Gbps"
+      ],
+      "assumptions": [
+        "Peak factor 3x"
+      ],
+      "takeaway": "A handful of 10G NICs handle ingress; storage write throughput is the real constraint."
+    },
+    {
+      "id": "est-12",
+      "title": "Video conferencing bandwidth per SFU",
+      "level": "hard",
+      "topic": "Bandwidth",
+      "company": "microsoft",
+      "prompt": "A Teams-style SFU hosts meetings of **10 participants**. Each sends one **1.5 Mbps** stream; the SFU forwards every stream to the **other 9**. A server has a **10 Gbps NIC**, planned at **60%** utilisation.\n\nHow many concurrent meetings can one SFU host (bandwidth-bound)?",
+      "unit": "meetings",
+      "answer": 40,
+      "tolerance": 2,
+      "steps": [
+        "Ingress/meeting = 10 x 1.5 = 15 Mbps",
+        "Egress/meeting = 10 x 9 x 1.5 = 135 Mbps",
+        "Total = 150 Mbps/meeting",
+        "Usable NIC = 6 Gbps",
+        "6,000 / 150 = 40 meetings"
+      ],
+      "assumptions": [
+        "NIC full-duplex ignored (conservative: in+out summed)",
+        "No simulcast"
+      ],
+      "takeaway": "Egress grows O(n^2) with meeting size; simulcast and active-speaker limits are essential."
+    },
+    {
+      "id": "est-13",
+      "title": "Web servers needed",
+      "level": "easy",
+      "topic": "Servers",
+      "prompt": "Peak traffic is **60,000 req/s**. Each app server handles **2,000 req/s** at target CPU. You want **N+30%** headroom for failures and deploys.\n\nHow many servers?",
+      "unit": "servers",
+      "answer": 39,
+      "tolerance": 2,
+      "steps": [
+        "Base = 60,000 / 2,000 = 30",
+        "x1.3 headroom = 39"
+      ],
+      "assumptions": [
+        "Linear scaling, stateless"
+      ],
+      "takeaway": "Server counts are cheap to compute; the headroom policy is the interesting design decision."
+    },
+    {
+      "id": "est-14",
+      "title": "Servers from latency and concurrency",
+      "level": "hard",
+      "topic": "Servers",
+      "company": "stripe",
+      "prompt": "A fraud-scoring service receives **8,000 req/s** at peak. Each request takes **50 ms** of wall time but only **10 ms CPU**. Each server has **16 cores** and runs **200 concurrent request slots** (async I/O). Target **60%** CPU.\n\nHow many servers are needed (take the larger of CPU-bound and concurrency-bound)?",
+      "unit": "servers",
+      "answer": 9,
+      "tolerance": 2,
+      "steps": [
+        "CPU: 8,000 x 10 ms = 80 core-seconds/s = 80 cores",
+        "Usable per server = 16 x 0.6 = 9.6 cores -> 80/9.6 ≈ 8.3 -> 9",
+        "Concurrency (Little's law): 8,000 x 0.05 s = 400 in flight",
+        "400 / 200 slots = 2 servers",
+        "Max(9, 2) = 9 servers"
+      ],
+      "assumptions": [
+        "CPU is the binding constraint"
+      ],
+      "takeaway": "Little's law plus CPU-seconds tells you which resource actually binds."
+    },
+    {
+      "id": "est-15",
+      "title": "Redis cache for hot keys",
+      "level": "medium",
+      "topic": "Memory",
+      "prompt": "A product catalog has **50 million items**, each cached value **5 KB**. **20%** of items get 80% of traffic. Redis overhead is **~1.3x** of raw value size.\n\nHow much memory to cache the hot set (GB)?",
+      "unit": "GB",
+      "answer": 65,
+      "tolerance": 2,
+      "steps": [
+        "Hot items = 20% x 50M = 10M",
+        "Raw = 10M x 5 KB = 50 GB",
+        "x1.3 overhead = 65 GB"
+      ],
+      "assumptions": [
+        "Keys negligible vs values"
+      ],
+      "takeaway": "65 GB fits a small Redis cluster (e.g. 3 shards x ~32 GB) with replicas."
+    },
+    {
+      "id": "est-16",
+      "title": "Session store memory",
+      "level": "easy",
+      "topic": "Memory",
+      "company": "microsoft",
+      "prompt": "An Azure-hosted portal has **30 million concurrent sessions** at peak, each **2 KB**. Replicated **2x**.\n\nTotal memory (GB)?",
+      "unit": "GB",
+      "answer": 120,
+      "tolerance": 2,
+      "steps": [
+        "30M x 2 KB = 60 GB",
+        "x2 replication = 120 GB"
+      ],
+      "assumptions": [
+        "No per-entry overhead"
+      ],
+      "takeaway": "Sessions fit comfortably in a distributed cache; keep them out of the primary DB."
+    },
+    {
+      "id": "est-17",
+      "title": "Kafka partitions for throughput",
+      "level": "medium",
+      "topic": "Servers",
+      "prompt": "An event pipeline produces **500 MB/s** at peak. You plan **10 MB/s per partition** for producers, but each consumer instance can only process **5 MB/s**.\n\nHow many partitions does the topic need?",
+      "unit": "partitions",
+      "answer": 100,
+      "tolerance": 2,
+      "steps": [
+        "Producer-bound: 500 / 10 = 50",
+        "Consumer-bound: 500 / 5 = 100 (one consumer per partition max)",
+        "Take max = 100"
+      ],
+      "assumptions": [
+        "Consumers scale only up to partition count"
+      ],
+      "takeaway": "Partition count is usually set by consumer parallelism, and is hard to change later, so over-provision."
+    },
+    {
+      "id": "est-18",
+      "title": "Kafka broker disk for retention",
+      "level": "medium",
+      "topic": "Storage",
+      "prompt": "A topic receives **200 MB/s** average, with **replication factor 3** and **7-day retention**.\n\nTotal cluster disk needed (TB)?",
+      "unit": "TB",
+      "answer": 363,
+      "tolerance": 2,
+      "steps": [
+        "Per day = 200 MB/s x 86,400 ≈ 17.3 TB",
+        "7 days ≈ 121 TB",
+        "x3 replicas ≈ 363 TB"
+      ],
+      "assumptions": [
+        "No compression"
+      ],
+      "takeaway": "Retention x RF dominates; tiered storage or shorter retention is the main lever."
+    },
+    {
+      "id": "est-19",
+      "title": "Payment events to Kafka partitions",
+      "level": "medium",
+      "topic": "Servers",
+      "company": "stripe",
+      "prompt": "Peak payment events: **40,000 events/s**, each **2 KB**. Each partition is planned for **5 MB/s** and consumers handle **2,000 events/s** each.\n\nPartitions needed?",
+      "unit": "partitions",
+      "answer": 20,
+      "tolerance": 2,
+      "steps": [
+        "Bytes: 40k x 2 KB = 80 MB/s -> 80/5 = 16",
+        "Consumers: 40k / 2k = 20",
+        "Max = 20 partitions (round up to e.g. 24-32 for growth)"
+      ],
+      "assumptions": [
+        "Key = merchant id, evenly spread"
+      ],
+      "takeaway": "Per-merchant ordering via keyed partitions works if no single merchant dominates."
+    },
+    {
+      "id": "est-20",
+      "title": "LSM write amplification",
+      "level": "hard",
+      "topic": "Storage",
+      "company": "mongodb",
+      "prompt": "A storage engine using leveled compaction ingests **100 MB/s** of user writes. The WAL writes the data once, and compaction adds **write amplification of 10x** on top. Each disk sustains **1.5 GB/s** of writes.\n\nWhat is the total physical write rate to disk (MB/s)?",
+      "unit": "MB/s",
+      "answer": 1100,
+      "tolerance": 2,
+      "steps": [
+        "WAL = 1 x 100 = 100 MB/s",
+        "Compaction = 10 x 100 = 1,000 MB/s",
+        "Total = 1,100 MB/s",
+        "That is ~73% of one disk's 1.5 GB/s budget"
+      ],
+      "assumptions": [
+        "WA counted on top of WAL"
+      ],
+      "takeaway": "Write amplification, not user traffic, decides SSD wear and disk throughput headroom."
+    },
+    {
+      "id": "est-21",
+      "title": "SSD endurance under write amplification",
+      "level": "hard",
+      "topic": "Storage",
+      "prompt": "A node writes **50 MB/s** of user data; the LSM engine has **write amplification 12x** (including WAL). Its SSD is **4 TB** rated for **1 drive write per day (DWPD)**.\n\nHow many drive-writes per day does the workload consume?",
+      "unit": "drive writes/day",
+      "answer": 13,
+      "tolerance": 2,
+      "steps": [
+        "Physical = 50 x 12 = 600 MB/s",
+        "Per day = 600 MB/s x 86,400 ≈ 52 TB",
+        "52 / 4 TB ≈ 13 DWPD",
+        "13x the rating -> drive dies in weeks"
+      ],
+      "assumptions": [
+        "Constant load"
+      ],
+      "takeaway": "Pick higher-endurance drives, spread writes over more drives, or tune compaction."
+    },
+    {
+      "id": "est-22",
+      "title": "Secondary index write amplification",
+      "level": "medium",
+      "topic": "QPS",
+      "company": "mongodb",
+      "prompt": "A collection takes **20,000 inserts/s**. It has **6 secondary indexes** plus the `_id` index, and is in a **3-member replica set**.\n\nHow many index-entry writes per second happen across the replica set?",
+      "unit": "index writes/second",
+      "answer": 420000,
+      "tolerance": 2,
+      "steps": [
+        "Indexes per insert = 6 + 1 = 7",
+        "Per node = 20k x 7 = 140k/s",
+        "x3 members = 420k/s"
+      ],
+      "assumptions": [
+        "Each index entry is one write"
+      ],
+      "takeaway": "Every index taxes every write on every replica; audit indexes on write-heavy collections."
+    },
+    {
+      "id": "est-23",
+      "title": "Monthly compute cost",
+      "level": "easy",
+      "topic": "Cost",
+      "prompt": "You need **120 VMs** at **$0.40/hour** each, running 24/7. Assume **730 hours/month**.\n\nMonthly cost in dollars?",
+      "unit": "USD/month",
+      "answer": 35000,
+      "tolerance": 2,
+      "steps": [
+        "Per VM = 0.40 x 730 = $292",
+        "x120 = $35,040",
+        "≈ $35k/month"
+      ],
+      "assumptions": [
+        "On-demand pricing, no discounts"
+      ],
+      "takeaway": "Reserved/savings plans (30-60% off) matter once a fleet is steady-state."
+    },
+    {
+      "id": "est-24",
+      "title": "Object storage cost for backups",
+      "level": "medium",
+      "topic": "Cost",
+      "company": "microsoft",
+      "prompt": "You store **2 PB** of backups in blob storage. Hot tier is **$0.02/GB-month**, archive tier **$0.002/GB-month**. You move **90%** to archive.\n\nNew monthly storage cost in dollars?",
+      "unit": "USD/month",
+      "answer": 7600,
+      "tolerance": 2,
+      "steps": [
+        "2 PB = 2,000,000 GB",
+        "Hot 10% = 200k GB x $0.02 = $4,000",
+        "Archive 90% = 1.8M GB x $0.002 = $3,600",
+        "Total = $7,600/month (vs $40k all-hot)"
+      ],
+      "assumptions": [
+        "Ignoring retrieval and transaction fees"
+      ],
+      "takeaway": "Tiering cuts storage spend ~5x, but archive retrieval latency (hours) must fit your RTO."
+    },
+    {
+      "id": "est-25",
+      "title": "CDN egress cost",
+      "level": "medium",
+      "topic": "Cost",
+      "prompt": "A video app serves **1 million hours of video/day** at **3 Mbps**. CDN egress costs **$0.01/GB**.\n\nMonthly egress cost in dollars (30 days)?",
+      "unit": "USD/month",
+      "answer": 405000,
+      "tolerance": 2,
+      "steps": [
+        "Per hour = 3 Mbps x 3,600 s / 8 = 1.35 GB",
+        "Per day = 1M x 1.35 GB = 1.35 PB",
+        "Per month = 40.5 PB = 40.5M GB",
+        "x $0.01 = $405k/month"
+      ],
+      "assumptions": [
+        "Blended committed-use CDN rate"
+      ],
+      "takeaway": "Egress is the dominant cost for media; bitrate ladders and codecs (AV1) are cost levers."
+    },
+    {
+      "id": "est-26",
+      "title": "LLM inference cost per day",
+      "level": "hard",
+      "topic": "Cost",
+      "prompt": "A support assistant handles **2 million conversations/day**, each **4 turns**. Each turn sends **3,000 input tokens** and returns **300 output tokens**. Pricing: **$3 per 1M input**, **$15 per 1M output** tokens.\n\nDaily cost in dollars?",
+      "unit": "USD/day",
+      "answer": 108000,
+      "tolerance": 2,
+      "steps": [
+        "Turns/day = 8M",
+        "Input = 8M x 3,000 = 24B tokens x $3/M = $72k",
+        "Output = 8M x 300 = 2.4B tokens x $15/M = $36k",
+        "Total = $108k/day"
+      ],
+      "assumptions": [
+        "No prompt caching"
+      ],
+      "takeaway": "Input context dominates; prompt caching or trimming history is the biggest saving."
+    },
+    {
+      "id": "est-27",
+      "title": "p99 latency budget across a call chain",
+      "level": "medium",
+      "topic": "Latency",
+      "company": "stripe",
+      "prompt": "A checkout API has an end-to-end **p99 SLO of 500 ms**. The path: edge + TLS **40 ms**, auth **20 ms**, fraud scoring **80 ms**, card network call **180 ms** (external). Remaining work is your ledger write.\n\nWhat p99 budget (ms) remains for the ledger write, keeping a **20% safety margin** of the SLO?",
+      "unit": "ms",
+      "answer": 80,
+      "tolerance": 2,
+      "steps": [
+        "Usable = 500 x 0.8 = 400 ms",
+        "Spent = 40 + 20 + 80 + 180 = 320 ms",
+        "Remaining = 400 - 320 = 80 ms"
+      ],
+      "assumptions": [
+        "Sequential calls",
+        "p99s add (pessimistic)"
+      ],
+      "takeaway": "An 80 ms p99 is tight for a replicated write; consider parallelise (fraud alongside auth) to buy slack."
+    },
+    {
+      "id": "est-28",
+      "title": "Fan-out tail latency",
+      "level": "hard",
+      "topic": "Latency",
+      "prompt": "A search request fans out to **100 shards** in parallel and waits for all. Each shard independently exceeds **50 ms** with probability **1%** (its p99).\n\nWhat percentage of user requests exceed 50 ms?",
+      "unit": "percent",
+      "answer": 63,
+      "tolerance": 2,
+      "steps": [
+        "P(one shard fast) = 0.99",
+        "P(all 100 fast) = 0.99^100 ≈ 0.366",
+        "P(slow) = 1 - 0.366 ≈ 63%"
+      ],
+      "assumptions": [
+        "Independent shard latencies"
+      ],
+      "takeaway": "Shard p99 becomes user median at high fan-out; use hedged requests or partial results."
+    },
+    {
+      "id": "est-29",
+      "title": "Cross-region synchronous replication cost",
+      "level": "medium",
+      "topic": "Latency",
+      "company": "microsoft",
+      "prompt": "A write must be **synchronously acknowledged** by a replica in another region (**RTT 70 ms**), plus **2 ms** local commit. A user operation performs **4 sequential writes**.\n\nMinimum latency of the operation (ms)?",
+      "unit": "ms",
+      "answer": 288,
+      "tolerance": 2,
+      "steps": [
+        "Per write = 70 + 2 = 72 ms",
+        "x4 sequential = 288 ms"
+      ],
+      "assumptions": [
+        "No pipelining or batching"
+      ],
+      "takeaway": "Batch writes into one transaction or go async cross-region; sequential geo-sync writes kill latency."
+    },
+    {
+      "id": "est-30",
+      "title": "Availability of serial dependencies",
+      "level": "easy",
+      "topic": "Latency",
+      "prompt": "A request depends serially on **5 services**, each **99.9%** available.\n\nWhat is the combined availability in percent?",
+      "unit": "percent",
+      "answer": 99.5,
+      "tolerance": 2,
+      "steps": [
+        "0.999^5 ≈ 0.995",
+        "≈ 99.5% (≈ 3.6 h downtime/month)"
+      ],
+      "assumptions": [
+        "Independent failures"
+      ],
+      "takeaway": "Serial dependencies multiply unavailability; add caching, fallbacks or remove hops."
+    }
+  ]
+}

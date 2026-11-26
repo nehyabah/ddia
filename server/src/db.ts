@@ -208,6 +208,13 @@ export type ContentFile = { chapters: RawChapter[]; badges: Record<string, strin
 export const content: ContentFile = JSON.parse(
   fs.readFileSync(path.join(ROOT, "server", "content", "chapters.json"), "utf8"),
 );
+// Extra chapter packs (e.g. networking & operating systems) live in their own files.
+for (const extra of ["fundamentals.json"]) {
+  const p = path.join(ROOT, "server", "content", extra);
+  if (fs.existsSync(p)) content.chapters.push(...(JSON.parse(fs.readFileSync(p, "utf8")) as { chapters: RawChapter[] }).chapters);
+}
+/** Which unlock track a chapter belongs to: the book, or a tagged track by prefix (DB, NET, OS…). */
+export const trackOf = (tag: string | null | undefined) => (tag ? tag.replace(/\d+$/, "") : "book");
 
 export function seedContent() {
   db.exec("BEGIN");

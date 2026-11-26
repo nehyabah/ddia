@@ -20,6 +20,10 @@ export function PrepHome() {
     { to: "/mongo", title: "MongoDB lab", sub: "Queries & pipelines", icon: "folder" },
     { to: "/mock", title: "Mock interview", sub: "45 minutes, timed", icon: "target" },
     { to: "/companies", title: "Companies", sub: "MongoDB · Microsoft · Stripe", icon: "trophy" },
+    { to: "/estimation", title: "Estimation", sub: "Back-of-envelope maths", icon: "calender" },
+    { to: "/deepdive", title: "Project deep dive", sub: "Your strongest project", icon: "file-text" },
+    { to: "/whyus", title: "Why us", sub: "And questions to ask", icon: "bulb" },
+    { to: "/applications", title: "Applications", sub: "Roles, rounds, reflections", icon: "mail" },
   ];
   return (
     <>

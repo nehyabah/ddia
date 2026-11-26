@@ -7,6 +7,7 @@ import { ReadinessCard } from "./Readiness";
 import { HomePlan } from "./Prep";
 import { CommitCard } from "./Commitment";
 import { WarmUp, Welcome } from "./Momentum";
+import { RoadmapCard } from "./Career";
 
 const BADGE_ICON: Record<string, IconName> = {
   first: "check", combo5: "flame", combo10: "flame", perfect: "star", matcher: "puzzle", reader: "book",
@@ -80,6 +81,7 @@ export function Home() {
         <Link to="/java" className="tile-stat"><span className="ic3"><Pic name="computer" plain /></span><span><div className="v">{profile.javaDue}</div><div className="l">Java due</div></span></Link>
       </div>
 
+      <RoadmapCard />
       <WarmUp />
       <CommitCard />
       <HomePlan />
@@ -106,10 +108,16 @@ export function Home() {
 
       <h3 className="section-h" id="chapters">The book <span className="small muted">{book.filter((c) => c.mastery >= 80).length}/{book.length} healthy</span></h3>
       <div className="cluster">{book.map(node)}</div>
-      {extra.length > 0 && (<>
-        <h3 className="section-h">MongoDB interview track <span className="small muted">{extra.filter((c) => c.mastery >= 80).length}/{extra.length} healthy</span></h3>
-        <div className="cluster">{extra.map(node)}</div>
-      </>)}
+      {([["DB", "MongoDB interview track"], ["NET", "Networking"], ["OS", "Operating systems"]] as const).map(([pre, label]) => {
+        const group = extra.filter((c) => (c.tag ?? "").replace(/\d+$/, "") === pre);
+        if (!group.length) return null;
+        return (
+          <div key={pre}>
+            <h3 className="section-h">{label} <span className="small muted">{group.filter((c) => c.mastery >= 80).length}/{group.length} healthy</span></h3>
+            <div className="cluster">{group.map(node)}</div>
+          </div>
+        );
+      })}
 
       <h3 className="section-h">Achievements <span className="small muted">{profile.badges.filter((b) => b.earned).length}/{profile.badges.length}</span></h3>
       <div className="badges">

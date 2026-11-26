@@ -78,7 +78,7 @@ export const content = {
 };
 export function loadPrep() {
   content.design = [...load<DesignPrompt[]>("design/prompts.json", []), ...load<DesignPrompt[]>("design/ood.json", []), ...load<DesignPrompt[]>("design/api.json", [])];
-  content.coding = [...load<CodingProblem[]>("coding/problems.json", []), ...load<CodingProblem[]>("coding/concurrency.json", [])];
+  content.coding = [...load<CodingProblem[]>("coding/problems.json", []), ...load<CodingProblem[]>("coding/patterns.json", []), ...load<CodingProblem[]>("coding/concurrency.json", [])];
   content.behavioral = load("behavioral/questions.json", content.behavioral);
   content.mongo = load("mongo/exercises.json", []);
   content.datasets = load("mongo/datasets.json", {});
@@ -141,7 +141,9 @@ onGraded("coding", (u, id, score) => {
   db.prepare(`INSERT INTO coding_progress (user_id, problem_id, java_score, updated_at) VALUES (?, ?, ?, ?)
     ON CONFLICT(user_id, problem_id) DO UPDATE SET java_score = MAX(COALESCE(java_score, 0), excluded.java_score), updated_at = excluded.updated_at`)
     .run(u, id, score, Date.now());
-  if (score >= 7) markCodingSolved(u, id, false);
+  const wasSolved = !!(db.prepare("SELECT solved FROM coding_progress WHERE user_id = ? AND problem_id = ?").get(u, id) as { solved: number } | undefined)?.solved;
+  if (wasSolved && isDue(u, id)) scheduleCoding(u, id, score >= 7);
+  else if (score >= 7) markCodingSolved(u, id, false);
 });
 onGraded("story", (u, id, score) => {
   db.prepare("UPDATE story_links SET best_score = MAX(COALESCE(best_score, 0), ?) WHERE user_id = ? AND question_id = ?").run(score, u, id);
@@ -186,24 +188,54 @@ prep.post("/design/:id/summary", (req, res) => {
 });
 
 /* ---------- coding ---------- */
+db.exec(`CREATE TABLE IF NOT EXISTS coding_srs (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, problem_id TEXT NOT NULL,
+  box INTEGER NOT NULL DEFAULT 1, due_at INTEGER NOT NULL, reps INTEGER NOT NULL DEFAULT 0, lapses INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, problem_id))`);
+const CODE_INTERVALS = [1, 3, 7, 16, 35, 70];
+const DAY_MS = 86400000;
+/** Schedule the next re-solve. pass=true moves it further out; a failed re-solve brings it back tomorrow. */
+export function scheduleCoding(u: number, id: string, pass: boolean) {
+  const cur = db.prepare("SELECT box FROM coding_srs WHERE user_id = ? AND problem_id = ?").get(u, id) as { box: number } | undefined;
+  const box = pass ? Math.min((cur?.box ?? 0) + 1, CODE_INTERVALS.length) : 1;
+  const due = Date.now() + (pass ? CODE_INTERVALS[box - 1] : 1) * DAY_MS;
+  db.prepare(`INSERT INTO coding_srs (user_id, problem_id, box, due_at, reps, lapses, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)
+    ON CONFLICT(user_id, problem_id) DO UPDATE SET box = excluded.box, due_at = excluded.due_at, reps = reps + 1, lapses = lapses + excluded.lapses, updated_at = excluded.updated_at`)
+    .run(u, id, box, due, pass ? 0 : 1, Date.now());
+  return { box, due };
+}
+export function codingDue(u: number) {
+  return (db.prepare("SELECT COUNT(*) n FROM coding_srs WHERE user_id = ? AND due_at <= ?").get(u, Date.now()) as { n: number }).n;
+}
+const isDue = (u: number, id: string) => !!db.prepare("SELECT 1 FROM coding_srs WHERE user_id = ? AND problem_id = ? AND due_at <= ?").get(u, id, Date.now());
+
 function markCodingSolved(u: number, id: string, firstTry: boolean) {
   const r = db.prepare("SELECT solved FROM coding_progress WHERE user_id = ? AND problem_id = ?").get(u, id) as { solved: number } | undefined;
   if (r?.solved) return { xp: 0, badges: [] as string[] };
   db.prepare("UPDATE coding_progress SET solved = 1, first_try = ?, solved_day = ? WHERE user_id = ? AND problem_id = ?").run(firstTry ? 1 : 0, localDay(), u, id);
+  scheduleCoding(u, id, true); // first re-solve tomorrow
   const p = content.coding.find((x) => x.id === id);
   const xp = Math.round((XP[p?.level ?? "medium"] ?? 25) * (firstTry ? 1 : 0.6));
   return { xp, badges: addXP(u, xp, `coding:${id}`) };
 }
 prep.get("/coding", (req, res) => {
   const rows = db.prepare("SELECT problem_id, solved, attempts, best_passed, total, java_score FROM coding_progress WHERE user_id = ?").all(req.userId) as { problem_id: string; solved: number; attempts: number; best_passed: number; total: number; java_score: number | null }[];
+  const srs = new Map((db.prepare("SELECT problem_id, box, due_at FROM coding_srs WHERE user_id = ?").all(req.userId) as { problem_id: string; box: number; due_at: number }[]).map((x) => [x.problem_id, x]));
   res.json(content.coding.map((p) => {
     const r = rows.find((x) => x.problem_id === p.id);
-    return { id: p.id, javaOnly: !!p.javaOnly, company: p.company ?? null, title: p.title, level: p.level, topic: p.topic, solved: !!r?.solved, attempts: r?.attempts ?? 0, bestPassed: r?.best_passed ?? 0, total: p.tests.length, javaScore: r?.java_score ?? null };
+    const sr = srs.get(p.id);
+    return { id: p.id, pattern: (p as { pattern?: string }).pattern ?? null, due: !!sr && sr.due_at <= Date.now(), box: sr?.box ?? 0, nextDue: sr?.due_at ?? null, javaOnly: !!p.javaOnly, company: p.company ?? null, title: p.title, level: p.level, topic: p.topic, solved: !!r?.solved, attempts: r?.attempts ?? 0, bestPassed: r?.best_passed ?? 0, total: p.tests.length, javaScore: r?.java_score ?? null };
   }));
 });
 prep.get("/coding/:id", (req, res) => {
   const p = findOr404(content.coding, String(req.params.id), "problem");
   const r = db.prepare("SELECT code_js, code_java, solved, attempts FROM coding_progress WHERE user_id = ? AND problem_id = ?").get(req.userId, p.id) as { code_js: string; code_java: string; solved: number; attempts: number } | undefined;
+  const review = !!r?.solved && isDue(req.userId!, p.id);
+  if (review) return res.json({
+    id: p.id, javaOnly: !!p.javaOnly, title: p.title, level: p.level, topic: p.topic, prompt: p.prompt, fn: p.fn, starter: p.starter, hints: p.hints, complexity: p.complexity,
+    tests: p.tests.map((t) => ({ name: t.name, call: t.call, expected: t.expected })),
+    code: { js: p.starter.js, java: p.starter.java }, solved: true, attempts: r!.attempts, solution: null, review: true,
+  });
   res.json({
     id: p.id, javaOnly: !!p.javaOnly, title: p.title, level: p.level, topic: p.topic, prompt: p.prompt, fn: p.fn, starter: p.starter, hints: p.hints, complexity: p.complexity,
     tests: p.tests.map((t) => ({ name: t.name, call: t.call, expected: t.expected })),
@@ -230,6 +262,12 @@ prep.post("/coding/:id/result", (req, res) => {
     ON CONFLICT(user_id, problem_id) DO UPDATE SET code_js = excluded.code_js, attempts = attempts + 1, best_passed = MAX(best_passed, excluded.best_passed), total = excluded.total, updated_at = excluded.updated_at`)
     .run(u, p.id, code, passed, p.tests.length, Date.now());
   const all = passed === p.tests.length;
+  const wasSolved = !!(db.prepare("SELECT solved FROM coding_progress WHERE user_id = ? AND problem_id = ?").get(u, p.id) as { solved: number } | undefined)?.solved;
+  if (wasSolved && isDue(u, p.id)) {
+    const s2 = scheduleCoding(u, p.id, all);
+    const xp = all ? 10 : 0; const badges = all ? addXP(u, xp, `coding-review:${p.id}`) : [];
+    return res.json({ passed, total: p.tests.length, solved: true, review: true, reviewPassed: all, nextInDays: Math.round((s2.due - Date.now()) / DAY_MS), xp, newBadges: nb(badges), solution: all ? p.solution : null });
+  }
   const r = all ? markCodingSolved(u, p.id, !prior?.attempts) : { xp: 0, badges: [] };
   res.json({ passed, total: p.tests.length, solved: all, xp: r.xp, newBadges: nb(r.badges), solution: all || (prior?.attempts ?? 0) + 1 >= 4 ? p.solution : null });
 });

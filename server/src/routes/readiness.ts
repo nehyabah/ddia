@@ -32,6 +32,7 @@ const AREAS: Area[] = [
   { id: "storage", label: "Storage, indexes & query planning", weight: 1.0, chapters: [3, 16] },
   { id: "modeling", label: "Data modelling & encoding", weight: 0.9, chapters: [1, 2, 4, 18] },
   { id: "mongodb", label: "MongoDB core", weight: 0.9, chapters: [13] },
+  { id: "fundamentals", label: "Networking & operating systems", weight: 0.9, chapters: [19, 20, 21, 22] },
   { id: "java", label: "Java fundamentals & debugging", weight: 0.8, chapters: [], javaTopics: "rest" },
 ];
 

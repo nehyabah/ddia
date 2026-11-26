@@ -1,0 +1,110 @@
+{
+  "sections": [
+    {"key":"context","title":"Context: Problem, Users, Scale","prompt":"Describe the business problem, who the users were, and the scale involved. Make the interviewer understand why this project mattered in two or three sentences.","tips":["Lead with the user pain or business goal, not the tech stack.","Give concrete numbers: requests/sec, data volume, users, team size.","Keep it under 90 seconds; the interviewer will dig in."],"keyPoints":["Clear problem statement and why it mattered to the business","Who the users/customers were and what they needed","Quantified scale (QPS, data size, latency targets, growth rate)","Constraints: deadlines, budget, legacy systems, compliance","Team composition and where you sat in it"]},
+    {"key":"architecture","title":"Architecture: System and Data Flow","prompt":"Sketch the system's major components and walk through how a request or piece of data flows end to end. Be ready to draw it.","tips":["Walk one concrete request through the system from entry to storage.","Name the datastores and explain why each was chosen.","Call out the parts you designed versus inherited."],"keyPoints":["High-level components and their responsibilities","End-to-end data/request flow with sync vs async boundaries","Storage choices and data model, with rationale","Consistency, replication, and partitioning approach","How the system scales and where the bottlenecks are","Observability: metrics, logs, tracing, alerting"]},
+    {"key":"role","title":"Your Role: Ownership and Decisions","prompt":"Explain precisely what you owned and which decisions you drove. Use 'I' for your work and 'we' for the team's.","tips":["Separate your contributions from the team's explicitly.","Show influence beyond code: design docs, reviews, mentoring, alignment.","Mention a decision you pushed for against initial resistance."],"keyPoints":["Specific components or workstreams you owned end to end","Key technical decisions you drove and how you built consensus","Cross-team coordination and stakeholder management","Mentoring or raising the bar for other engineers","Scope that grew because of your initiative"]},
+    {"key":"hardest","title":"Hardest Technical Problem","prompt":"Describe the hardest technical problem on the project and how you solved it. Include the investigation, not just the answer.","tips":["Pick something genuinely hard: concurrency, consistency, performance, migration.","Narrate the debugging or design process, including dead ends.","Quantify the result of the fix."],"keyPoints":["Why the problem was hard (not just tedious)","How you diagnosed it: data, experiments, profiling, hypotheses","Options considered and the solution chosen","Depth on the underlying mechanism (e.g., race, hot partition, GC, N+1)","How you validated the fix and prevented regression","Measured outcome"]},
+    {"key":"tradeoffs","title":"Tradeoffs and Alternatives","prompt":"List the main alternatives you considered for key decisions and why you rejected them. Show you understood the costs of what you chose.","tips":["Frame decisions as tradeoffs along explicit axes (latency, cost, complexity, consistency).","Admit the downsides of the option you picked.","Mention what would make you revisit the decision."],"keyPoints":["At least two real alternatives for a major decision","Explicit evaluation criteria tied to requirements","Honest costs of the chosen approach","Build vs buy considerations","Reversibility and migration path","Conditions under which you would choose differently"]},
+    {"key":"failure","title":"Failure: Incident and What Changed","prompt":"Describe an incident or something that went wrong, how you responded, and what you changed afterwards. Own your part in it.","tips":["Choose a real failure with real impact; avoid humble-brags.","Use a timeline: detection, mitigation, root cause, follow-ups.","Emphasize systemic fixes over individual heroics."],"keyPoints":["What happened and the customer/business impact","How it was detected and time to mitigate","Root cause analysis, including contributing factors","Blameless postmortem and your ownership","Systemic changes: tests, alerts, runbooks, design changes","What the team learned culturally"]},
+    {"key":"impact","title":"Impact: Metrics Before and After","prompt":"Quantify the outcome with before/after metrics for users, the business, and engineering. Tie impact back to the original problem.","tips":["Have 2-3 crisp numbers memorized.","Include engineering impact (on-call load, deploy speed) as well as business impact.","Be honest about how metrics were measured."],"keyPoints":["Before/after metrics (latency, cost, availability, revenue, adoption)","Connection back to the original problem statement","How impact was measured and attributed","Second-order effects: team velocity, reuse by other teams","Recognition or adoption beyond the original scope"]},
+    {"key":"retro","title":"Retrospective: What You'd Do Differently","prompt":"Reflect on what you would do differently with today's knowledge. Show growth and judgment, not regret.","tips":["Pick one or two substantive changes, not trivia.","Explain what signal you missed at the time.","Connect the lesson to how you work now."],"keyPoints":["Specific technical decision you would change and why","Process or communication improvements","Earlier risk identification or validation","How the lesson changed your current practice","Balanced view: what you would keep the same"]}
+  ],
+  "probes": [
+    {"id":"probe-01","q":"Why did this project need to exist? What would have happened if it was never built?","section":"context","why":"Business judgment and understanding of the problem's value"},
+    {"id":"probe-02","q":"What were the actual numbers: peak QPS, data size, latency SLOs?","section":"context","why":"Whether the candidate really knows the scale or is hand-waving"},
+    {"id":"probe-03","q":"Draw the architecture and walk me through a single request end to end.","section":"architecture","why":"Clarity of system understanding and communication"},
+    {"id":"probe-04","q":"Why that database? What does your access pattern look like?","section":"architecture","why":"Data modeling and storage selection reasoning"},
+    {"id":"probe-05","q":"What happens if this component goes down? How does the system degrade?","section":"architecture","why":"Failure-mode thinking and resilience design"},
+    {"id":"probe-06","q":"How did you handle consistency between these services?","section":"architecture","why":"Distributed systems depth: transactions, idempotency, eventual consistency"},
+    {"id":"probe-07","q":"If traffic grew 10x tomorrow, what breaks first?","section":"architecture","why":"Scalability reasoning and bottleneck awareness"},
+    {"id":"probe-08","q":"What specifically did you build, versus what your teammates built?","section":"role","why":"Separates personal ownership from team credit"},
+    {"id":"probe-09","q":"Tell me about a decision you made that others disagreed with. How did you resolve it?","section":"role","why":"Influence, conflict resolution, senior-level leadership"},
+    {"id":"probe-10","q":"How did you get alignment across teams on the design?","section":"role","why":"Cross-team collaboration and communication"},
+    {"id":"probe-11","q":"What was the hardest bug or technical challenge, and how did you find the root cause?","section":"hardest","why":"Debugging methodology and technical depth"},
+    {"id":"probe-12","q":"Go one level deeper: why exactly did that happen at the system level?","section":"hardest","why":"Whether understanding goes beyond surface fixes"},
+    {"id":"probe-13","q":"How did you verify your fix actually worked and wouldn't regress?","section":"hardest","why":"Rigor in testing and validation"},
+    {"id":"probe-14","q":"What alternatives did you consider, and why did you reject them?","section":"tradeoffs","why":"Breadth of options and quality of decision-making"},
+    {"id":"probe-15","q":"What is the biggest weakness of the approach you chose?","section":"tradeoffs","why":"Honesty and awareness of costs"},
+    {"id":"probe-16","q":"Why not use an off-the-shelf solution?","section":"tradeoffs","why":"Build vs buy judgment and pragmatism"},
+    {"id":"probe-17","q":"Under what conditions would you reverse this decision?","section":"tradeoffs","why":"Adaptive thinking and reversibility"},
+    {"id":"probe-18","q":"Tell me about the worst production incident on this system.","section":"failure","why":"Operational maturity and ownership"},
+    {"id":"probe-19","q":"How was the issue detected, and how long until it was mitigated?","section":"failure","why":"Observability and incident response practices"},
+    {"id":"probe-20","q":"What did you change so it couldn't happen again?","section":"failure","why":"Systemic thinking versus one-off fixes"},
+    {"id":"probe-21","q":"How did you measure success? What were the before and after numbers?","section":"impact","why":"Data-driven results orientation"},
+    {"id":"probe-22","q":"How do you know the improvement came from your change and not something else?","section":"impact","why":"Rigor in attribution and measurement"},
+    {"id":"probe-23","q":"Did other teams adopt or build on your work?","section":"impact","why":"Leverage and scope of influence"},
+    {"id":"probe-24","q":"If you started over today, what would you do differently?","section":"retro","why":"Self-awareness and growth"},
+    {"id":"probe-25","q":"What did this project teach you that you've applied since?","section":"retro","why":"Ability to generalize lessons into practice"}
+  ],
+  "companies": {
+    "mongodb": {
+      "why": {"prompt":"Why MongoDB?","keyPoints":[
+        "The document model maps naturally to application objects, and you appreciate the developer-productivity thesis behind it",
+        "Atlas as a fully managed, multi-cloud database service (AWS, Azure, Google Cloud) is a deep distributed-systems problem: provisioning, scaling, backup, and operations at scale",
+        "Core database internals excite you: replication via replica sets and Raft-inspired elections, sharding, the WiredTiger storage engine, multi-document ACID transactions",
+        "Expansion into a developer data platform (e.g., Atlas Search, Vector Search) and its relevance to AI-era applications",
+        "Building infrastructure that thousands of other engineering teams depend on raises the bar for correctness and reliability",
+        "Source-available core and an active developer community mean your work is visible and used broadly",
+        "Connect to your own experience: a time you designed schemas, ran MongoDB or another distributed database, or debugged replication/consistency issues"
+      ]},
+      "askThem":[
+        {"group":"Team & work","q":"What does the team own, and how does it interact with Atlas versus the core server?"},
+        {"group":"Team & work","q":"What would success look like for this role in the first six months?"},
+        {"group":"Team & work","q":"What is the biggest technical challenge the team is facing this year?"},
+        {"group":"Engineering","q":"How do you test correctness for distributed features, e.g., fuzzing, Jepsen-style testing, or formal methods?"},
+        {"group":"Engineering","q":"How do you balance backward compatibility for drivers and wire protocol against evolving the product?"},
+        {"group":"Engineering","q":"What does on-call and incident response look like for a managed service like Atlas?"},
+        {"group":"Growth","q":"How do senior engineers grow here: technical leadership, scope, or specialization?"},
+        {"group":"Growth","q":"How are design decisions documented and reviewed across teams?"},
+        {"group":"Culture","q":"How does the team incorporate customer and community feedback into the roadmap?"},
+        {"group":"Culture","q":"What is something you would change about how the team works?"}
+      ]
+    },
+    "microsoft": {
+      "why": {"prompt":"Why Microsoft?","keyPoints":[
+        "Azure operates at global hyperscale across many regions, offering distributed-systems problems few companies can match",
+        "The mission 'to empower every person and every organization on the planet to achieve more' and the breadth of impact across consumers and enterprises",
+        "Growth mindset culture (learn-it-all versus know-it-all) championed under Satya Nadella",
+        "Leadership in AI infrastructure and products (e.g., Azure AI, Copilot) and the systems engineering behind them",
+        "Strong open-source and developer ecosystem: GitHub, VS Code, TypeScript, .NET",
+        "Enterprise trust requirements (security, compliance, reliability) that demand rigorous engineering",
+        "Connect to your own experience: building cloud services, working at scale, or using Microsoft developer tools"
+      ]},
+      "askThem":[
+        {"group":"Team & work","q":"What part of the product or platform does this team own, and who are its main customers?"},
+        {"group":"Team & work","q":"How are priorities set between new features, reliability, and security work?"},
+        {"group":"Team & work","q":"What would you expect me to accomplish in my first 90 days?"},
+        {"group":"Engineering","q":"How does the team handle safe deployment across many regions?"},
+        {"group":"Engineering","q":"What does the on-call model and livesite culture look like here?"},
+        {"group":"Engineering","q":"How much of the stack is shared internal infrastructure versus owned by the team?"},
+        {"group":"Growth","q":"How does the team support moving between orgs or growing toward principal-level scope?"},
+        {"group":"Growth","q":"What does growth mindset look like in practice on this team?"},
+        {"group":"Culture","q":"How does the team collaborate with partner teams across time zones and orgs?"},
+        {"group":"Culture","q":"What do you enjoy most about working on this team?"}
+      ]
+    },
+    "stripe": {
+      "why": {"prompt":"Why Stripe?","keyPoints":[
+        "Mission to increase the GDP of the internet, and payments infrastructure as leverage for millions of businesses",
+        "Developer-first API design and documentation that set an industry standard",
+        "Hard reliability and correctness problems: money movement demands idempotency, exactly-once semantics, and very high availability",
+        "Global complexity: many currencies, payment methods, banking networks, and regulatory regimes",
+        "Broad product surface beyond payments (e.g., Billing, Connect, Radar fraud detection) built on shared infrastructure",
+        "Culture known for writing, rigor, and user focus",
+        "Connect to your own experience: integrating Stripe or another payments API, building idempotent APIs, or financial-correctness systems"
+      ]},
+      "askThem":[
+        {"group":"Team & work","q":"Which users does this team serve, and how do you hear from them?"},
+        {"group":"Team & work","q":"What is a recent project the team shipped that you are proud of?"},
+        {"group":"Team & work","q":"What would make someone exceptionally successful in this role in their first year?"},
+        {"group":"Engineering","q":"How do you approach API design and versioning so you don't break existing integrations?"},
+        {"group":"Engineering","q":"How do you test and roll out changes on systems that move money?"},
+        {"group":"Engineering","q":"How is reliability measured and owned across teams?"},
+        {"group":"Growth","q":"How do senior engineers expand their scope and influence here?"},
+        {"group":"Growth","q":"How does written communication, like design docs, factor into decision-making and growth?"},
+        {"group":"Culture","q":"How do teams balance moving fast with the rigor payments require?"},
+        {"group":"Culture","q":"What surprised you most when you joined?"}
+      ]
+    }
+  }
+}

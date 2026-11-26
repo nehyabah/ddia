@@ -19,7 +19,7 @@ let statusCache: Status | null = null;
  * Controlled (answer/onAnswer) or self-contained.
  */
 export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, hideInput, title, onGraded }: {
-  kind: "card" | "drill" | "java" | "puzzle" | "design" | "coding" | "story"; id: string | number; placeholder?: string;
+  kind: "card" | "drill" | "java" | "puzzle" | "design" | "coding" | "story" | "project" | "probe" | "why"; id: string | number; placeholder?: string;
   answer?: string; onAnswer?: (s: string) => void; hideInput?: boolean; title?: string; onGraded?: (g: Grade) => void;
 }) {
   const { reward } = useProfile();
