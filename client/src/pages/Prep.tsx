@@ -56,8 +56,8 @@ export function PlanCard({ plan, compact }: { plan: Plan; compact?: boolean }) {
       <div className="tasks">
         {plan.tasks.map((t) => (
           <button key={t.id} className={`task ${t.done ? "done" : ""}`} onClick={() => nav(t.to)}>
-            <span className="tk">{t.done ? <Icon name="check" size={14} /> : null}</span>
-            <span className="tt"><b>{t.label}</b><small>{t.detail}{t.target > 1 ? ` · ${t.progress}/${t.target}` : ""}</small></span>
+            <span className="task-ck">{t.done ? <Icon name="check" size={14} /> : null}</span>
+            <span className="task-tx"><b>{t.label}</b><small>{t.detail}{t.target > 1 ? ` · ${t.progress}/${t.target}` : ""}</small></span>
             <Icon name="arrow" size={15} />
           </button>
         ))}

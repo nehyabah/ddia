@@ -879,10 +879,10 @@ button.themechip{cursor:pointer}
 .tasks{display:grid}
 .task{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;text-align:left;padding:10px 0;border-top:1px solid var(--glass-line)}
 .task>svg{width:15px;height:15px;color:var(--muted)}
-.tk{width:22px;height:22px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;flex:none}
-.task.done .tk{background:var(--teal);border-color:var(--teal);color:#fff}
-.task.done .tt b{color:var(--muted);text-decoration:line-through}
-.tt{flex:1;display:grid;min-width:0}.tt small{color:var(--muted);font-size:.76rem}
+.task-ck{width:22px;height:22px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;flex:none}
+.task.done .task-ck{background:var(--teal);border-color:var(--teal);color:#fff}
+.task.done .task-tx b{color:var(--muted);text-decoration:line-through}
+.task-tx{flex:1;display:grid;min-width:0}.task-tx small{color:var(--muted);font-size:.76rem}
 
 /* mock */
 .mockbar{position:sticky;top:calc(var(--topbar-h) + 4px);z-index:6;display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:12px;border-radius:16px;
@@ -929,7 +929,7 @@ button.themechip{cursor:pointer}
   .node .ttl{font-size:.82rem}
   .opt{font-size:.92rem}
   .listrow,.focusrow{padding:11px 14px}
-  .lr-t b,.tt b,.fr-t b{font-size:.92rem}
+  .lr-t b,.task-tx b,.fr-t b{font-size:.92rem}
   .readycard{padding:12px 14px}
   .rc-t b{font-size:1rem}
   .readyhero h3{font-size:1.2rem}
@@ -945,7 +945,7 @@ button.themechip{cursor:pointer}
   .preptile b{font-size:.92rem}
   .mx-l b{font-size:.84rem}
 }
-.task .tt b,.listrow .lr-t b,.focusrow .fr-t b,.step-t b,.qrow-h b{color:var(--ink)}
+.task .task-tx b,.listrow .lr-t b,.focusrow .fr-t b,.step-t b,.qrow-h b{color:var(--ink)}
 .brand .logo{background:#fff;border:1px solid var(--glass-line);box-shadow:var(--shadow-sm)}
 @media (max-width:420px){.hero .sub{padding-right:64px}}
 
@@ -1021,3 +1021,6 @@ button.themechip{cursor:pointer}
   html{scroll-padding-top:16px}
 }
 .commit-cta{margin-top:12px}
+/* standalone rows (not inside a .list) get breathing room from what's above/below */
+:not(.list)>.listrow{margin-top:12px;margin-bottom:12px}
+.cogrid+.listrow,.readyhero+.listrow{margin-top:12px}
