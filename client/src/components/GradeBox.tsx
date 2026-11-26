@@ -49,44 +49,52 @@ export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, h
   }
 
   if (status && !status.enabled) {
-    return <p className="small muted" style={{ marginTop: 12 }}>AI grading is off: add <code className="ic">ANTHROPIC_API_KEY</code> to the server to enable it.</p>;
+    return <p className="small muted" style={{ marginTop: 12 }}>Answer review is off: add <code className="ic">ANTHROPIC_API_KEY</code> to the server to enable it.</p>;
   }
 
   const tone = (s: number) => (s >= 8 ? "var(--teal)" : s >= 5 ? "var(--amber)" : "var(--red)");
+  const words = answer.trim() ? answer.trim().split(/\s+/).length : 0;
   return (
-    <div className="gradebox">
-      {title && <div className="steplabel"><span>{title}</span>{status && <span className="n">{status.limit - status.used} grades left today</span>}</div>}
+    <div className="coach">
+      <div className="coach-h">
+        <span className="coach-ic"><Icon name="check" size={16} /></span>
+        <span className="coach-t"><b>{title ?? "Answer review"}</b><small>Checked against the reference notes{status ? ` · ${status.limit - status.used} left today` : ""}</small></span>
+      </div>
       {!hideInput && (
-        <textarea className="field" rows={5} value={answer} onChange={(e) => setAnswer(e.target.value)}
+        <textarea className="field coach-in" rows={5} value={answer} onChange={(e) => setAnswer(e.target.value)}
           placeholder={placeholder ?? "Explain it in your own words, as you would in an interview…"} disabled={busy} />
       )}
-      <button className="primary ai" onClick={submit} disabled={busy || answer.trim().length < 15}>
-        <Icon name="sparkle" />{busy ? "Claude is grading…" : grade ? "Grade again" : "Grade with Claude"}
-      </button>
-      {answer.trim().length > 0 && answer.trim().length < 15 && <span className="small muted" style={{ marginLeft: 10 }}>Write a little more first.</span>}
+      <div className="coach-bar">
+        <span className="small muted">{words ? `${words} words` : "Write your answer"}{words > 0 && answer.trim().length < 15 ? " · a little more" : ""}</span>
+        <button className="primary coach-go" onClick={submit} disabled={busy || answer.trim().length < 15}>
+          {busy ? <span className="spin" /> : <Icon name="check" />}{busy ? "Reviewing" : grade ? "Review again" : "Review answer"}
+        </button>
+      </div>
+      {busy && <div className="coach-steps"><span>Reading</span><span className="d1">Comparing</span><span className="d2">Scoring</span></div>}
       {err && <p className="err">{err}</p>}
       {grade && (
-        <div className="graded">
-          <div className="gh">
-            <Ring value={grade.score * 10} size={58} stroke={6} color={tone(grade.score)}>{grade.score}<small>/10</small></Ring>
-            <div><b>{grade.verdict}</b>{grade.xp ? <div className="small muted">+{grade.xp} XP</div> : null}</div>
+        <div className="coach-res">
+          <div className="coach-score">
+            <Ring value={grade.score * 10} size={72} stroke={7} color={tone(grade.score)}>{grade.score}<small>/10</small></Ring>
+            <div className="cs-t">
+              <b>{grade.verdict}</b>
+              <div className="cs-seg">
+                <span className="ok">{grade.covered.length} covered</span>
+                <span className="warn">{grade.missed.length} missed</span>
+                <span className="bad">{grade.mistakes.length} to fix</span>
+              </div>
+              {grade.xp ? <small className="muted">+{grade.xp} XP</small> : null}
+            </div>
           </div>
-          {grade.covered.length > 0 && <List cls="ok" icon="check" title="You covered" items={grade.covered} />}
-          {grade.missed.length > 0 && <List cls="warn" icon="bulb" title="You missed" items={grade.missed} />}
-          {grade.mistakes.length > 0 && <List cls="bad" icon="x" title="Not quite right" items={grade.mistakes} />}
-          <div className="box-tip"><b><Icon name="bolt" />Next time</b><span>{grade.tip}</span></div>
-          <details className="reveal" style={{ marginTop: 10 }}><summary>Model answer</summary><p style={{ margin: "8px 0 0" }}>{grade.modelAnswer}</p></details>
+          <ul className="rubric">
+            {grade.covered.map((t, i) => <li key={"c" + i} className="ok"><Icon name="check" size={14} /><span>{t}</span></li>)}
+            {grade.missed.map((t, i) => <li key={"m" + i} className="warn"><Icon name="bulb" size={14} /><span>{t}</span></li>)}
+            {grade.mistakes.map((t, i) => <li key={"x" + i} className="bad"><Icon name="x" size={14} /><span>{t}</span></li>)}
+          </ul>
+          <div className="coach-tip"><b>Next time</b><span>{grade.tip}</span></div>
+          <details className="coach-model"><summary>Show a model answer</summary><p>{grade.modelAnswer}</p></details>
         </div>
       )}
-    </div>
-  );
-}
-
-function List({ cls, icon, title, items }: { cls: string; icon: "check" | "bulb" | "x"; title: string; items: string[] }) {
-  return (
-    <div className={`glist ${cls}`}>
-      <div className="gt"><Icon name={icon} size={15} />{title}</div>
-      <ul>{items.map((t, i) => <li key={i}>{t}</li>)}</ul>
     </div>
   );
 }

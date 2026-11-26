@@ -105,6 +105,7 @@ export function App() {
   return (
     <>
       <SvgDefs />
+      <div className="ambient" aria-hidden="true"><i /><i /><i /></div>
       <Shell />
       <div className="wrap">
         <main key={location.pathname} className="page">

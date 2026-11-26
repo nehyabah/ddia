@@ -28,7 +28,7 @@ export function PuzzlesHome() {
       <h2>Systems puzzles</h2>
       <p className="lede">
         MongoDB‑style interview problems without writing code from scratch: arrange the lines of a working solution, fill the
-        blanks, or explain the idea and get graded by Claude ({data.passScore}/10 to pass). {solved}/{total} solved.
+        blanks, or explain the idea and get it reviewed ({data.passScore}/10 to pass). {solved}/{total} solved.
       </p>
       <div className="levels">
         {data.tracks.map((t) => {

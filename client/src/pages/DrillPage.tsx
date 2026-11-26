@@ -61,7 +61,7 @@ export function DrillPage() {
         )}
         <GradeBox kind="drill" id={d.id} answer={answer} onAnswer={setAnswer} hideInput
           onGraded={(g) => setGate((x) => ({ passScore: x?.passScore ?? 7, best: Math.max(x?.best ?? 0, g.score), passed: Math.max(x?.best ?? 0, g.score) >= (x?.passScore ?? 7) }))} />
-        {gate && !gate.passed && <p className="small muted" style={{ marginTop: 8 }}><Icon name="lock" size={13} /> Score {gate.passScore}/10 with Claude to unlock the next prompt{gate.best != null ? ` (best so far: ${gate.best}/10)` : ""}.</p>}
+        {gate && !gate.passed && <p className="small muted" style={{ marginTop: 8 }}><Icon name="lock" size={13} /> Score {gate.passScore}/10 on the review to unlock the next prompt{gate.best != null ? ` (best so far: ${gate.best}/10)` : ""}.</p>}
         {!revealed ? (
           <button className="ghost" onClick={() => setRevealed(true)}>Self-check key points</button>
         ) : (

@@ -113,7 +113,7 @@ export function Learn() {
       <div className="cardtools">
         <button className={`iconbtn ${card.starred ? "on" : ""}`} onClick={toggleStar}>{card.starred ? "★ Starred" : "☆ Star"}</button>
         <button className={`iconbtn ${noteOpen ? "on" : ""}`} onClick={() => setNoteOpen((o) => !o)}>✎ {card.note ? "Edit note" : "Add note"}</button>
-        <button className={`iconbtn ${explainOpen ? "on" : ""}`} onClick={() => setExplainOpen((o) => !o)}>✦ Explain it to Claude</button>
+        <button className={`iconbtn ${explainOpen ? "on" : ""}`} onClick={() => setExplainOpen((o) => !o)}>Explain it in your words</button>
       </div>
       {explainOpen && <GradeBox kind="card" id={card.id} title="Explain this concept" placeholder={`Explain “${card.title}” in your own words — try before flipping the card…`} />}
       {noteOpen && (

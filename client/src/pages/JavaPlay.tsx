@@ -194,7 +194,7 @@ export function JavaPlay() {
             <DiffView before={c.code} after={result.fix} />
 
             <div className="box-tip"><b><Icon name="bulb" />How you'd catch it</b><span><Md text={result.debugTip} /></span></div>
-            <details className="reveal explainbox"><summary>✦ Explain this bug to Claude (interview practice)</summary>
+            <details className="reveal explainbox"><summary>Explain this bug (interview practice)</summary>
               <GradeBox kind="java" id={c.id} placeholder="What is the bug, why does Java behave this way, and how would you fix and catch it?" />
             </details>
 
