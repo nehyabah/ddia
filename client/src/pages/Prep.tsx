@@ -7,6 +7,7 @@ import { Prose } from "../components/CodeView";
 import { Pic } from "../components/Art";
 import { Icon, Ring } from "../components/ui";
 import { tone } from "./Readiness";
+import { SpeakButton, speak, stopSpeaking } from "../components/Voice";
 
 /* ---------- Prep hub ---------- */
 export function PrepHome() {
@@ -81,6 +82,9 @@ export function MockPage() {
 
   useEffect(() => { if (overview?.open && !mock) api.get<Mock>(`/mock/${overview.open.id}`).then(setMock); }, [overview]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!mock || mock.finishedAt) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [mock]);
+  // The interviewer reads each question out when you reach it.
+  const spokenKey = mock && !mock.finishedAt ? `${mock.id}-${i}` : "";
+  useEffect(() => { if (spokenKey && mock) speak(`${mock.items[i].title}. ${mock.items[i].question}`); return () => stopSpeaking(); }, [spokenKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function start() { setMock(await api.post<Mock>("/mock/start")); setI(0); setAnswers({}); }
   async function finish() {
@@ -137,7 +141,7 @@ export function MockPage() {
       </div>
       <section className="panel">
         <div className="eyebrow">{({ card: "Concept", puzzle: "Systems puzzle", design: "System design", story: "Behavioural" })[it.kind]} · ~{it.minutes} min</div>
-        <h3 style={{ margin: "4px 0 8px" }}>{it.title}</h3>
+        <h3 style={{ margin: "4px 0 8px", display: "flex", alignItems: "center", gap: 8 }}>{it.title}<SpeakButton text={`${it.title}. ${it.question}`} /></h3>
         <Prose text={it.question} />
       </section>
       <GradeBox key={`${mock.id}-${i}`} kind={it.kind} id={it.id} answer={answers[i] ?? ""} onAnswer={(v) => setAnswers({ ...answers, [i]: v })} title="Your answer"

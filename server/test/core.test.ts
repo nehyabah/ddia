@@ -176,3 +176,14 @@ return (${t.call});`)(); if (g && typeof g.then === "function") g = await g; if 
     }
   }
 });
+
+test("voice: delivery stats count pace and filler words", async () => {
+  const { delivery, readSpoken } = await import("../src/delivery.js");
+  assert.equal(readSpoken({ seconds: 1, words: 2 }), null);
+  const text = "Um so basically you know the leader like replicates the oplog um to secondaries";
+  const d = delivery(text, { seconds: 6, words: 14 });
+  assert.equal(d.wpm, 140);
+  assert.equal(d.fillers, 5);
+  assert.equal(d.topFillers[0].word, "um");
+  assert.ok(d.notes.some((n) => /filler/i.test(n)));
+});

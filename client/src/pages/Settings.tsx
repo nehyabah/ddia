@@ -4,6 +4,7 @@ import { api, type Profile } from "../api";
 import { useProfile } from "../state";
 import { Link } from "react-router-dom";
 import { Icon } from "../components/ui";
+import { canListen, canSpeak, setVoiceOn, voiceOn } from "../components/Voice";
 
 const SNIPPET = `copy(localStorage.getItem("ddia-quest-v1"))`;
 
@@ -94,6 +95,8 @@ export function Settings() {
           <button className="primary" style={{ marginTop: 0 }}>Save</button>
         </div>
       </form>
+
+      <VoiceSettings />
 
       <div className="panel">
         <h3>Theme</h3>
@@ -226,5 +229,22 @@ export function InterviewSettings() {
       </div>
       <p className="small muted">Reminders come once a day at that time: reviews due, a streak at risk, or what’s left on today’s plan. <Link to="/companies">Target companies →</Link></p>
     </form>
+  );
+}
+
+function VoiceSettings() {
+  const [on, setOn] = useState(() => voiceOn());
+  return (
+    <div className="panel">
+      <h3>Voice</h3>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        {canListen ? "Tap “Speak your answer” on any answer box to answer out loud; you’ll also get feedback on pace and filler words." : "Voice answers aren’t supported in this browser. On iPhone, use Safari; on Android or desktop, use Chrome."}
+      </p>
+      {canSpeak && (
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); setVoiceOn(e.target.checked); }} /> Read interviewer questions aloud
+        </label>
+      )}
+    </div>
   );
 }

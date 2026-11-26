@@ -8,6 +8,7 @@ import { HttpError, int, str } from "../http.js";
 import type { Challenge } from "../javaContent.js";
 import { PASS_SCORE, getPuzzle, markSolved } from "./puzzles.js";
 import { assertUnlocked } from "./study.js";
+import { SPOKEN_NOTE, delivery, readSpoken } from "../delivery.js";
 
 export const ai = Router();
 
@@ -111,6 +112,7 @@ ai.post("/ai/grade", async (req, res) => {
   userIdForLock = u;
   const ref = reference(kind, id);
   userIdForLock = null;
+  const spoken = readSpoken(req.body?.spoken);
 
   let result: GradeResult;
   try {
@@ -121,7 +123,7 @@ ai.post("/ai/grade", async (req, res) => {
       system: SYSTEM,
       messages: [{
         role: "user",
-        content: `<question>\n${ref.question}\n</question>\n<reference>\n${ref.reference}\n</reference>\n<student_answer>\n${answer}\n</student_answer>`,
+        content: `<question>\n${ref.question}\n</question>\n<reference>\n${ref.reference}\n</reference>\n${spoken ? SPOKEN_NOTE : ""}<student_answer>\n${answer}\n</student_answer>`,
       }],
     });
     if (response.stop_reason === "refusal") throw new HttpError(422, "The grader declined this answer. Try rephrasing it.");
@@ -150,7 +152,7 @@ ai.post("/ai/grade", async (req, res) => {
     const r = markSolved(u, getPuzzle(id), prior <= 1, result.score);
     xp += r.xp; badges.push(...r.badges);
   }
-  res.json({ ...result, passed, passScore: PASS_SCORE, xp, newBadges: badges.map((b) => ({ id: b, label: BADGES[b] ?? b })), used: used + 1, limit: DAILY_LIMIT });
+  res.json({ ...result, delivery: spoken ? delivery(answer, spoken) : null, passed, passScore: PASS_SCORE, xp, newBadges: badges.map((b) => ({ id: b, label: BADGES[b] ?? b })), used: used + 1, limit: DAILY_LIMIT });
 });
 
 ai.get("/ai/history", (req, res) => {
