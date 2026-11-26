@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { content } from "./prep.js";
+import { chapterLocks } from "./study.js";
 
 /**
  * Interview readiness, computed from everything the user has done.
@@ -71,6 +72,7 @@ export function computeReadiness(u: number, company?: string) {
     return { chs, javaOk, pzOk };
   };
 
+  const locks = chapterLocks(u);
   const areas = AREAS.map((a) => {
     const { chs, javaOk, pzOk } = inArea(a);
     const aq = qs.filter((q) => chs.has(q.ch));
@@ -124,7 +126,7 @@ export function computeReadiness(u: number, company?: string) {
 
     // weakest signal → one concrete next action
     const weakest = (Object.entries(signals).filter(([, v]) => v != null) as [keyof typeof W, number][]).sort((x, y) => x[1] - y[1])[0]?.[0];
-    const firstCh = a.chapters[0];
+    const firstCh = a.chapters.find((c) => !locks.get(c)?.locked); // never point at a locked chapter
     const action = nextAction(a, weakest, firstCh);
 
     const pct = (v: number | null) => (v == null ? null : Math.round(v * 100));

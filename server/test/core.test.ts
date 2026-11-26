@@ -187,3 +187,14 @@ test("voice: delivery stats count pace and filler words", async () => {
   assert.equal(d.topFillers[0].word, "um");
   assert.ok(d.notes.some((n) => /filler/i.test(n)));
 });
+
+test("plan and readiness never send you to a locked chapter", () => {
+  const u = newUser("locked-plan");
+  const locks = chapterLocks(u);
+  const locked = (to: string) => { const m = /^\/chapter\/(\d+)/.exec(to); return !!m && !!locks.get(Number(m[1]))?.locked; };
+  const p = buildPlan(u);
+  assert.ok(p.tasks.length > 0);
+  for (const t of p.tasks) assert.ok(!locked(t.to), `plan task ${t.id} -> ${t.to}`);
+  assert.ok(p.tasks.some((t) => t.id === "unlock-1"), "the chapter you are unlocking is on the plan");
+  for (const a of computeReadiness(u).areas) assert.ok(!locked(a.action.to), `readiness ${a.id} -> ${a.action.to}`);
+});

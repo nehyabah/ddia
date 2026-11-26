@@ -6,6 +6,7 @@ import { javaDueCount } from "./java.js";
 import { computeReadiness } from "./readiness.js";
 import { content } from "./prep.js";
 import { getPuzzle } from "./puzzles.js";
+import { chapterLocks } from "./study.js";
 
 /* ============================================================
    Interview date, daily plan, readiness history, mock interviews.
@@ -100,15 +101,39 @@ export function buildPlan(u: number) {
   if (jdue > 0) add("java-review", "Fix Java bugs you missed", `${jdue} due`, "/java/play?mode=review", t.java, Math.min(5, jdue));
 
   const nFocus = intensity === "final" ? 2 : 3;
-  for (const f of r.focus.slice(0, nFocus)) {
-    const a = r.areas.find((x) => x.id === f.id);
+  // Only suggest what you can actually open: skip locked chapters.
+  const locks = chapterLocks(u);
+  const open = (chs: number[]) => chs.filter((c) => !locks.get(c)?.locked);
+  // The chapter you're working to unlock (first open book chapter under 80%) is always on the plan.
+  const chs = db.prepare("SELECT c.id, c.tag, c.title FROM chapters c ORDER BY c.position").all() as { id: number; tag: string | null; title: string }[];
+  const byCh = new Map((db.prepare(`SELECT q.chapter_id ch, COUNT(*) n, COALESCE(SUM(MIN(COALESCE(s.box,0),3)),0) pts FROM questions q
+    LEFT JOIN question_srs s ON s.question_id = q.id AND s.user_id = ? GROUP BY q.chapter_id`).all(u) as { ch: number; n: number; pts: number }[]).map((x) => [x.ch, Math.round((x.pts / (x.n * 3)) * 100)]));
+  const current = chs.find((c) => !c.tag && !locks.get(c.id)?.locked && (byCh.get(c.id) ?? 0) < 80);
+  const chapterTasks = new Set<number>();
+  if (current) {
+    const nextLocked = chs.find((c) => !c.tag && locks.get(c.id)?.locked);
+    add(`unlock-${current.id}`, `Ch ${current.id}: ${current.title}`, `${byCh.get(current.id) ?? 0}% → 80%${nextLocked ? ` unlocks Ch ${nextLocked.id}` : ""}`, `/chapter/${current.id}`, t.quiz([current.id]), 10);
+    chapterTasks.add(current.id);
+  }
+  const AREA_PUZZLE_FALLBACK: Record<string, string> = { consistency: "distributed", replication: "distributed", sharding: "distributed", distributed: "distributed" };
+  const ranked = [...r.areas].sort((x, y) => x.score * (2 - x.weight) - y.score * (2 - y.weight));
+  let added = 0;
+  for (const a of ranked) {
+    if (added >= nFocus) break;
+    const f = { id: a.id, label: a.label, score: a.score };
+    const before = tasks.length;
     if (f.id === "design") add("design", "System design practice", `${f.label} · ${f.score}/100`, "/design", t.design, intensity === "steady" ? 1 : 2);
     else if (f.id === "coding") add("coding", "Solve a coding problem", `${f.label} · ${f.score}/100`, "/coding", t.coding, 1);
     else if (f.id === "behavioral") add("behavioral", "Review a behavioural story", `${f.label} · ${f.score}/100`, "/behavioral", t.story, 1);
     else if (f.id === "java") add("java", "Fix Java bugs", `${f.label} · ${f.score}/100`, "/java/play", t.java, 5);
     else if (f.id === "mongodb" && content.mongo.length) add("mongo", "Hands-on MongoDB queries", `${f.label} · ${f.score}/100`, "/mongo", t.mongo, 2);
     else if (AREA_TRACK[f.id]) add(`pz-${f.id}`, `Solve ${f.label.toLowerCase()} puzzles`, `${f.score}/100`, `/puzzles/play?track=${AREA_TRACK[f.id]}`, t.puzzles(AREA_TRACK[f.id]), 2);
-    else if (AREA_CHAPTERS[f.id]) add(`quiz-${f.id}`, `Study ${f.label.toLowerCase()}`, `${f.score}/100 · ${a?.action.label ?? "Quiz"}`, a?.action.to ?? `/chapter/${AREA_CHAPTERS[f.id][0]}`, t.quiz(AREA_CHAPTERS[f.id]), 10);
+    else if (AREA_CHAPTERS[f.id]) {
+      const avail = open(AREA_CHAPTERS[f.id]).filter((c) => !chapterTasks.has(c));
+      if (avail.length) { add(`quiz-${f.id}`, `Study ${f.label.toLowerCase()}`, `${f.score}/100 · Ch ${avail[0]}`, `/chapter/${avail[0]}`, t.quiz(avail), 10); avail.forEach((c) => chapterTasks.add(c)); }
+      else if (AREA_PUZZLE_FALLBACK[f.id] && !tasks.some((x) => x.id === "pz-fallback")) add("pz-fallback", `Practise ${f.label.toLowerCase()} with puzzles`, `${f.score}/100 · chapters still locked`, `/puzzles/play?track=${AREA_PUZZLE_FALLBACK[f.id]}`, t.puzzles(AREA_PUZZLE_FALLBACK[f.id]), 2);
+    }
+    if (tasks.length > before) added++;
   }
   const lastMock = (db.prepare("SELECT MAX(finished_at) t FROM mock_sessions WHERE user_id = ?").get(u) as { t: number | null }).t;
   const mockEvery = intensity === "final" ? 2 : intensity === "push" ? 4 : 7;
@@ -127,8 +152,10 @@ function composeMock(u: number): MockItem[] {
   const r = computeReadiness(u);
   const items: MockItem[] = [];
   // 1) theory: a card from a weak DDIA chapter that is unlocked/started (fallback: any chapter 1-9)
-  const weakCh = r.focus.map((f) => AREA_CHAPTERS[f.id]?.[0]).filter(Boolean) as number[];
-  const ch = weakCh[0] ?? pick([1, 3, 5, 6, 7, 8, 9]);
+  const locks = chapterLocks(u);
+  const openChs = (db.prepare("SELECT id FROM chapters").all() as { id: number }[]).map((c) => c.id).filter((id) => !locks.get(id)?.locked);
+  const weakCh = r.focus.flatMap((f) => AREA_CHAPTERS[f.id] ?? []).filter((c) => openChs.includes(c));
+  const ch = weakCh[0] ?? pick(openChs.length ? openChs : [1]);
   const card = db.prepare("SELECT k.id, k.title, c.title chapter FROM cards k JOIN chapters c ON c.id = k.chapter_id WHERE k.chapter_id = ? ORDER BY RANDOM() LIMIT 1").get(ch) as { id: number; title: string; chapter: string } | undefined;
   if (card) items.push({ kind: "card", id: String(card.id), title: card.title, question: `Explain "${card.title}" (${card.chapter}) as you would to an interviewer.`, minutes: 8 });
   // 2) theory puzzle: concurrency / resilience / distributed
@@ -190,7 +217,6 @@ plan.get("/mock", (req, res) => {
 
 /* ---------- warm-up: one quick question on Home to get going ---------- */
 import { schedule as srsSchedule } from "../progress.js";
-import { chapterLocks } from "./study.js";
 
 plan.get("/warmup", (req, res) => {
   const u = req.userId!;
