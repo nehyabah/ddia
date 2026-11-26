@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Badge } from "../api";
 import { useProfile } from "../state";
-import { Icon, Ring } from "./ui";
+import { Icon } from "./ui";
 import { Thinking } from "./Thinking";
 
 export type Grade = {
@@ -58,7 +58,7 @@ export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, h
   return (
     <div className="coach">
       <div className="coach-h">
-        <span className="coach-ic"><Icon name="check" size={16} /></span>
+        <img className="coach-orb" src="/art/orb.webp" alt="" />
         <span className="coach-t"><b>{title ?? "Answer review"}</b><small>Checked against the reference notes{status ? ` · ${status.limit - status.used} left today` : ""}</small></span>
       </div>
       {!hideInput && (
@@ -75,16 +75,20 @@ export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, h
       {err && <p className="err">{err}</p>}
       {grade && (
         <div className="coach-res">
-          <div className="coach-score">
-            <Ring value={grade.score * 10} size={72} stroke={7} color={tone(grade.score)}>{grade.score}<small>/10</small></Ring>
-            <div className="cs-t">
-              <b>{grade.verdict}</b>
-              <div className="cs-seg">
-                <span className="ok">{grade.covered.length} covered</span>
-                <span className="warn">{grade.missed.length} missed</span>
-                <span className="bad">{grade.mistakes.length} to fix</span>
-              </div>
-              {grade.xp ? <small className="muted">+{grade.xp} XP</small> : null}
+          <div className="score2">
+            <div className="s2-top">
+              <span className="s2-num" style={{ color: tone(grade.score) }}>{grade.score}<small>/10</small></span>
+              <span className="s2-verdict">{grade.verdict}</span>
+            </div>
+            <div className="s2-line" aria-label={`Score ${grade.score} out of 10`}>
+              <i style={{ width: `${grade.score * 10}%`, background: tone(grade.score) }} />
+              <b style={{ left: `${(grade.passScore ?? 7) * 10}%` }} title={`Pass mark ${grade.passScore ?? 7}/10`} />
+            </div>
+            <div className="s2-meta">
+              <span><i className="ok" />{grade.covered.length} covered</span>
+              <span><i className="warn" />{grade.missed.length} missed</span>
+              <span><i className="bad" />{grade.mistakes.length} to fix</span>
+              {grade.xp ? <em>+{grade.xp} XP</em> : null}
             </div>
           </div>
           <ul className="rubric">

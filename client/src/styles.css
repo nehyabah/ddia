@@ -1025,3 +1025,45 @@ button.themechip{cursor:pointer}
 :not(.list)>.listrow{margin-top:12px;margin-bottom:12px}
 .cogrid+.listrow,.readyhero+.listrow{margin-top:12px}
 .ai-orb{display:inline-block;flex:none}.ai-orb svg{display:block}
+
+/* ---------- score card ---------- */
+.coach-score{gap:14px;padding:12px 14px}
+.coach-score .ringwrap .lab{display:flex;align-items:center;justify-content:center}
+.sc-num{display:inline-flex;align-items:baseline;gap:1px;font-size:1.15rem;font-weight:800;white-space:nowrap}
+.sc-num small{font-size:.6rem;font-weight:600;color:var(--muted)}
+.cs-t b{font-size:.98rem;line-height:1.3}
+.cs-seg{gap:4px}
+.cs-seg span{font-size:.68rem;padding:2px 8px;white-space:nowrap}
+.cs-t small{font-size:.75rem}
+
+/* ---------- home welcome ---------- */
+.welcome{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 2px 14px}
+.welcome h1{margin:2px 0 0;font-size:1.6rem;font-weight:700;letter-spacing:-.03em;line-height:1.15}
+.w-date{font-size:.74rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.w-avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;flex:none;text-decoration:none;
+  background:var(--accent);color:var(--onAccent);font-weight:700;font-size:1rem;box-shadow:var(--shadow-sm)}
+@media (min-width:761px){.welcome h1{font-size:1.9rem}}
+@media (max-width:420px){.welcome h1{font-size:1.4rem}}
+
+/* ---------- score card v2: number + thin line ---------- */
+.score2{padding:14px 16px;border-radius:16px;background:color-mix(in srgb,var(--surface) 60%,transparent);border:1px solid var(--glass-line)}
+.s2-top{display:flex;align-items:baseline;gap:12px}
+.s2-num{font-size:2rem;font-weight:700;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;flex:none}
+.s2-num small{font-size:.9rem;font-weight:500;color:var(--muted);margin-left:2px;letter-spacing:0}
+.s2-verdict{font-weight:600;font-size:.95rem;line-height:1.3}
+.s2-line{position:relative;height:4px;border-radius:2px;background:var(--line);margin:14px 0 10px}
+.s2-line i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;animation:s2-grow .7s cubic-bezier(.2,.8,.2,1)}
+.s2-line b{position:absolute;top:-4px;width:2px;height:12px;border-radius:1px;background:var(--ink);opacity:.35;margin-left:-1px}
+@keyframes s2-grow{from{width:0}}
+.s2-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;font-size:.78rem;color:var(--muted)}
+.s2-meta span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.s2-meta i{width:7px;height:7px;border-radius:50%}
+.s2-meta i.ok{background:var(--teal)}.s2-meta i.warn{background:var(--amber)}.s2-meta i.bad{background:var(--red)}
+.s2-meta em{margin-left:auto;font-style:normal;font-weight:600;color:var(--accent)}
+
+/* ---------- typeface: Poppins ---------- */
+:root{--display:"Poppins",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;--body:"Poppins",-apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+body{letter-spacing:0}
+h1,h2,h3{letter-spacing:-.02em}
+.coach-orb{width:36px;height:36px;flex:none;object-fit:contain}
+.tile-stat .ic3{width:40px;height:40px;flex:none}@media (max-width:520px){.tile-stat .ic3{width:34px;height:34px}}

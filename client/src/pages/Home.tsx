@@ -77,10 +77,16 @@ export function Home() {
 
   return (
     <>
+      <header className="welcome">
+        <div>
+          <div className="w-date">{today}</div>
+          <h1>{greeting()}, {profile.user.username}</h1>
+        </div>
+        <Link to="/settings" className="w-avatar" aria-label="Your profile">{profile.user.username.slice(0, 1).toUpperCase()}</Link>
+      </header>
       <section className="hero glass">
         <div className="hero-art"><Pic name="target" plain /></div>
         <div className="hero-main">
-          <div className="eyebrow">{today}<span className="greet"> · {greeting()}, {profile.user.username}</span></div>
           <h2>{goalPct >= 100 ? "Daily goal reached." : profile.xpToday === 0 ? "Pick up where you left off." : `${goalLeft} XP to today’s goal.`}</h2>
           <p className="sub">{cta.sub}</p>
           <div className="cta">
@@ -97,10 +103,10 @@ export function Home() {
       </section>
 
       <div className="tiles">
-        <div className="tile-stat"><span className="ic flame"><Icon name="flame" /></span><span><div className="v">{profile.streak}</div><div className="l">day streak</div></span></div>
-        <Link to="/stats" className="tile-stat"><span className="ic bolt"><Icon name="bolt" /></span><span><div className="v">Lv {profile.level}</div><div className="l">{profile.need - profile.into} XP to next</div></span></Link>
-        <Link to="/review" className="tile-stat"><span className="ic due"><Icon name="review" /></span><span><div className="v">{profile.dueCount}</div><div className="l">DDIA due</div></span></Link>
-        <Link to="/java" className="tile-stat"><span className="ic code"><Icon name="code" /></span><span><div className="v">{profile.javaDue}</div><div className="l">Java due</div></span></Link>
+        <div className="tile-stat"><span className="ic3"><Pic name="fire" plain /></span><span><div className="v">{profile.streak}</div><div className="l">day streak</div></span></div>
+        <Link to="/stats" className="tile-stat"><span className="ic3"><Pic name="flash" plain /></span><span><div className="v">Lv {profile.level}</div><div className="l">{profile.need - profile.into} XP to next</div></span></Link>
+        <Link to="/review" className="tile-stat"><span className="ic3"><Pic name="calender" plain /></span><span><div className="v">{profile.dueCount}</div><div className="l">DDIA due</div></span></Link>
+        <Link to="/java" className="tile-stat"><span className="ic3"><Pic name="computer" plain /></span><span><div className="v">{profile.javaDue}</div><div className="l">Java due</div></span></Link>
       </div>
 
       <CommitCard />
