@@ -678,3 +678,19 @@ h2{font-weight:650}
 .node .node-art{height:56px}
 .topsearch{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;color:var(--muted);background:var(--glass);border:1px solid var(--glass-line)}
 .topsearch svg{width:18px;height:18px}
+
+/* ---------- 3D icon tiles ---------- */
+.pic{display:grid;place-items:center;width:100%;height:100%;overflow:hidden}
+.pic img{height:84%;max-height:150px;width:auto;object-fit:contain;filter:drop-shadow(0 10px 14px rgba(15,25,60,.22));user-select:none}
+.pic.tint-blue{background:#DCE6FB}.pic.tint-slate{background:#E3E7EE}.pic.tint-sand{background:#F1EBE2}.pic.tint-sky{background:#E2EEF8}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .pic.tint-blue{background:#1A2540}:root:not([data-theme="light"]) .pic.tint-slate{background:#1E222B}:root:not([data-theme="light"]) .pic.tint-sand{background:#2A2620}:root:not([data-theme="light"]) .pic.tint-sky{background:#18262F}}
+:root[data-theme="dark"] .pic.tint-blue{background:#1A2540}:root[data-theme="dark"] .pic.tint-slate{background:#1E222B}:root[data-theme="dark"] .pic.tint-sand{background:#2A2620}:root[data-theme="dark"] .pic.tint-sky{background:#18262F}
+.hero-art .pic img{height:88%}
+.node .node-art{height:84px}
+@media (max-width:520px){.node .node-art{height:72px}}
+.trackcard .tc-art{height:104px}
+.node.locked .node-art{filter:grayscale(1);opacity:.45}
+.pic{position:relative}
+.pic img{position:absolute;left:0;right:0;top:9%;bottom:9%;width:100%;height:82%;max-height:none;object-fit:contain}
+.hero-art .pic img{top:7%;bottom:7%;height:86%}
+.node.locked .node-art{opacity:.6}

@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, type ChapterSummary, type JavaOverview } from "../api";
 import { useLoad, useProfile } from "../state";
 import { Icon, Ring, type IconName } from "../components/ui";
-import { Art } from "../components/Art";
+import { Pic } from "../components/Art";
 
 const BADGE_ICON: Record<string, IconName> = {
   first: "check", combo5: "flame", combo10: "flame", perfect: "star", matcher: "puzzle", reader: "book",
@@ -53,7 +53,7 @@ export function Home() {
       <button key={c.id} className={`node ${c.mastery >= 80 ? "done" : ""} ${c.locked ? "locked" : ""}`} disabled={c.locked}
         title={c.locked ? `Reach ${c.unlockAt}% on ${c.unlockAfter} to unlock` : undefined} onClick={() => nav(`/chapter/${c.id}`)}>
         {c.due > 0 && <span className="due pill" title="Questions due for review">{c.due}</span>}
-        <span className="node-art"><Art seed={c.id} /></span>
+        <span className="node-art"><Pic chapter={c.id} /></span>
         <span className="nh">
           <span className="num">{c.tag ?? c.id}</span>
           {c.locked ? <span className="lockic"><Icon name="lock" size={16} /></span> : <Ring value={c.mastery} size={38} stroke={4}>{c.mastery}%</Ring>}
@@ -74,7 +74,7 @@ export function Home() {
   return (
     <>
       <section className="hero glass">
-        <div className="hero-art"><Art seed={next?.id ?? 1} palette={0} motif="orbits" /></div>
+        <div className="hero-art"><Pic name="target" tint="blue" /></div>
         <div className="hero-main">
           <div className="eyebrow">{today}<span className="greet"> · {greeting()}, {profile.user.username}</span></div>
           <h2>{goalPct >= 100 ? "Daily goal reached." : profile.xpToday === 0 ? "Pick up where you left off." : `${goalLeft} XP to today’s goal.`}</h2>
@@ -102,17 +102,17 @@ export function Home() {
       <h3 className="section-h">Tracks</h3>
       <div className="tracks">
         <a className="trackcard" href="#chapters">
-          <span className="tc-art"><Art seed={3} motif="stacks" palette={0} /></span>
+          <span className="tc-art"><Pic name="file-text" tint="blue" /></span>
           <span className="tx"><h4>Designing Data‑Intensive Apps</h4><p>{chapters.length} chapters · {ddiaPct}% mastered</p><span className="bar" style={{ display: "block" }}><i style={{ width: `${ddiaPct}%` }} /></span></span>
           <span className="go"><Icon name="arrow" /></span>
         </a>
         <Link className="trackcard" to="/puzzles">
-          <span className="tc-art"><Art seed={5} motif="threads" palette={2} /></span>
+          <span className="tc-art"><Pic name="bulb" tint="sand" /></span>
           <span className="tx"><h4>Systems puzzles</h4><p>Concurrency · rate limits &amp; retries · distributed</p></span>
           <span className="go"><Icon name="arrow" /></span>
         </Link>
         <Link className="trackcard" to="/java">
-          <span className="tc-art"><Art seed={8} motif="grid" palette={1} /></span>
+          <span className="tc-art"><Pic name="computer" tint="slate" /></span>
           <span className="tx"><h4>Java debugging</h4><p>{javaTotal || "…"} challenges · {javaPct}% mastered</p><span className="bar" style={{ display: "block" }}><i style={{ width: `${javaPct}%`, background: "var(--grad-warm)" }} /></span></span>
           <span className="go"><Icon name="arrow" /></span>
         </Link>

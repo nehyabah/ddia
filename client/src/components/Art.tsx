@@ -91,3 +91,21 @@ export function Art({ seed, motif, palette, className, label }: { seed: number; 
     </svg>
   );
 }
+
+/* 3D icon artwork (3dicons.co, CC0) on a soft tinted tile. */
+const CHAPTER_ICON: Record<number, string> = {
+  1: "shield", 2: "file-text", 3: "folder", 4: "lock", 5: "copy", 6: "chart", 7: "wallet", 8: "fire", 9: "link",
+  10: "calender", 11: "flash", 12: "trophy", 13: "boy", 14: "battery", 15: "chart", 16: "computer", 17: "wallet", 18: "bulb",
+};
+const TINTS = ["blue", "slate", "sand", "sky"] as const;
+
+export function Pic({ name, chapter, tint, className }: { name?: string; chapter?: number; tint?: (typeof TINTS)[number]; className?: string }) {
+  const icon = name ?? (chapter != null ? CHAPTER_ICON[chapter] : undefined);
+  if (!icon) return <Art seed={chapter ?? 1} className={className} />;
+  const t = tint ?? TINTS[(chapter ?? 0) % TINTS.length];
+  return (
+    <span className={`pic tint-${t} ${className ?? ""}`}>
+      <img src={`/art/${icon}.webp`} alt="" loading="lazy" decoding="async" draggable={false} />
+    </span>
+  );
+}
