@@ -72,9 +72,9 @@ export function GradeBox({ kind, id, placeholder, answer: extAnswer, onAnswer, h
       )}
       {micOk && <MicButton value={answer} onChange={setAnswer} onSpoken={setSpoken} disabled={busy} />}
       <div className="coach-bar">
-        <span className="small muted">{words ? `${words} words` : "Write your answer"}{words > 0 && answer.trim().length < 15 ? " · a little more" : ""}</span>
+        <span className="small muted">{words ? `${words} words` : "No answer yet"}{words > 0 && answer.trim().length < 15 ? " · a little more" : ""}</span>
         <button className="primary coach-go" onClick={submit} disabled={busy || answer.trim().length < 15}>
-          <Icon name="check" />{grade ? "Review again" : "Review answer"}
+          {grade ? "Review again" : "Review answer"}<Icon name="arrow" />
         </button>
       </div>
       {busy && <Thinking phases={["Reading your answer", "Checking it against the reference", "Weighing what you missed", "Scoring"]} />}

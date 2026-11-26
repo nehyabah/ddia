@@ -1158,3 +1158,24 @@ h1,h2,h3,h4,b,strong,.hero h2,.node .num,.tile-stat .v,.s2-num,.welcome h1,.mx-s
 .dl-stats{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 4px;font-size:.8rem;color:var(--muted)}
 .dl-stats em{font-style:normal;font-weight:600;font-size:1.05rem;color:var(--ink);margin-right:3px}
 @media (prefers-reduced-motion:reduce){.mic-wave i,.micbtn.on .mic-dot::after{animation:none}}
+
+/* review button: one line, no muddy disabled state */
+.coach-bar{flex-wrap:nowrap}
+.coach-bar>.small{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.coach-go,.primary.coach-go{flex:none;white-space:nowrap;padding:10px 18px;gap:6px}
+.coach-go svg{width:16px;height:16px}
+.primary:disabled,.primary.coach-go:disabled{background:var(--accent);color:var(--onAccent);opacity:.35;box-shadow:none}
+
+/* ---------- mic button v2 ---------- */
+.micbtn{gap:8px;padding:7px 14px 7px 7px;border:1px solid var(--line2);background:var(--glass);min-height:40px}
+.micbtn .mic-ic{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--accentSoft);color:var(--accent);flex:none}
+.micbtn.on{background:var(--glass);border-color:var(--line2);padding:7px 7px 7px 14px;gap:10px}
+.micbtn.on .mic-dot,.micbtn.on .mic-dot::after{display:none}
+.rec-dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex:none;animation:rec-blink 1.2s ease-in-out infinite}
+@keyframes rec-blink{0%,100%{opacity:1}50%{opacity:.35}}
+.micbtn .mic-wave{margin:0;height:16px;gap:2px}
+.micbtn .mic-wave i{width:2px;background:var(--ink);opacity:.55}
+.micbtn .mic-wave i:nth-child(6){animation-delay:.6s}.micbtn .mic-wave i:nth-child(7){animation-delay:.72s}
+.rec-time{font-variant-numeric:tabular-nums;font-size:.85rem;color:var(--muted);min-width:30px}
+.rec-stop{padding:5px 12px;border-radius:999px;background:var(--ink);color:var(--surface);font-size:.8rem;font-weight:600}
+@media (prefers-reduced-motion:reduce){.rec-dot{animation:none}}

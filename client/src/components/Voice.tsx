@@ -23,6 +23,8 @@ export type Spoken = { seconds: number; words: number };
  */
 export function MicButton({ value, onChange, onSpoken, disabled }: { value: string; onChange: (v: string) => void; onSpoken?: (s: Spoken) => void; disabled?: boolean }) {
   const [on, setOn] = useState(false);
+  const [secs, setSecs] = useState(0);
+  useEffect(() => { if (!on) return; setSecs(0); const t = setInterval(() => setSecs((x) => x + 1), 1000); return () => clearInterval(t); }, [on]);
   const [interim, setInterim] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const rec = useRef<Rec | null>(null);
@@ -73,10 +75,15 @@ export function MicButton({ value, onChange, onSpoken, disabled }: { value: stri
     <div className="mic">
       <button type="button" className={`micbtn ${on ? "on" : ""}`} onClick={on ? stop : start} disabled={disabled} aria-pressed={on}
         aria-label={on ? "Stop recording" : "Answer by voice"}>
-        <span className="mic-dot" aria-hidden="true">{on ? <i /> : <MicIcon />}</span>
-        {on ? "Listening… tap to stop" : "Speak your answer"}
+        {on ? (<>
+          <span className="rec-dot" aria-hidden="true" />
+          <span className="mic-wave" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></span>
+          <span className="rec-time">{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}</span>
+          <span className="rec-stop">Done</span>
+        </>) : (<>
+          <span className="mic-ic" aria-hidden="true"><MicIcon /></span>Speak your answer
+        </>)}
       </button>
-      {on && <span className="mic-wave" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
       {interim && <p className="mic-live">{interim}</p>}
       {err && <p className="err small">{err}</p>}
     </div>
